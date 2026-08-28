@@ -67,6 +67,7 @@ export async function agendar(p: {
   servicoId: string;
   cortesiaId?: string;
   inicioMin: number;
+  naCadeira?: boolean;
   dayKey: string;
 }): Promise<R> {
   const db = tenantDb();
@@ -115,7 +116,7 @@ export async function agendar(p: {
     cliente_id: clienteId,
     servico_id: p.servicoId,
     duracao_minutos: dur,
-    status: "confirmado",
+    status: p.naCadeira ? "confirmado" : "agendado",
     cortesia_id: cortesiaId,
   });
   if (ins.error) return falha(ins.error, "agendar/agendamento");

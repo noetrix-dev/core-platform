@@ -71,8 +71,8 @@ function agendamentosDoDia(dayKey: string): Agendamento[] {
     { id: "ag-04", cliente_id: "cli-12", servico_id: "svc-barba", inicio: at(660), duracao_minutos: 30, status: "concluido", origem: "walkin" },
     { id: "ag-05", cliente_id: "cli-15", servico_id: "svc-cb-sobrancelha", inicio: at(750), duracao_minutos: 75, status: "confirmado", origem: "whatsapp", em_atendimento: true, observacoes: "Pediu para deixar a franja mais longa.", cortesia_id: "cor-cerveja", cortesia_nome: "Cerveja" },
     { id: "ag-06", cliente_id: "cli-02", servico_id: "svc-corte", inicio: at(810), duracao_minutos: 30, status: "confirmado", origem: "whatsapp", cortesia_id: "cor-cafe", cortesia_nome: "Café" },
-    { id: "ag-07", cliente_id: "cli-09", servico_id: "svc-sobrancelha", inicio: at(840), duracao_minutos: 15, status: "pendente", origem: "whatsapp", observacoes: "Aguardando confirmação pelo WhatsApp." },
-    { id: "ag-08", cliente_id: "cli-05", servico_id: "svc-progressiva", inicio: at(900), duracao_minutos: 90, status: "confirmado", origem: "whatsapp" },
+    { id: "ag-07", cliente_id: "cli-09", servico_id: "svc-sobrancelha", inicio: at(840), duracao_minutos: 15, status: "agendado", origem: "whatsapp", observacoes: "Aguardando confirmação pelo WhatsApp." },
+    { id: "ag-08", cliente_id: "cli-05", servico_id: "svc-progressiva", inicio: at(900), duracao_minutos: 90, status: "agendado", origem: "whatsapp" },
     { id: "ag-09", cliente_id: "cli-16", servico_id: "svc-infantil", inicio: at(990), duracao_minutos: 30, status: "confirmado", origem: "whatsapp" },
   ];
 }

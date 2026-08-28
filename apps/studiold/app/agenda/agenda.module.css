@@ -175,14 +175,15 @@
   padding: 0.7rem 0.85rem;
   transition: box-shadow 0.2s var(--ease), opacity 0.2s var(--ease);
 }
-/* confirmado: fio de cromo + esmalte (o repouso) */
-.ficha[data-status="confirmado"] {
+/* agendado: só o fio de cromo, esmalte neutro (marcado, não confirmado) */
+.ficha[data-status="agendado"] {
   background: var(--enamel-hi);
   box-shadow: inset 0 0 0 1px var(--chrome);
 }
-/* pendente: fio de ocre */
-.ficha[data-status="pendente"] {
-  box-shadow: inset 0 0 0 1px var(--ochre);
+/* confirmado: presença confirmada — fio de sálvia + leve lavagem verde */
+.ficha[data-status="confirmado"] {
+  background: rgba(78, 97, 81, 0.06);
+  box-shadow: inset 0 0 0 1px var(--sage);
 }
 /* concluído: apagado, nome riscado */
 .ficha[data-status="concluido"] {
@@ -252,9 +253,9 @@
   border-radius: 1px;
   white-space: nowrap;
 }
-.selo[data-s="confirmado"] { color: var(--steel); box-shadow: inset 0 0 0 1px currentColor; }
-.selo[data-s="pendente"]   { color: var(--ochre); box-shadow: inset 0 0 0 1px currentColor; }
-.selo[data-s="concluido"]  { color: var(--sage); box-shadow: inset 0 0 0 1px currentColor; }
+.selo[data-s="agendado"]   { color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--chrome); }
+.selo[data-s="confirmado"] { color: var(--sage); box-shadow: inset 0 0 0 1px currentColor; }
+.selo[data-s="concluido"]  { color: var(--muted); box-shadow: inset 0 0 0 1px currentColor; }
 .selo[data-s="nao_compareceu"] { color: var(--muted); box-shadow: inset 0 0 0 1px currentColor; }
 .selo[data-s="cancelado"]  { color: var(--muted); box-shadow: inset 0 0 0 1px currentColor; }
 
@@ -283,11 +284,11 @@
 }
 /* status na ficha do espelho: em_atendimento já é o próprio frame preto;
    os demais só marcam quando o card é "próximo" ou logo após uma ação. */
-.hero[data-status="pendente"] {
+.hero[data-status="confirmado"] {
   box-shadow:
     0 6px 20px -8px rgba(33, 30, 27, 0.32),
     0 1px 0 0 var(--chrome),
-    inset 0 0 0 1px var(--ochre);
+    inset 0 0 0 1px var(--sage);
 }
 .hero[data-status="concluido"],
 .hero[data-status="nao_compareceu"] {

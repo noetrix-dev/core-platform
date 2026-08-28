@@ -118,7 +118,7 @@ function AgendaScreen({
       (f) =>
         f.inicioMin >= agoraMin &&
         (f.agendamento.status === "confirmado" ||
-          f.agendamento.status === "pendente"),
+          f.agendamento.status === "agendado"),
     );
     return prox?.key ?? null;
   }, [itens, agoraMin]);

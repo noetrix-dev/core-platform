@@ -11,7 +11,7 @@ export const JANELA_FILA_MIN = 15;
 export type Action =
   | { type: "TICK"; now: number }
   | { type: "HYDRATE"; dayKey: string; data: AgendaData }
-  | { type: "CONFIRMAR_AG"; agId: string }
+  | { type: "CONFIRMAR_PRESENCA"; agId: string }
   | { type: "CHECK_IN"; agId: string }
   | { type: "CONCLUIR"; agId: string }
   | { type: "FALTOU"; agId: string }
@@ -99,7 +99,8 @@ export function reducer(state: State, action: Action): State {
       return mudou ? { ...state, data: { ...d, fila, encaixes } } : state;
     }
 
-    case "CONFIRMAR_AG":
+    case "CONFIRMAR_PRESENCA":
+      // agendado → confirmado (cliente confirmou / apareceu)
       return {
         ...state,
         data: {
@@ -290,7 +291,8 @@ export function reducer(state: State, action: Action): State {
         servico_id: action.servicoId,
         inicio: isoAt(state.dayKey, action.inicioMin),
         duracao_minutos: servico.duracao_minutos,
-        status: "confirmado",
+        // na cadeira agora = presença confirmada; senão só agendado
+        status: action.naCadeira ? "confirmado" : "agendado",
         origem: action.origem,
         cortesia_id: action.cortesiaId,
         cortesia_nome: cortesia?.nome,

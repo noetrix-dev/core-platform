@@ -92,6 +92,14 @@ export function HeroFicha({
             >
               <Icon name="check" size={15} /> Concluir atendimento
             </button>
+          ) : ag.status === "agendado" ? (
+            <button
+              type="button"
+              className={`${styles.btn} ${styles["btn--primary"]}`}
+              onClick={() => dispatch({ type: "CONFIRMAR_PRESENCA", agId: ag.id })}
+            >
+              <Icon name="check" size={15} /> Confirmar presença
+            </button>
           ) : (
             <button
               type="button"
@@ -99,15 +107,6 @@ export function HeroFicha({
               onClick={() => dispatch({ type: "CHECK_IN", agId: ag.id })}
             >
               <Icon name="scissors" size={15} /> Check-in
-            </button>
-          )}
-          {!naCadeira && ag.status === "pendente" && (
-            <button
-              type="button"
-              className={`${styles.btn} ${styles["btn--ghost"]}`}
-              onClick={() => dispatch({ type: "CONFIRMAR_AG", agId: ag.id })}
-            >
-              Confirmar
             </button>
           )}
           {!naCadeira && (

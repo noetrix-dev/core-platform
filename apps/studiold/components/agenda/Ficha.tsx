@@ -8,11 +8,11 @@ import { Icon } from "./Icon";
 import styles from "@/app/agenda/agenda.module.css";
 
 const SELO_TXT: Record<string, string> = {
-  confirmado: "confirmado",
-  pendente: "a confirmar",
-  concluido: "concluído",
-  nao_compareceu: "faltou",
-  cancelado: "cancelado",
+  agendado: "AGENDADO",
+  confirmado: "CONFIRMADO",
+  concluido: "CONCLUÍDO",
+  nao_compareceu: "FALTOU",
+  cancelado: "CANCELADO",
 };
 
 const ORIGEM_TXT: Record<string, string> = {
@@ -72,14 +72,21 @@ export function Ficha({ item }: { item: ItemFicha }) {
           </span>
         </div>
 
-        {ag.status === "pendente" && (
+        {ag.status === "agendado" && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button
               type="button"
               className={`${styles.btn} ${styles["btn--primary"]}`}
-              onClick={() => dispatch({ type: "CONFIRMAR_AG", agId: ag.id })}
+              onClick={() => dispatch({ type: "CONFIRMAR_PRESENCA", agId: ag.id })}
             >
-              <Icon name="check" size={15} /> Confirmar
+              <Icon name="check" size={15} /> Confirmar presença
+            </button>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles["btn--ghost"]}`}
+              onClick={() => dispatch({ type: "FALTOU", agId: ag.id })}
+            >
+              Faltou
             </button>
             <button
               type="button"

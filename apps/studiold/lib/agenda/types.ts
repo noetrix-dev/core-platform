@@ -54,12 +54,13 @@ export interface BloqueioPontual {
   hora_fim: string;
 }
 
+// Fluxo: agendado → confirmado → concluido / nao_compareceu / cancelado
 export type StatusAgendamento =
+  | "agendado"
   | "confirmado"
-  | "pendente"
-  | "cancelado"
   | "concluido"
-  | "nao_compareceu";
+  | "nao_compareceu"
+  | "cancelado";
 
 export type OrigemAgendamento = "whatsapp" | "walkin" | "encaixe";
 

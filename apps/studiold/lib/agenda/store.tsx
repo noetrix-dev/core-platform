@@ -47,7 +47,7 @@ async function persistir(
   dayKey: string,
 ): Promise<Resultado | null> {
   switch (action.type) {
-    case "CONFIRMAR_AG":
+    case "CONFIRMAR_PRESENCA":
       return mudarStatus(action.agId, "confirmado");
     case "CONCLUIR":
       return mudarStatus(action.agId, "concluido");
@@ -71,6 +71,7 @@ async function persistir(
         servicoId: action.servicoId,
         cortesiaId: action.cortesiaId,
         inicioMin: action.inicioMin,
+        naCadeira: action.naCadeira,
         dayKey,
       });
     case "BLOQUEAR":
