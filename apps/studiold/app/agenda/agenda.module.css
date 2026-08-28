@@ -1159,6 +1159,29 @@
 .finBadge[data-m="cartao_credito"] { color: var(--ochre); }
 .finBadge[data-m="dinheiro"] { color: var(--ink-2); }
 
+/* ---- drawer de pagamento (concluir atendimento) ------------------- */
+.pagFormas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.pagFormas .chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.7rem 0.5rem;
+  font-size: 0.85rem;
+  text-align: center;
+}
+.pagDock {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding-top: 0.9rem;
+  background: linear-gradient(to top, var(--enamel) 72%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell *,
   .shell *::before,
