@@ -5,7 +5,7 @@
 ## Estado atual
 
 - Infraestrutura pronta: monorepo Turborepo + pnpm, apps e packages criados, tooling configurado (typecheck, lint, build, hooks de path protegido e build-before-stop).
-- App `apps/studiold` é boilerplate do `create-next-app`; UI de produto ainda não feita.
+- App `apps/studiold`: rota `/agenda` construída (mundo visual **A Estação do Barbeiro**, via impeccable). Roda sobre store em memória (`lib/agenda/`) com o shape do schema `barbearia_001`; ainda não ligada ao Supabase client. Cobre a agenda do dia (pilha de fichas + ficha "no espelho"), fila de espera, pedidos de encaixe, walk-in, novo agendamento, bloqueio pontual, banner de status do WhatsApp. `/` redireciona para `/agenda`.
 - Migrations Supabase aplicadas: `public.tenants` + `public.tenant_usuarios` com RLS, schema `barbearia_001` completo, seed real da StudiOLD (horários, almoço, 13 serviços).
 - Integrações com variável de ambiente reservada mas não implementadas: Evolution API (WhatsApp) e OpenAI (assistente).
 - MCPs configurados: Supabase, Context7, Playwright.
@@ -31,4 +31,10 @@
 
 ## Onde parei
 
-<!-- Preencher no fim de cada sessão: o que ficou pela metade, próximo passo concreto, arquivo/branch em foco. -->
+Rota `/agenda` da StudiOLD construída e commitada em `main` ("feat: agenda-barbeiro — A Estação do Barbeiro"). `pnpm typecheck/lint/build` e `pnpm --filter studiold check` verdes. Contrato de direção no `app/layout.tsx` (seed key `8d732202`, code-led porque a rolagem do impeccable rodou degradada, sem rede).
+
+Pendente do finish do impeccable:
+
+1. **Review visual no browser** — não deu pra rodar nesta máquina (Playwright MCP caiu; sem `libnss3`/`libnspr4` pro Chromium, sem sudo). Falta screenshot desktop/mobile e o agente `impeccable-finish-reviewer`. Rodar num ambiente com Chrome ou instalar as libs.
+2. **DESIGN.md** — não escrito de propósito; a skill grava no finish pelo `impeccable-documenter`, depois do review visual. Mundo visual novo sem DESIGN.md = run incompleto pela skill.
+3. **Ligar ao Supabase** — o reducer (`lib/agenda/reducer.ts`) é a única camada a trocar: cada action vira query no schema do tenant, operações de fila com `SELECT ... FOR UPDATE`. O seed (`lib/agenda/seed.ts`) está marcado `SINTÉTICO`.
