@@ -10,7 +10,7 @@ export const JANELA_FILA_MIN = 15;
 
 export type Action =
   | { type: "TICK"; now: number }
-  | { type: "SET_DAY"; dayKey: string }
+  | { type: "HYDRATE"; dayKey: string; data: AgendaData }
   | { type: "CONFIRMAR_AG"; agId: string }
   | { type: "CHECK_IN"; agId: string }
   | { type: "CONCLUIR"; agId: string }
@@ -37,6 +37,7 @@ export type Action =
       horaFim: string;
       descricao: string;
     }
+  | { type: "AVISO"; texto: string }
   | { type: "LIMPAR_AVISO" };
 
 export interface State {
@@ -46,8 +47,10 @@ export interface State {
   avisoId: number;
 }
 
-export function initState(dayKey: string): State {
-  return { dayKey, data: buildSeed(dayKey), aviso: null, avisoId: 0 };
+/** `data` vem do servidor (lib/agenda/load). Sem `data`, cai no mock — usado
+ *  só pelo check de node. */
+export function initState(dayKey: string, data?: AgendaData): State {
+  return { dayKey, data: data ?? buildSeed(dayKey), aviso: null, avisoId: 0 };
 }
 
 function upd<T extends { id: string }>(list: T[], id: string, patch: Partial<T>): T[] {
@@ -66,8 +69,15 @@ export function reducer(state: State, action: Action): State {
   const d = state.data;
 
   switch (action.type) {
-    case "SET_DAY":
-      return initState(action.dayKey);
+    case "HYDRATE":
+      // troca a verdade local pela do servidor (carga inicial, troca de dia,
+      // reconciliação depois de uma mutação). Preserva o aviso em curso.
+      return {
+        dayKey: action.dayKey,
+        data: action.data,
+        aviso: state.aviso,
+        avisoId: state.avisoId,
+      };
 
     case "TICK": {
       const fila = d.fila.map((f) =>
@@ -309,6 +319,9 @@ export function reducer(state: State, action: Action): State {
         },
         "Horário bloqueado.",
       );
+
+    case "AVISO":
+      return avisar(state, action.texto);
 
     case "LIMPAR_AVISO":
       return { ...state, aviso: null };

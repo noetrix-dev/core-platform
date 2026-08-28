@@ -1,7 +1,7 @@
-// Seed da agenda. Dados fixos (horário de funcionamento, almoço, 13 serviços) são
-// os reais da StudiOLD — copiados de infra/supabase/migrations/20260825000003_seed_studiold.sql.
-// Clientes e o movimento do dia são autorais, em fidelidade de produção, para a
-// tela ter o que mostrar. SINTÉTICO: trocar por dados do Supabase antes de ir ao ar.
+// Fixtures da agenda. Em produção os dados vêm de lib/agenda/load (Supabase);
+// isto sobrou como fallback de `initState` e alimenta só o `pnpm --filter
+// studiold check`. Os dados fixos (horário, almoço, 13 serviços) são os reais
+// da StudiOLD; clientes e movimento do dia são sintéticos.
 
 import type {
   AgendaData,
@@ -10,7 +10,7 @@ import type {
   HorarioFuncionamento,
   Servico,
 } from "./types";
-import { isoAt, ymd } from "./time.ts";
+import { isoAt } from "./time.ts";
 
 export const SERVICOS: Servico[] = [
   { id: "svc-corte", nome: "Corte", duracao_minutos: 30, preco: 55 },
@@ -100,5 +100,3 @@ export function buildSeed(dayKey: string): AgendaData {
     ],
   };
 }
-
-export const HOJE_KEY = ymd(new Date());

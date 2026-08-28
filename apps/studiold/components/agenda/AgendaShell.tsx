@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AgendaProvider, useAgenda } from "@/lib/agenda/store";
-import { HOJE_KEY } from "@/lib/agenda/seed";
 import { buildTimeline, type ItemFicha } from "@/lib/agenda/timeline";
 import {
   DIAS_SEMANA_LONGO,
@@ -11,6 +11,7 @@ import {
   parseYmd,
   ymd,
 } from "@/lib/agenda/time";
+import type { AgendaData } from "@/lib/agenda/types";
 import { Ficha } from "./Ficha";
 import { HeroFicha } from "./HeroFicha";
 import { ExceptionTray } from "./ExceptionTray";
@@ -19,22 +20,41 @@ import { BloquearDrawer } from "./BloquearDrawer";
 import { Icon } from "./Icon";
 import styles from "@/app/agenda/agenda.module.css";
 
-const DEMO_NOW_MIN = 770; // 12:50 — mantém "no espelho" povoado fora do horário real
+const DEMO_NOW_MIN = 770; // 12:50 — mantém "no espelho" povoado em dia passado/futuro
 
-export function AgendaShell({ waOverride }: { waOverride?: string }) {
-  const [dayKey, setDayKey] = useState(HOJE_KEY);
+/** dayKey e data vêm do RSC (app/agenda/page.tsx). A navegação de dia troca a
+ *  URL (?d=) e deixa o servidor recarregar. */
+export function AgendaShell({
+  dayKey,
+  data,
+  waOverride,
+}: {
+  dayKey: string;
+  data: AgendaData;
+  waOverride?: string;
+}) {
+  const router = useRouter();
+  const hojeKey = ymd(new Date());
+
+  const irPara = (novoDayKey: string) => {
+    const qs = new URLSearchParams();
+    if (novoDayKey !== hojeKey) qs.set("d", novoDayKey);
+    if (waOverride) qs.set("wa", waOverride);
+    router.push(qs.toString() ? `/agenda?${qs}` : "/agenda");
+  };
   const passo = (dias: number) => {
     const d = parseYmd(dayKey);
     d.setDate(d.getDate() + dias);
-    setDayKey(ymd(d));
+    irPara(ymd(d));
   };
+
   return (
-    <AgendaProvider dayKey={dayKey}>
+    <AgendaProvider dayKey={dayKey} data={data}>
       <AgendaScreen
         onPrev={() => passo(-1)}
         onNext={() => passo(1)}
-        onHoje={() => setDayKey(HOJE_KEY)}
-        ehHoje={dayKey === HOJE_KEY}
+        onHoje={() => irPara(hojeKey)}
+        ehHoje={dayKey === hojeKey}
         waOverride={waOverride}
       />
     </AgendaProvider>
