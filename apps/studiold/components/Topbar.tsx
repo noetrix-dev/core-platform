@@ -14,12 +14,11 @@ type ItemNav = {
   href: string;
   label: string;
   icone: "calendar" | "cash" | "music";
-  emBreve?: boolean;
 };
 
 const PRINCIPAIS: ItemNav[] = [
   { href: "/agenda", label: "Agenda", icone: "calendar" },
-  { href: "/financeiro", label: "Caixa", icone: "cash", emBreve: true },
+  { href: "/financeiro", label: "Caixa", icone: "cash" },
 ];
 
 const GERENCIAR: ItemNav[] = [
@@ -116,27 +115,19 @@ function NavDrawer({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className={styles.navList}>
-          {PRINCIPAIS.map((it) =>
-            it.emBreve ? (
-              <span key={it.href} className={styles.navItem} data-soon="true">
-                <Icon name={it.icone} size={17} />
-                {it.label}
-                <span className={styles.navSoon}>em breve</span>
-              </span>
-            ) : (
-              <Link
-                key={it.href}
-                href={it.href}
-                className={styles.navItem}
-                data-active={ativo(it.href) ? "true" : undefined}
-                aria-current={ativo(it.href) ? "page" : undefined}
-                onClick={onClose}
-              >
-                <Icon name={it.icone} size={17} />
-                {it.label}
-              </Link>
-            ),
-          )}
+          {PRINCIPAIS.map((it) => (
+            <Link
+              key={it.href}
+              href={it.href}
+              className={styles.navItem}
+              data-active={ativo(it.href) ? "true" : undefined}
+              aria-current={ativo(it.href) ? "page" : undefined}
+              onClick={onClose}
+            >
+              <Icon name={it.icone} size={17} />
+              {it.label}
+            </Link>
+          ))}
 
           <div className={styles.navDivider} role="separator" />
 
