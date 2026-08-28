@@ -5,6 +5,7 @@ import type { ItemFicha } from "@/lib/agenda/timeline";
 import { useAgenda } from "@/lib/agenda/store";
 import { desde, fmtPreco, minToHm } from "@/lib/agenda/time";
 import { Icon } from "./Icon";
+import { PagamentoDrawer } from "./PagamentoDrawer";
 import styles from "@/app/agenda/agenda.module.css";
 
 const SELO_TXT: Record<string, string> = {
@@ -31,9 +32,19 @@ export function Ficha({ item }: { item: ItemFicha }) {
   const preco = servico ? fmtPreco(servico.preco) : "";
   const faixa = `${minToHm(item.inicioMin)}–${minToHm(item.fimMin)}`;
 
-  const concluir = () => {
+  const [pagando, setPagando] = useState(false);
+
+  const confirmarPagamento = (p: {
+    valor: number;
+    forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro";
+    cortesiaId?: string;
+  }) => {
+    setPagando(false);
     setCarimbo(true);
-    setTimeout(() => dispatch({ type: "CONCLUIR", agId: ag.id }), 260);
+    setTimeout(
+      () => dispatch({ type: "CONCLUIR_PAGAMENTO", agId: ag.id, ...p }),
+      260,
+    );
   };
 
   return (
@@ -129,7 +140,7 @@ export function Ficha({ item }: { item: ItemFicha }) {
             <button
               type="button"
               className={`${styles.btn} ${styles["btn--primary"]}`}
-              onClick={concluir}
+              onClick={() => setPagando(true)}
             >
               <Icon name="check" size={15} /> Concluir
             </button>
@@ -149,6 +160,15 @@ export function Ficha({ item }: { item: ItemFicha }) {
               ? `${cliente.total_visitas + 1}ª visita`
               : `${cliente.total_visitas}ª visita · ${desde(cliente.ultima_visita) ?? "primeira vez"}`}
           </p>
+        )}
+
+        {pagando && (
+          <PagamentoDrawer
+            valorSugerido={servico?.preco ?? 0}
+            cortesiaIdInicial={ag.cortesia_id}
+            onConfirmar={confirmarPagamento}
+            onClose={() => setPagando(false)}
+          />
         )}
       </article>
     </div>

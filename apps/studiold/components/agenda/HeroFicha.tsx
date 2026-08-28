@@ -5,6 +5,7 @@ import type { ItemFicha } from "@/lib/agenda/timeline";
 import { useAgenda } from "@/lib/agenda/store";
 import { desde, fmtPreco, minToHm } from "@/lib/agenda/time";
 import { Icon } from "./Icon";
+import { PagamentoDrawer } from "./PagamentoDrawer";
 import styles from "@/app/agenda/agenda.module.css";
 
 export function HeroFicha({
@@ -19,9 +20,19 @@ export function HeroFicha({
   const [carimbo, setCarimbo] = useState(false);
   const naCadeira = ag.em_atendimento;
 
-  const concluir = () => {
+  const [pagando, setPagando] = useState(false);
+
+  const confirmarPagamento = (p: {
+    valor: number;
+    forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro";
+    cortesiaId?: string;
+  }) => {
+    setPagando(false);
     setCarimbo(true);
-    setTimeout(() => dispatch({ type: "CONCLUIR", agId: ag.id }), 300);
+    setTimeout(
+      () => dispatch({ type: "CONCLUIR_PAGAMENTO", agId: ag.id, ...p }),
+      300,
+    );
   };
 
   const hist =
@@ -88,7 +99,7 @@ export function HeroFicha({
             <button
               type="button"
               className={`${styles.btn} ${styles["btn--primary"]}`}
-              onClick={concluir}
+              onClick={() => setPagando(true)}
             >
               <Icon name="check" size={15} /> Concluir atendimento
             </button>
@@ -127,6 +138,15 @@ export function HeroFicha({
           </button>
         </div>
       </div>
+
+      {pagando && (
+        <PagamentoDrawer
+          valorSugerido={servico?.preco ?? 0}
+          cortesiaIdInicial={ag.cortesia_id}
+          onConfirmar={confirmarPagamento}
+          onClose={() => setPagando(false)}
+        />
+      )}
     </section>
   );
 }
