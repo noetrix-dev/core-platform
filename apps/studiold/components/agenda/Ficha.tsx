@@ -156,21 +156,23 @@ export function Ficha({ item }: { item: ItemFicha }) {
 
         {ag.status === "concluido" && cliente && (
           <p className={styles.ficha__meta}>
-            {desde(cliente.ultima_visita) === "hoje"
-              ? `${cliente.total_visitas + 1}ª visita`
-              : `${cliente.total_visitas}ª visita · ${desde(cliente.ultima_visita) ?? "primeira vez"}`}
+            {`${cliente.total_visitas}ª visita`}
+            {desde(cliente.ultima_visita) &&
+              desde(cliente.ultima_visita) !== "hoje" &&
+              ` · ${desde(cliente.ultima_visita)}`}
           </p>
         )}
 
-        {pagando && (
-          <PagamentoDrawer
-            valorSugerido={servico?.preco ?? 0}
-            cortesiaIdInicial={ag.cortesia_id}
-            onConfirmar={confirmarPagamento}
-            onClose={() => setPagando(false)}
-          />
-        )}
       </article>
+
+      {pagando && (
+        <PagamentoDrawer
+          valorSugerido={servico?.preco ?? 0}
+          cortesiaIdInicial={ag.cortesia_id}
+          onConfirmar={confirmarPagamento}
+          onClose={() => setPagando(false)}
+        />
+      )}
     </div>
   );
 }

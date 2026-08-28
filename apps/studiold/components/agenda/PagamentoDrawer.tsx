@@ -57,8 +57,13 @@ export function PagamentoDrawer({
     return ativas;
   }, [data.cortesias, cortesiaIdInicial]);
 
-  const valor = Number(valorTxt.replace(/\./g, "").replace(",", "."));
-  const valorOk = Number.isFinite(valor) && valor >= 0;
+  const valorTrim = valorTxt.trim();
+  const valor = Number(
+    valorTrim.includes(",")
+      ? valorTrim.replace(/\./g, "").replace(",", ".")
+      : valorTrim,
+  );
+  const valorOk = valorTrim !== "" && Number.isFinite(valor) && valor >= 0;
   const podeEnviar = valorOk && forma != null && !enviando;
 
   const enviar = (e: FormEvent) => {
