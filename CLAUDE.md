@@ -4,6 +4,8 @@ Instruções para agentes trabalhando no monorepo `noetrix-platform`.
 
 As regras em `.claude/rules/` (frontend, backend, database, security) estão sempre ativas e têm precedência sobre o comportamento padrão.
 
+@MEMORY.md
+
 ## Antes de concluir uma tarefa
 
 Rodar esta checklist antes de considerar qualquer tarefa finalizada:
