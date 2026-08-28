@@ -889,6 +889,105 @@
   display: none;
 }
 
+/* ---- drawer de navegação (hambúrguer) ------------------------------- */
+.navScrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 18, 16, 0.42);
+  z-index: 80;
+  animation: fade 0.2s var(--ease) both;
+}
+.navDrawer {
+  position: fixed;
+  z-index: 81;
+  inset: 0 auto 0 0;
+  width: min(280px, 86vw);
+  background: var(--enamel);
+  background-image: radial-gradient(rgba(28, 26, 23, 0.04) 1px, transparent 1.4px);
+  background-size: 7px 7px;
+  box-shadow: 12px 0 40px -12px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  animation: navEntra 0.28s var(--ease) both;
+}
+@keyframes navEntra {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+.navHead {
+  background: var(--matte);
+  padding: 0.85rem 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem;
+}
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--r);
+  color: var(--ink);
+  font-family: var(--font-barlow-cond), sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background 0.14s var(--ease), box-shadow 0.14s var(--ease);
+}
+.navItem:hover {
+  background: rgba(28, 26, 23, 0.05);
+}
+.navItem[data-active="true"] {
+  color: var(--oxblood);
+  background: rgba(123, 45, 38, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(123, 45, 38, 0.35);
+}
+.navItemSub {
+  margin-left: 0.9rem;
+  font-weight: 500;
+  font-size: 0.92rem;
+}
+.navItem[data-soon="true"] {
+  color: var(--ink-2);
+  cursor: default;
+}
+.navItem[data-soon="true"]:hover {
+  background: none;
+}
+.navSoon {
+  margin-left: auto;
+  font-family: var(--font-barlow-cond), sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--chrome);
+  padding: 0.05rem 0.35rem;
+  border-radius: 1px;
+}
+.navDivider {
+  height: 1px;
+  background: var(--chrome);
+  margin: 0.55rem 0.4rem;
+}
+.navSection {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem 0.3rem;
+  font-family: var(--font-barlow-cond), sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell *,
   .shell *::before,

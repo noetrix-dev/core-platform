@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Topbar } from "@/components/Topbar";
 import { AgendaProvider, useAgenda } from "@/lib/agenda/store";
 import { buildTimeline, type ItemFicha } from "@/lib/agenda/timeline";
 import {
@@ -128,71 +128,48 @@ function AgendaScreen({
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topbar}>
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
-          {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático, sem otimização do next/image */}
-          <img
-            src="/studiold-logo.svg"
-            alt="StudiOLD"
-            className="h-8 w-auto"
-            // logo é preenchido em #231f20; inverte para branco no topbar escuro
-            style={{ filter: "brightness(0) invert(1)" }}
-          />
-          <span className="hidden text-xs uppercase tracking-widest opacity-50 sm:inline">
-            Agenda
-          </span>
-
-          <div className="ml-auto flex items-center gap-1.5">
-            <button
-              type="button"
-              className={styles.navbtn}
-              onClick={onPrev}
-              aria-label="Dia anterior"
-            >
-              <Icon name="prev" size={16} />
-            </button>
-            <button
-              type="button"
-              className={`${styles.navbtn} px-2 py-1 text-xs uppercase tracking-wider`}
-              onClick={onHoje}
-              disabled={ehHoje}
-              aria-label="Ir para hoje"
-            >
-              Hoje
-            </button>
-            <button
-              type="button"
-              className={styles.navbtn}
-              onClick={onNext}
-              aria-label="Próximo dia"
-            >
-              <Icon name="next" size={16} />
-            </button>
-          </div>
-
-          <span
-            className={styles.pip}
-            title={`WhatsApp ${waStatus}`}
-            aria-label={`WhatsApp ${waStatus}`}
-          >
-            <span className={styles.pipDot} data-s={waStatus} />
-            <span className="hidden sm:inline">WhatsApp</span>
-          </span>
-
-          <Link
-            href="/configuracoes"
-            className={`${styles.navbtn} inline-flex items-center justify-center p-1.5`}
-            aria-label="Configurações"
-          >
-            <Icon name="gear" size={16} />
-          </Link>
-        </div>
-        <div className="mx-auto max-w-6xl px-4 pb-3 sm:px-6">
+      <Topbar
+        titulo="Agenda"
+        sub={
           <h1 className={`${styles.daylabel} text-lg font-semibold`}>
             {fmtDataLonga(dayKey)}
           </h1>
-        </div>
-      </header>
+        }
+      >
+        <button
+          type="button"
+          className={styles.navbtn}
+          onClick={onPrev}
+          aria-label="Dia anterior"
+        >
+          <Icon name="prev" size={16} />
+        </button>
+        <button
+          type="button"
+          className={`${styles.navbtn} px-2 py-1 text-xs uppercase tracking-wider`}
+          onClick={onHoje}
+          disabled={ehHoje}
+          aria-label="Ir para hoje"
+        >
+          Hoje
+        </button>
+        <button
+          type="button"
+          className={styles.navbtn}
+          onClick={onNext}
+          aria-label="Próximo dia"
+        >
+          <Icon name="next" size={16} />
+        </button>
+        <span
+          className={styles.pip}
+          title={`WhatsApp ${waStatus}`}
+          aria-label={`WhatsApp ${waStatus}`}
+        >
+          <span className={styles.pipDot} data-s={waStatus} />
+          <span className="hidden sm:inline">WhatsApp</span>
+        </span>
+      </Topbar>
 
       {waStatus !== "conectado" && (
         <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">

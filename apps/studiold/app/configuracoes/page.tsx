@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { tenantDb } from "@/lib/supabase/server";
 import { Icon } from "@/components/agenda/Icon";
+import { Topbar } from "@/components/Topbar";
 import styles from "@/app/agenda/agenda.module.css";
 import * as A from "./actions";
 import { EstoqueEditavel } from "./EstoqueEditavel";
@@ -32,26 +32,7 @@ export default async function ConfiguracoesPage() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topbar}>
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 sm:px-6">
-          {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático */}
-          <img
-            src="/studiold-logo.svg"
-            alt="StudiOLD"
-            className="h-8 w-auto"
-            style={{ filter: "brightness(0) invert(1)" }}
-          />
-          <span className="hidden text-xs uppercase tracking-widest opacity-50 sm:inline">
-            Configurações
-          </span>
-          <Link
-            href="/agenda"
-            className={`${styles.navbtn} ml-auto flex items-center gap-1.5 px-2 py-1 text-xs uppercase tracking-wider`}
-          >
-            <Icon name="prev" size={14} /> Agenda
-          </Link>
-        </div>
-      </header>
+      <Topbar titulo="Configurações" />
 
       <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-5 sm:px-6">
         {/* ---- CORTESIAS ---- */}
