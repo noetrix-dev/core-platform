@@ -25,6 +25,7 @@ import {
   agendar,
   bloquear,
   cancelar,
+  concluirAtendimento,
   confirmarFila,
   mudarStatus,
   notificarFila,
@@ -49,8 +50,13 @@ async function persistir(
   switch (action.type) {
     case "CONFIRMAR_PRESENCA":
       return mudarStatus(action.agId, "confirmado");
-    case "CONCLUIR":
-      return mudarStatus(action.agId, "concluido");
+    case "CONCLUIR_PAGAMENTO":
+      return concluirAtendimento(
+        action.agId,
+        action.valor,
+        action.forma,
+        action.cortesiaId,
+      );
     case "FALTOU":
       return mudarStatus(action.agId, "nao_compareceu");
     case "CANCELAR":

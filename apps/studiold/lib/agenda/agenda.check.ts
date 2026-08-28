@@ -90,6 +90,46 @@ const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
   );
 }
 
+// --- CONCLUIR_PAGAMENTO: status, cadeira, estoque -------------------
+{
+  let s = initState(DIA);
+  // ag-05 está em atendimento no seed, com cortesia cor-cerveja
+  const cerveja0 = s.data.cortesias.find((c) => c.id === "cor-cerveja")!
+    .quantidade_estoque;
+  s = reducer(s, {
+    type: "CONCLUIR_PAGAMENTO",
+    agId: "ag-05",
+    valor: 115,
+    forma: "pix",
+    cortesiaId: "cor-cerveja",
+  });
+  const ag = s.data.agendamentos.find((a) => a.id === "ag-05")!;
+  assert.equal(ag.status, "concluido");
+  assert.equal(ag.em_atendimento, false, "sai da cadeira ao concluir");
+  const cerveja1 = s.data.cortesias.find((c) => c.id === "cor-cerveja")!
+    .quantidade_estoque;
+  assert.equal(cerveja1, cerveja0 - 1, "baixa 1 na cortesia servida");
+  assert.match(s.aviso ?? "", /conclu/i);
+}
+
+// --- CONCLUIR_PAGAMENTO sem cortesia não mexe no estoque -----------
+{
+  let s = initState(DIA);
+  const soma0 = s.data.cortesias.reduce((n, c) => n + c.quantidade_estoque, 0);
+  s = reducer(s, {
+    type: "CONCLUIR_PAGAMENTO",
+    agId: "ag-05",
+    valor: 100,
+    forma: "dinheiro",
+  });
+  const soma1 = s.data.cortesias.reduce((n, c) => n + c.quantidade_estoque, 0);
+  assert.equal(soma1, soma0, "sem cortesia, estoque intacto");
+  assert.equal(
+    s.data.agendamentos.find((a) => a.id === "ag-05")!.status,
+    "concluido",
+  );
+}
+
 // --- expiração pelo TICK --------------------------------------------
 {
   let s = initState(DIA);

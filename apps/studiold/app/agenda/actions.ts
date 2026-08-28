@@ -154,3 +154,29 @@ export async function aceitarEncaixe(encId: string): Promise<R> {
   });
   return error ? falha(error, "aceitarEncaixe") : { ok: true };
 }
+
+export async function concluirAtendimento(
+  agId: string,
+  valor: number,
+  forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro",
+  cortesiaId?: string,
+): Promise<R> {
+  if (!/^[0-9a-f-]{36}$/i.test(agId)) {
+    return { ok: false, error: "id de agendamento inválido" };
+  }
+  if (!Number.isFinite(valor) || valor < 0) {
+    return { ok: false, error: "valor inválido" };
+  }
+  if (!["pix", "cartao_debito", "cartao_credito", "dinheiro"].includes(forma)) {
+    return { ok: false, error: "forma de pagamento inválida" };
+  }
+  const cor = /^[0-9a-f-]{36}$/i.test(cortesiaId ?? "") ? cortesiaId! : null;
+
+  const { error } = await tenantDb().rpc("fn_concluir_atendimento", {
+    p_agendamento_id: agId,
+    p_valor: valor,
+    p_forma_pagamento: forma,
+    p_cortesia_id: cor,
+  });
+  return error ? falha(error, "concluirAtendimento") : { ok: true };
+}

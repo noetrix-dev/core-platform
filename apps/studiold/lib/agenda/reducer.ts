@@ -13,7 +13,13 @@ export type Action =
   | { type: "HYDRATE"; dayKey: string; data: AgendaData }
   | { type: "CONFIRMAR_PRESENCA"; agId: string }
   | { type: "CHECK_IN"; agId: string }
-  | { type: "CONCLUIR"; agId: string }
+  | {
+      type: "CONCLUIR_PAGAMENTO";
+      agId: string;
+      valor: number;
+      forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro";
+      cortesiaId?: string;
+    }
   | { type: "FALTOU"; agId: string }
   | { type: "CANCELAR"; agId: string }
   | { type: "NOTIFICAR_FILA"; filaId: string }
@@ -121,17 +127,37 @@ export function reducer(state: State, action: Action): State {
         },
       };
 
-    case "CONCLUIR":
-      return {
-        ...state,
-        data: {
-          ...d,
-          agendamentos: upd(d.agendamentos, action.agId, {
-            status: "concluido",
-            em_atendimento: false,
-          }),
+    case "CONCLUIR_PAGAMENTO": {
+      const cortesia = action.cortesiaId
+        ? d.cortesias.find((c) => c.id === action.cortesiaId)
+        : undefined;
+      const cortesias = cortesia
+        ? d.cortesias.map((c) =>
+            c.id === cortesia.id
+              ? {
+                  ...c,
+                  quantidade_estoque: Math.max(0, c.quantidade_estoque - 1),
+                }
+              : c,
+          )
+        : d.cortesias;
+      return avisar(
+        {
+          ...state,
+          data: {
+            ...d,
+            cortesias,
+            agendamentos: upd(d.agendamentos, action.agId, {
+              status: "concluido",
+              em_atendimento: false,
+              cortesia_id: action.cortesiaId,
+              cortesia_nome: cortesia?.nome,
+            }),
+          },
         },
-      };
+        "Atendimento concluído.",
+      );
+    }
 
     case "FALTOU":
       return {
