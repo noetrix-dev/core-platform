@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AgendaProvider, useAgenda } from "@/lib/agenda/store";
 import { buildTimeline, type ItemFicha } from "@/lib/agenda/timeline";
@@ -177,6 +178,14 @@ function AgendaScreen({
             <span className={styles.pipDot} data-s={waStatus} />
             <span className="hidden sm:inline">WhatsApp</span>
           </span>
+
+          <Link
+            href="/configuracoes"
+            className={`${styles.navbtn} inline-flex items-center justify-center p-1.5`}
+            aria-label="Configurações"
+          >
+            <Icon name="gear" size={16} />
+          </Link>
         </div>
         <div className="mx-auto max-w-6xl px-4 pb-3 sm:px-6">
           <h1 className={`${styles.daylabel} text-lg font-semibold`}>

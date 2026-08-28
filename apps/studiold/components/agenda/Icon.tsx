@@ -13,7 +13,10 @@ type Name =
   | "user"
   | "phone"
   | "lock"
-  | "chat";
+  | "chat"
+  | "gear"
+  | "cup"
+  | "music";
 
 const PATHS: Record<Name, React.ReactNode> = {
   prev: <polyline points="13,4 7,10 13,16" />,
@@ -69,6 +72,26 @@ const PATHS: Record<Name, React.ReactNode> = {
   ),
   chat: (
     <path d="M4 5h12v8H8l-4 3.5V5z" />
+  ),
+  gear: (
+    <>
+      <circle cx="10" cy="10" r="2.6" />
+      <path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M15.3 4.7l-1.6 1.6M6.3 13.7l-1.6 1.6" />
+    </>
+  ),
+  cup: (
+    <>
+      <path d="M5 6h9v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V6z" />
+      <path d="M14 7h2.5a1.5 1.5 0 0 1 0 3H14" />
+      <line x1="5" y1="17.5" x2="14" y2="17.5" />
+    </>
+  ),
+  music: (
+    <>
+      <path d="M8 14V4l8-1.6V12" />
+      <circle cx="6" cy="14" r="2" />
+      <circle cx="14" cy="12" r="2" />
+    </>
   ),
 };
 

@@ -1,0 +1,250 @@
+import Link from "next/link";
+import { tenantDb } from "@/lib/supabase/server";
+import { Icon } from "@/components/agenda/Icon";
+import styles from "@/app/agenda/agenda.module.css";
+import * as A from "./actions";
+
+export const dynamic = "force-dynamic";
+
+type Cortesia = {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  ativo: boolean;
+  quantidade_estoque: number;
+};
+type Estilo = { id: string; nome: string; ativo: boolean };
+
+export default async function ConfiguracoesPage() {
+  const db = tenantDb();
+  const [cRes, eRes] = await Promise.all([
+    db
+      .from("cortesias")
+      .select("id, nome, descricao, ativo, quantidade_estoque")
+      .order("nome"),
+    db.from("estilos_musica").select("id, nome, ativo").order("nome"),
+  ]);
+  if (cRes.error) throw new Error(`configuracoes/cortesias: ${cRes.error.message}`);
+  if (eRes.error) throw new Error(`configuracoes/estilos: ${eRes.error.message}`);
+  const cortesias = (cRes.data ?? []) as Cortesia[];
+  const estilos = (eRes.data ?? []) as Estilo[];
+
+  return (
+    <div className={styles.shell}>
+      <header className={styles.topbar}>
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 sm:px-6">
+          {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático */}
+          <img
+            src="/studiold-logo.svg"
+            alt="StudiOLD"
+            className="h-8 w-auto"
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
+          <span className="hidden text-xs uppercase tracking-widest opacity-50 sm:inline">
+            Configurações
+          </span>
+          <Link
+            href="/agenda"
+            className={`${styles.navbtn} ml-auto flex items-center gap-1.5 px-2 py-1 text-xs uppercase tracking-wider`}
+          >
+            <Icon name="prev" size={14} /> Agenda
+          </Link>
+        </div>
+      </header>
+
+      <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-5 sm:px-6">
+        {/* ---- CORTESIAS ---- */}
+        <section className={styles.cfgSection}>
+          <header>
+            <Icon name="cup" size={15} /> Cortesias
+          </header>
+
+          <form action={A.criarCortesia} className={styles.cfgAddbar}>
+            <input
+              name="nome"
+              placeholder="Nova cortesia"
+              aria-label="Nome da nova cortesia"
+              required
+              maxLength={120}
+            />
+            <input
+              name="descricao"
+              placeholder="Descrição (opcional)"
+              aria-label="Descrição da nova cortesia"
+              maxLength={280}
+            />
+            <button
+              type="submit"
+              className={`${styles.btn} ${styles["btn--primary"]}`}
+            >
+              <Icon name="plus" size={14} /> Adicionar
+            </button>
+          </form>
+
+          {cortesias.length === 0 && (
+            <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+              Nenhuma cortesia cadastrada.
+            </p>
+          )}
+
+          {cortesias.map((c) => (
+            <div
+              key={c.id}
+              className={styles.cfgRow}
+              data-inativo={c.ativo ? undefined : "true"}
+            >
+              <div>
+                <p className={styles.cfgRow__nome}>{c.nome}</p>
+                {c.descricao && (
+                  <p className={styles.cfgRow__meta}>{c.descricao}</p>
+                )}
+                <p className={styles.cfgRow__meta}>
+                  Estoque: {c.quantidade_estoque}
+                </p>
+              </div>
+
+              <div className={styles.cfgRow__acoes}>
+                <form action={A.adicionarEstoque} className={styles.cfgEstoque}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <input
+                    type="number"
+                    name="n"
+                    defaultValue={10}
+                    min={1}
+                    max={9999}
+                    aria-label={`Unidades a somar no estoque de ${c.nome}`}
+                  />
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles["btn--ghost"]}`}
+                    aria-label={`Somar ao estoque de ${c.nome}`}
+                  >
+                    <Icon name="plus" size={13} /> estoque
+                  </button>
+                </form>
+
+                <form action={A.toggleCortesiaAtivo}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <input type="hidden" name="ativo" value={String(!c.ativo)} />
+                  <button
+                    type="submit"
+                    className={styles.cfgSwitch}
+                    data-on={c.ativo}
+                    aria-label={`${c.ativo ? "Desativar" : "Ativar"} ${c.nome}`}
+                  />
+                </form>
+              </div>
+
+              <details className={styles.cfgEdit}>
+                <summary
+                  className={`${styles.cfgSummary} ${styles.btn} ${styles["btn--ghost"]}`}
+                >
+                  Editar
+                </summary>
+                <form action={A.editarCortesia}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <input
+                    name="nome"
+                    defaultValue={c.nome}
+                    aria-label={`Nome de ${c.nome}`}
+                    required
+                    maxLength={120}
+                  />
+                  <input
+                    name="descricao"
+                    defaultValue={c.descricao ?? ""}
+                    placeholder="Descrição"
+                    aria-label={`Descrição de ${c.nome}`}
+                    maxLength={280}
+                  />
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles["btn--primary"]}`}
+                  >
+                    Salvar
+                  </button>
+                </form>
+              </details>
+            </div>
+          ))}
+        </section>
+
+        {/* ---- ESTILOS DE MÚSICA ---- */}
+        <section className={styles.cfgSection}>
+          <header>
+            <Icon name="music" size={15} /> Estilos de música
+          </header>
+
+          <form action={A.criarEstilo} className={styles.cfgAddbar}>
+            <input
+              name="nome"
+              placeholder="Novo estilo"
+              aria-label="Nome do novo estilo"
+              required
+              maxLength={120}
+            />
+            <button
+              type="submit"
+              className={`${styles.btn} ${styles["btn--primary"]}`}
+            >
+              <Icon name="plus" size={14} /> Adicionar
+            </button>
+          </form>
+
+          {estilos.length === 0 && (
+            <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+              Nenhum estilo cadastrado.
+            </p>
+          )}
+
+          {estilos.map((e) => (
+            <div
+              key={e.id}
+              className={styles.cfgRow}
+              data-inativo={e.ativo ? undefined : "true"}
+            >
+              <p className={styles.cfgRow__nome}>{e.nome}</p>
+
+              <div className={styles.cfgRow__acoes}>
+                <form action={A.toggleEstiloAtivo}>
+                  <input type="hidden" name="id" value={e.id} />
+                  <input type="hidden" name="ativo" value={String(!e.ativo)} />
+                  <button
+                    type="submit"
+                    className={styles.cfgSwitch}
+                    data-on={e.ativo}
+                    aria-label={`${e.ativo ? "Desativar" : "Ativar"} ${e.nome}`}
+                  />
+                </form>
+              </div>
+
+              <details className={styles.cfgEdit}>
+                <summary
+                  className={`${styles.cfgSummary} ${styles.btn} ${styles["btn--ghost"]}`}
+                >
+                  Editar
+                </summary>
+                <form action={A.editarEstilo}>
+                  <input type="hidden" name="id" value={e.id} />
+                  <input
+                    name="nome"
+                    defaultValue={e.nome}
+                    aria-label={`Nome de ${e.nome}`}
+                    required
+                    maxLength={120}
+                  />
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles["btn--primary"]}`}
+                  >
+                    Salvar
+                  </button>
+                </form>
+              </details>
+            </div>
+          ))}
+        </section>
+      </main>
+    </div>
+  );
+}

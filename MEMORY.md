@@ -6,6 +6,7 @@
 
 - Infraestrutura pronta: monorepo Turborepo + pnpm, apps e packages criados, tooling configurado (typecheck, lint, build, hooks de path protegido e build-before-stop).
 - App `apps/studiold`: rota `/agenda` construída (mundo visual **A Estação do Barbeiro**, via impeccable). Cobre a agenda do dia (pilha de fichas + ficha "no espelho"), fila de espera, pedidos de encaixe, walk-in, novo agendamento, bloqueio pontual, banner de status do WhatsApp. `/` redireciona para `/agenda`.
+- Rota `/configuracoes` (link pela engrenagem no topbar da agenda): CRUD de `cortesias` e `estilos_musica` via Server Actions, sem JS de cliente (forms nativos + `<details>`). Depende da migration `docs/migration-cortesias-musicas-preferencias.sql` ser aplicada — 500 até lá.
 - Camada de dados da agenda **ligada ao Supabase (path A: service-role só no servidor)**: `lib/supabase/server.ts` (service-role, `.schema` do tenant), `lib/agenda/load.ts` (RSC lê o schema e devolve `AgendaData`), `app/agenda/actions.ts` (Server Actions por mutação; fila/encaixe via RPC `fn_*` com `FOR UPDATE`). O reducer (`lib/agenda/reducer.ts`) continua puro — cliente faz update otimista e `router.refresh()` reconcilia via `HYDRATE`. `lib/agenda/seed.ts` sobrou só como fixture do `check`.
 - Migrations Supabase aplicadas: `public.tenants` + `public.tenant_usuarios` com RLS, schema `barbearia_001` completo, seed real da StudiOLD (horários, almoço, 13 serviços).
 - Integrações com variável de ambiente reservada mas não implementadas: Evolution API (WhatsApp) e OpenAI (assistente).
