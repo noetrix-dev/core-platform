@@ -46,6 +46,7 @@ export function Ficha({ item }: { item: ItemFicha }) {
       <article
         className={`${styles.ficha} ${carimbo ? styles.stamped : ""}`}
         data-status={ag.status}
+        data-em-atendimento={ag.em_atendimento ? "true" : undefined}
         aria-label={`${nome}, ${svcNome}, ${faixa}, ${SELO_TXT[ag.status]}`}
       >
         <div className="flex items-start justify-between gap-3">

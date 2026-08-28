@@ -165,19 +165,32 @@
   color: var(--muted);
 }
 
-/* ficha: cartão de esmalte, canto de 2px, fio de cromo gravado */
+/* ficha: cartão de esmalte, canto de 2px, fio de cromo gravado.
+   Cor por status, tudo no mundo da Estação: cromo/esmalte, ocre, oxblood. */
 .ficha {
   position: relative;
   background: var(--enamel-hi);
   border-radius: var(--r);
   box-shadow: inset 0 0 0 1px var(--chrome);
   padding: 0.7rem 0.85rem;
-  transition: box-shadow 0.2s var(--ease);
+  transition: box-shadow 0.2s var(--ease), opacity 0.2s var(--ease);
 }
+/* confirmado: fio de cromo + esmalte (o repouso) */
+.ficha[data-status="confirmado"] {
+  background: var(--enamel-hi);
+  box-shadow: inset 0 0 0 1px var(--chrome);
+}
+/* pendente: fio de ocre */
+.ficha[data-status="pendente"] {
+  box-shadow: inset 0 0 0 1px var(--ochre);
+}
+/* concluído: apagado, nome riscado */
 .ficha[data-status="concluido"] {
   background: var(--enamel-lo);
   color: var(--ink-2);
+  opacity: 0.55;
 }
+/* não compareceu: hachura diagonal + bem apagado */
 .ficha[data-status="nao_compareceu"] {
   background: repeating-linear-gradient(
     -45deg,
@@ -187,9 +200,26 @@
     #dcd6ca 7px
   );
   color: var(--ink-2);
+  opacity: 0.4;
 }
-.ficha[data-status="pendente"] {
-  box-shadow: inset 0 0 0 1px var(--ochre);
+/* cancelado: fio de oxblood + lavagem quente + nome riscado */
+.ficha[data-status="cancelado"] {
+  background: rgba(123, 45, 38, 0.06);
+  box-shadow: inset 0 0 0 1px var(--oxblood);
+  color: var(--ink-2);
+  opacity: 0.6;
+}
+/* na cadeira, quando não é o card do espelho: oxblood cheio, texto claro.
+   Vence os data-status por vir depois com a mesma especificidade. */
+.ficha[data-em-atendimento="true"] {
+  background: var(--oxblood);
+  box-shadow: inset 0 0 0 1px var(--oxblood-hi);
+  color: #f6efe6;
+  opacity: 1;
+}
+.ficha[data-em-atendimento="true"] .ficha__name,
+.ficha[data-em-atendimento="true"] .ficha__meta {
+  color: #f6efe6;
 }
 
 .ficha__name {
@@ -204,7 +234,8 @@
   font-size: 0.83rem;
 }
 .ficha[data-status="concluido"] .ficha__name,
-.ficha[data-status="nao_compareceu"] .ficha__name {
+.ficha[data-status="nao_compareceu"] .ficha__name,
+.ficha[data-status="cancelado"] .ficha__name {
   text-decoration: line-through;
   text-decoration-color: var(--muted);
   text-decoration-thickness: 1px;
@@ -249,6 +280,31 @@
 @keyframes espelho {
   from { transform: translateY(8px) scale(0.985); box-shadow: 0 0 0 0 transparent, inset 0 0 0 1px var(--chrome); }
   to   { transform: none; }
+}
+/* status na ficha do espelho: em_atendimento já é o próprio frame preto;
+   os demais só marcam quando o card é "próximo" ou logo após uma ação. */
+.hero[data-status="pendente"] {
+  box-shadow:
+    0 6px 20px -8px rgba(33, 30, 27, 0.32),
+    0 1px 0 0 var(--chrome),
+    inset 0 0 0 1px var(--ochre);
+}
+.hero[data-status="concluido"],
+.hero[data-status="nao_compareceu"] {
+  opacity: 0.55;
+}
+.hero[data-status="cancelado"] {
+  opacity: 0.6;
+  box-shadow:
+    0 6px 20px -8px rgba(33, 30, 27, 0.32),
+    inset 0 0 0 1px var(--oxblood);
+}
+.hero[data-status="concluido"] .hero__name,
+.hero[data-status="nao_compareceu"] .hero__name,
+.hero[data-status="cancelado"] .hero__name {
+  text-decoration: line-through;
+  text-decoration-color: var(--muted);
+  text-decoration-thickness: 1px;
 }
 .hero__frame {
   background: var(--matte);

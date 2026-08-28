@@ -34,6 +34,7 @@ export function HeroFicha({
   return (
     <section
       className={`${styles.hero} ${carimbo ? styles.stamped : ""}`}
+      data-status={ag.status}
       aria-label={`No espelho: ${cliente?.nome ?? "cliente"}`}
     >
       <div className={styles.hero__frame}>
