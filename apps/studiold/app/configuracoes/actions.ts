@@ -78,6 +78,23 @@ export async function adicionarEstoque(fd: FormData): Promise<void> {
   revalidatePath(ROTA);
 }
 
+/** define a quantidade absoluta (edição inline do número). */
+export async function definirEstoque(
+  id: string,
+  quantidade: number,
+): Promise<void> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("id inválido");
+  if (!Number.isInteger(quantidade) || quantidade < 0 || quantidade > 100_000) {
+    return;
+  }
+  const { error } = await tenantDb()
+    .from("cortesias")
+    .update({ quantidade_estoque: quantidade })
+    .eq("id", id);
+  if (error) throw new Error(`definirEstoque: ${error.message}`);
+  revalidatePath(ROTA);
+}
+
 // --- estilos de música --------------------------------------------------
 
 export async function criarEstilo(fd: FormData): Promise<void> {

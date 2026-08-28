@@ -3,6 +3,7 @@ import { tenantDb } from "@/lib/supabase/server";
 import { Icon } from "@/components/agenda/Icon";
 import styles from "@/app/agenda/agenda.module.css";
 import * as A from "./actions";
+import { EstoqueEditavel } from "./EstoqueEditavel";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,12 @@ export default async function ConfiguracoesPage() {
                   <p className={styles.cfgRow__meta}>{c.descricao}</p>
                 )}
                 <p className={styles.cfgRow__meta}>
-                  Estoque: {c.quantidade_estoque}
+                  Estoque:{" "}
+                  <EstoqueEditavel
+                    id={c.id}
+                    valor={c.quantidade_estoque}
+                    nome={c.nome}
+                  />
                 </p>
               </div>
 
@@ -119,7 +125,7 @@ export default async function ConfiguracoesPage() {
                     className={`${styles.btn} ${styles["btn--ghost"]}`}
                     aria-label={`Somar ao estoque de ${c.nome}`}
                   >
-                    <Icon name="plus" size={13} /> estoque
+                    <Icon name="plus" size={13} /> Adicionar
                   </button>
                 </form>
 
