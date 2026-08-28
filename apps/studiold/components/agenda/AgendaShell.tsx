@@ -129,9 +129,8 @@ function AgendaScreen({
     <div className={styles.shell}>
       <header className={styles.topbar}>
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
-          <span className={styles.wordmark}>
-            Studi<b>OLD</b>
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático, sem otimização do next/image */}
+          <img src="/studiold-logo.svg" alt="StudiOLD" className="h-8 w-auto" />
           <span className="hidden text-xs uppercase tracking-widest opacity-50 sm:inline">
             Agenda
           </span>
