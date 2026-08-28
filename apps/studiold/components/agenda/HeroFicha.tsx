@@ -56,6 +56,14 @@ export function HeroFicha({
                 {servico ? fmtPreco(servico.preco) : ""}
               </span>
             </p>
+            {ag.cortesia_nome && (
+              <p
+                className="mt-1 flex items-center gap-1.5 text-sm"
+                style={{ color: "var(--ink-2)" }}
+              >
+                <Icon name="cup" size={14} /> {ag.cortesia_nome}
+              </p>
+            )}
           </div>
         </div>
 

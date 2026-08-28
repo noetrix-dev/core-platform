@@ -65,6 +65,7 @@ export async function agendar(p: {
   telefone: string;
   clienteId?: string;
   servicoId: string;
+  cortesiaId?: string;
   inicioMin: number;
   dayKey: string;
 }): Promise<R> {
@@ -105,14 +106,35 @@ export async function agendar(p: {
     .single();
   if (slot.error) return falha(slot.error, "agendar/slot");
 
+  const cortesiaId = /^[0-9a-f-]{36}$/i.test(p.cortesiaId ?? "")
+    ? p.cortesiaId!
+    : null;
+
   const ins = await db.from("agendamentos").insert({
     slot_id: slot.data.id as string,
     cliente_id: clienteId,
     servico_id: p.servicoId,
     duracao_minutos: dur,
     status: "confirmado",
+    cortesia_id: cortesiaId,
   });
-  return ins.error ? falha(ins.error, "agendar/agendamento") : { ok: true };
+  if (ins.error) return falha(ins.error, "agendar/agendamento");
+
+  // baixa de 1 no estoque da cortesia escolhida
+  // ponytail: read-modify-write; corrida irrelevante para uma agenda de um operador
+  if (cortesiaId) {
+    const cor = await db
+      .from("cortesias")
+      .select("quantidade_estoque")
+      .eq("id", cortesiaId)
+      .single();
+    if (!cor.error) {
+      const novo = Math.max(0, ((cor.data.quantidade_estoque as number) ?? 0) - 1);
+      await db.from("cortesias").update({ quantidade_estoque: novo }).eq("id", cortesiaId);
+    }
+  }
+
+  return { ok: true };
 }
 
 // --- fila / encaixe: FOR UPDATE dentro de função plpgsql -----------------

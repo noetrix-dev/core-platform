@@ -61,6 +61,11 @@ export function Ficha({ item }: { item: ItemFicha }) {
                 </>
               )}
             </p>
+            {ag.cortesia_nome && (
+              <p className={`${styles.ficha__meta} flex items-center gap-1`}>
+                <Icon name="cup" size={13} /> {ag.cortesia_nome}
+              </p>
+            )}
           </div>
           <span className={styles.selo} data-s={ag.status}>
             {SELO_TXT[ag.status]}

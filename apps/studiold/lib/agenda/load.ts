@@ -68,6 +68,7 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
     filaRes,
     encRes,
     atendRes,
+    cortesiasRes,
   ] = await Promise.all([
     db.schema("public").from("tenants").select("nome, whatsapp_status").eq("slug", TENANT_SCHEMA).maybeSingle(),
     db.from("clientes").select("id, nome, telefone, genero, observacoes").eq("ativo", true),
@@ -77,7 +78,9 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
     db.from("bloqueios_pontuais").select("id, descricao, data, hora_inicio, hora_fim").eq("ativo", true).eq("data", dayKey),
     db
       .from("agendamentos")
-      .select("id, cliente_id, servico_id, duracao_minutos, status, observacoes, slots!inner(data_hora)")
+      .select(
+        "id, cliente_id, servico_id, duracao_minutos, status, observacoes, cortesia_id, slots!inner(data_hora), cortesias(nome)",
+      )
       .gte("slots.data_hora", ini)
       .lt("slots.data_hora", fim),
     db.from("fila_espera").select("id, cliente_id, data_desejada, servico_id, status, notificado_em, expira_em, posicao").eq("data_desejada", dayKey).order("posicao"),
@@ -87,6 +90,10 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
       .gte("horario_solicitado", ini)
       .lt("horario_solicitado", fim),
     db.from("atendimentos").select("cliente_id, realizado_em"),
+    db
+      .from("cortesias")
+      .select("id, nome, descricao, ativo, quantidade_estoque")
+      .order("nome"),
   ]);
 
   const tenant = must(tenantRes, "tenants");
@@ -99,6 +106,7 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
   const filaRows = must(filaRes, "fila_espera") as Row[];
   const encRows = must(encRes, "pedidos_encaixe") as Row[];
   const atendRows = must(atendRes, "atendimentos") as Row[];
+  const cortesiasRows = must(cortesiasRes, "cortesias") as Row[];
 
   // histórico do cliente derivado de `atendimentos`
   const hist = new Map<string, { total: number; ultima?: string }>();
@@ -127,6 +135,8 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
   const agendamentos: Agendamento[] = agsRows.map((a) => {
     const slot = a.slots as { data_hora: string } | { data_hora: string }[];
     const dataHora = Array.isArray(slot) ? slot[0].data_hora : slot.data_hora;
+    const cort = a.cortesias as { nome: string } | { nome: string }[] | null;
+    const cortesiaNome = Array.isArray(cort) ? cort[0]?.nome : cort?.nome;
     return {
       id: a.id as string,
       cliente_id: a.cliente_id as string,
@@ -136,6 +146,8 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
       status: a.status as StatusAgendamento,
       origem: "whatsapp",
       observacoes: (a.observacoes as string) ?? undefined,
+      cortesia_id: (a.cortesia_id as string) ?? undefined,
+      cortesia_nome: cortesiaNome ?? undefined,
     };
   });
 
@@ -151,6 +163,13 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
       nome: s.nome as string,
       duracao_minutos: s.duracao_minutos as number,
       preco: Number(s.preco),
+    })),
+    cortesias: cortesiasRows.map((c) => ({
+      id: c.id as string,
+      nome: c.nome as string,
+      descricao: (c.descricao as string) ?? undefined,
+      ativo: c.ativo as boolean,
+      quantidade_estoque: (c.quantidade_estoque as number) ?? 0,
     })),
     horarios: horariosRows.map((h) => ({
       dia_semana: h.dia_semana as number,

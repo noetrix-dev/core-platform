@@ -22,6 +22,14 @@ export interface Servico {
   preco: number;
 }
 
+export interface Cortesia {
+  id: string;
+  nome: string;
+  descricao?: string;
+  ativo: boolean;
+  quantidade_estoque: number;
+}
+
 export interface HorarioFuncionamento {
   dia_semana: number; // 0=domingo … 6=sábado
   aberto: boolean;
@@ -64,6 +72,8 @@ export interface Agendamento {
   status: StatusAgendamento;
   origem: OrigemAgendamento;
   observacoes?: string;
+  cortesia_id?: string;
+  cortesia_nome?: string; // vem do join em load.ts
   // UI-only: cliente está na cadeira agora. No banco real seria uma linha em
   // `atendimentos` ou uma coluna nova — ponytail: sinal de tela, não de schema.
   em_atendimento?: boolean;
@@ -111,6 +121,7 @@ export interface AgendaData {
   tenant: Tenant;
   clientes: Cliente[];
   servicos: Servico[];
+  cortesias: Cortesia[];
   horarios: HorarioFuncionamento[];
   bloqueios_fixos: BloqueioFixo[];
   bloqueios_pontuais: BloqueioPontual[];

@@ -69,6 +69,7 @@ async function persistir(
         telefone: action.telefone,
         clienteId: action.clienteId,
         servicoId: action.servicoId,
+        cortesiaId: action.cortesiaId,
         inicioMin: action.inicioMin,
         dayKey,
       });

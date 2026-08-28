@@ -23,6 +23,11 @@ export function AgendarDrawer({
   const [telefone, setTelefone] = useState("");
   const [naCadeira, setNaCadeira] = useState(modo === "walkin");
   const [horario, setHorario] = useState<number | null>(null);
+  const [cortesiaId, setCortesiaId] = useState<string | null>(null);
+
+  const cortesiasDisponiveis = data.cortesias.filter(
+    (c) => c.ativo && c.quantidade_estoque > 0,
+  );
 
   const dur =
     data.servicos.find((s) => s.id === servicoId)?.duracao_minutos ?? 30;
@@ -50,6 +55,7 @@ export function AgendarDrawer({
       nome: cli?.nome ?? nome,
       telefone: cli?.telefone ?? telefone,
       servicoId,
+      cortesiaId: cortesiaId ?? undefined,
       inicioMin: usaHorario ? horario! : nowMinFallback(),
       naCadeira: modo === "walkin" ? naCadeira : false,
     });
@@ -122,6 +128,45 @@ export function AgendarDrawer({
               </option>
             ))}
           </select>
+        </div>
+
+        <div className={`${styles.field} flex flex-col gap-1.5`}>
+          <label>Cortesia (opcional)</label>
+          {cortesiasDisponiveis.length === 0 ? (
+            <p className={styles.slip__meta}>
+              Nenhuma cortesia disponível no momento
+            </p>
+          ) : (
+            <div
+              className={styles.chips}
+              role="radiogroup"
+              aria-label="Cortesia"
+            >
+              <button
+                type="button"
+                className={styles.chip}
+                data-on={cortesiaId === null}
+                role="radio"
+                aria-checked={cortesiaId === null}
+                onClick={() => setCortesiaId(null)}
+              >
+                Nenhuma
+              </button>
+              {cortesiasDisponiveis.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={styles.chip}
+                  data-on={cortesiaId === c.id}
+                  role="radio"
+                  aria-checked={cortesiaId === c.id}
+                  onClick={() => setCortesiaId(c.id)}
+                >
+                  {c.nome}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {modo === "walkin" && (
