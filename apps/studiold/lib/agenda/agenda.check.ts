@@ -67,6 +67,29 @@ const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
   assert.equal(s.data.clientes.length, c0 + 1, "cliente novo cadastrado");
 }
 
+// --- AGENDAR não mexe mais no estoque de cortesia ---------------------
+{
+  let s = initState(DIA);
+  const cor = s.data.cortesias.find((c) => c.quantidade_estoque > 0)!;
+  const estoque0 = cor.quantidade_estoque;
+  const vaga = vagasLivres(s.data, DIA, 30)[0];
+  s = reducer(s, {
+    type: "AGENDAR",
+    origem: "whatsapp",
+    nome: "Teste Cortesia",
+    telefone: "+55 11 90000-9999",
+    servicoId: "svc-corte",
+    cortesiaId: cor.id,
+    inicioMin: vaga,
+  });
+  const corDepois = s.data.cortesias.find((c) => c.id === cor.id)!;
+  assert.equal(
+    corDepois.quantidade_estoque,
+    estoque0,
+    "AGENDAR não baixa estoque (a baixa é na conclusão)",
+  );
+}
+
 // --- expiração pelo TICK --------------------------------------------
 {
   let s = initState(DIA);

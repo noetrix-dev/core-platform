@@ -119,23 +119,7 @@ export async function agendar(p: {
     status: p.naCadeira ? "confirmado" : "agendado",
     cortesia_id: cortesiaId,
   });
-  if (ins.error) return falha(ins.error, "agendar/agendamento");
-
-  // baixa de 1 no estoque da cortesia escolhida
-  // ponytail: read-modify-write; corrida irrelevante para uma agenda de um operador
-  if (cortesiaId) {
-    const cor = await db
-      .from("cortesias")
-      .select("quantidade_estoque")
-      .eq("id", cortesiaId)
-      .single();
-    if (!cor.error) {
-      const novo = Math.max(0, ((cor.data.quantidade_estoque as number) ?? 0) - 1);
-      await db.from("cortesias").update({ quantidade_estoque: novo }).eq("id", cortesiaId);
-    }
-  }
-
-  return { ok: true };
+  return ins.error ? falha(ins.error, "agendar/agendamento") : { ok: true };
 }
 
 // --- fila / encaixe: FOR UPDATE dentro de função plpgsql -----------------

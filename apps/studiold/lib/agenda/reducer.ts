@@ -294,6 +294,7 @@ export function reducer(state: State, action: Action): State {
         // na cadeira agora = presença confirmada; senão só agendado
         status: action.naCadeira ? "confirmado" : "agendado",
         origem: action.origem,
+        // cortesia no agendamento é só intenção — não baixa estoque aqui
         cortesia_id: action.cortesiaId,
         cortesia_nome: cortesia?.nome,
         em_atendimento: action.naCadeira ?? false,
@@ -301,16 +302,8 @@ export function reducer(state: State, action: Action): State {
       const ags = action.naCadeira
         ? [...limparCadeira(d.agendamentos), nova]
         : [...d.agendamentos, nova];
-      // baixa otimista do estoque (o servidor confirma no refresh)
-      const cortesias = cortesia
-        ? d.cortesias.map((c) =>
-            c.id === cortesia.id
-              ? { ...c, quantidade_estoque: Math.max(0, c.quantidade_estoque - 1) }
-              : c,
-          )
-        : d.cortesias;
       return avisar(
-        { ...state, data: { ...d, clientes, cortesias, agendamentos: ags } },
+        { ...state, data: { ...d, clientes, agendamentos: ags } },
         action.origem === "walkin" ? "Walk-in adicionado." : "Agendamento criado.",
       );
     }
