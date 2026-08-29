@@ -13,7 +13,7 @@ import styles from "@/app/agenda/agenda.module.css";
 type ItemNav = {
   href: string;
   label: string;
-  icone: "calendar" | "cash" | "music" | "user";
+  icone: "calendar" | "cash" | "music" | "user" | "gear";
 };
 
 const PRINCIPAIS: ItemNav[] = [
@@ -23,7 +23,7 @@ const PRINCIPAIS: ItemNav[] = [
 ];
 
 const GERENCIAR: ItemNav[] = [
-  { href: "/configuracoes", label: "Cortesias e Músicas", icone: "music" },
+  { href: "/configuracoes", label: "Ajustes", icone: "gear" },
 ];
 
 export function Topbar({
