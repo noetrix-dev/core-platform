@@ -27,6 +27,7 @@ export function AgendarDrawer({
   const [horario, setHorario] = useState<number | null>(null);
   const [cortesiaId, setCortesiaId] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<PreferenciasCliente | null>(null);
+  const [autoCortesia, setAutoCortesia] = useState<string | null>(null);
   const [, carregarPrefs] = useTransition();
 
   const cortesiasDisponiveis = data.cortesias.filter(
@@ -81,6 +82,8 @@ export function AgendarDrawer({
               const id = e.target.value;
               setClienteId(id);
               setPrefs(null);
+              setCortesiaId((atual) => (atual === autoCortesia ? null : atual));
+              setAutoCortesia(null);
               if (!id) return;
               carregarPrefs(async () => {
                 try {
@@ -94,6 +97,7 @@ export function AgendarDrawer({
                     )
                   ) {
                     setCortesiaId(r.prefs.cortesiaFavoritaId);
+                    setAutoCortesia(r.prefs.cortesiaFavoritaId);
                   }
                 } catch {
                   // preferências são um extra; falha não bloqueia o agendamento
@@ -114,8 +118,18 @@ export function AgendarDrawer({
         </div>
 
         {clienteExistente && prefs && (
-          <div className={`${styles.slip__meta} flex flex-col gap-0.5`}>
-            <span>Cortesia favorita: {prefs.cortesiaNome ?? "—"}</span>
+          <div
+            className={`${styles.slip__meta} flex flex-col gap-0.5`}
+            aria-live="polite"
+          >
+            <span>
+              Cortesia favorita: {prefs.cortesiaNome ?? "—"}
+              {prefs.cortesiaFavoritaId &&
+                !cortesiasDisponiveis.some(
+                  (c) => c.id === prefs.cortesiaFavoritaId,
+                ) &&
+                " (indisponível)"}
+            </span>
             <span>Estilo musical: {prefs.estiloNome ?? "—"}</span>
             {prefs.observacoesFixas && <span>Obs.: {prefs.observacoesFixas}</span>}
           </div>

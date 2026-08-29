@@ -123,6 +123,8 @@ export async function criarCliente(
 
   const db = tenantDb();
 
+  // ponytail: sem filtro de ativo — quando soft-delete existir, re-cadastrar o telefone de um
+  // cliente inativo vai bater UNIQUE e abrir um perfil que não está na lista. Fixar aí.
   const dup = await db
     .from("clientes")
     .select("id")

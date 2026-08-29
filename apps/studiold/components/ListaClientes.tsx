@@ -47,7 +47,7 @@ export function ListaClientes({ clientes }: { clientes: ClienteLista[] }) {
         className={`${styles.btn} ${styles["btn--primary"]} self-start`}
         onClick={() => setCriando(true)}
       >
-        <Icon name="plus" size={14} /> Novo cliente
+        <Icon name="plus" size={15} /> Novo cliente
       </button>
       <input
         className={styles.clientesBusca}
