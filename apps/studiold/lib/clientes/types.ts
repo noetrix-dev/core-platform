@@ -21,3 +21,18 @@ export interface PreferenciasPatch {
   estiloMusicaId: string | null;
   observacoesFixas: string | null;
 }
+
+export type CriarClienteResultado =
+  | { ok: true; id: string }
+  | { ok: false; error: string; clienteExistenteId?: string };
+
+export type PreferenciasCliente = {
+  cortesiaFavoritaId: string | null;
+  cortesiaNome: string | null;
+  estiloNome: string | null;
+  observacoesFixas: string | null;
+};
+
+export type PreferenciasResultado =
+  | { ok: true; prefs: PreferenciasCliente }
+  | { ok: false; error: string };

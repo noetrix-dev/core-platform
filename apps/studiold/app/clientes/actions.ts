@@ -3,9 +3,17 @@
 // Server Actions do perfil de cliente. tenantDb() = schema do tenant,
 // service-role, só servidor.
 
+import { revalidatePath } from "next/cache";
+
 import { tenantDb } from "@/lib/supabase/server";
 import { resumirAtendimentos, type AtendimentoRow } from "@/lib/clientes/resumo";
-import type { PerfilResultado, PreferenciasPatch } from "@/lib/clientes/types";
+import { normalizarTelefone } from "@/lib/clientes/telefone";
+import type {
+  PerfilResultado,
+  PreferenciasPatch,
+  CriarClienteResultado,
+  PreferenciasResultado,
+} from "@/lib/clientes/types";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const uuidOrNull = (v: string | null): string | null =>
@@ -95,4 +103,115 @@ export async function atualizarPreferencias(
   return error
     ? { ok: false, error: `atualizarPreferencias: ${error.message}` }
     : { ok: true };
+}
+
+const GENEROS = new Set(["masculino", "feminino", "nao_informado"]);
+
+export async function criarCliente(
+  fd: FormData,
+): Promise<CriarClienteResultado> {
+  const nome = (fd.get("nome") ?? "").toString().trim().slice(0, 120);
+  if (!nome) return { ok: false, error: "Informe o nome do cliente." };
+
+  const telefone = normalizarTelefone((fd.get("telefone") ?? "").toString());
+  if (!telefone) {
+    return { ok: false, error: "Telefone inválido. Use DDD + número." };
+  }
+
+  const generoRaw = (fd.get("genero") ?? "nao_informado").toString();
+  const genero = GENEROS.has(generoRaw) ? generoRaw : "nao_informado";
+
+  const db = tenantDb();
+
+  const dup = await db
+    .from("clientes")
+    .select("id")
+    .eq("telefone", telefone)
+    .maybeSingle();
+  if (dup.error) {
+    return { ok: false, error: `criarCliente/dup: ${dup.error.message}` };
+  }
+  if (dup.data) {
+    return {
+      ok: false,
+      error: "Já existe cliente com esse telefone.",
+      clienteExistenteId: (dup.data as { id: string }).id,
+    };
+  }
+
+  const ins = await db
+    .from("clientes")
+    .insert({ nome, telefone, genero })
+    .select("id")
+    .single();
+  if (ins.error) {
+    // corrida no UNIQUE(telefone) entre o check acima e o insert
+    if (ins.error.code === "23505") {
+      const again = await db
+        .from("clientes")
+        .select("id")
+        .eq("telefone", telefone)
+        .maybeSingle();
+      const existenteId = (again.data as { id: string } | null)?.id;
+      return existenteId
+        ? {
+            ok: false,
+            error: "Já existe cliente com esse telefone.",
+            clienteExistenteId: existenteId,
+          }
+        : { ok: false, error: "Já existe cliente com esse telefone." };
+    }
+    return { ok: false, error: `criarCliente: ${ins.error.message}` };
+  }
+
+  revalidatePath("/clientes");
+  return { ok: true, id: (ins.data as { id: string }).id };
+}
+
+export async function getPreferenciasCliente(
+  clienteId: string,
+): Promise<PreferenciasResultado> {
+  if (!UUID.test(clienteId)) return { ok: false, error: "id inválido" };
+  const db = tenantDb();
+
+  const [cliRes, cortRes, estRes] = await Promise.all([
+    db
+      .from("clientes")
+      .select("cortesia_favorita_id, estilo_musica_id, observacoes_fixas")
+      .eq("id", clienteId)
+      .maybeSingle(),
+    db.from("cortesias").select("id, nome"),
+    db.from("estilos_musica").select("id, nome"),
+  ]);
+
+  if (cliRes.error) {
+    return { ok: false, error: `getPreferenciasCliente: ${cliRes.error.message}` };
+  }
+  if (!cliRes.data) return { ok: false, error: "Cliente não encontrado." };
+  if (cortRes.error) {
+    return { ok: false, error: `getPreferenciasCliente/cortesias: ${cortRes.error.message}` };
+  }
+  if (estRes.error) {
+    return { ok: false, error: `getPreferenciasCliente/estilos: ${estRes.error.message}` };
+  }
+
+  const c = cliRes.data as Row;
+  const nomePorId = (rows: Row[], id: string | null): string | null => {
+    if (!id) return null;
+    const hit = rows.find((r) => (r.id as string) === id);
+    return hit ? (hit.nome as string) : null;
+  };
+  const cortesias = (cortRes.data ?? []) as Row[];
+  const estilos = (estRes.data ?? []) as Row[];
+  const cortesiaFavoritaId = (c.cortesia_favorita_id as string) ?? null;
+
+  return {
+    ok: true,
+    prefs: {
+      cortesiaFavoritaId,
+      cortesiaNome: nomePorId(cortesias, cortesiaFavoritaId),
+      estiloNome: nomePorId(estilos, (c.estilo_musica_id as string) ?? null),
+      observacoesFixas: (c.observacoes_fixas as string) ?? null,
+    },
+  };
 }
