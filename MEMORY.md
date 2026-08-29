@@ -40,8 +40,8 @@ Drawer de pagamento na conclusão do atendimento: entregue e pushado em `main` (
 
 Aberto:
 
-1. **`public.tenants` sem linha `slug = 'barbearia_001'`** (não confirmei; se faltar, `load.ts` não acha o tenant e o banner do WhatsApp fica sempre "desconectado").
-2. **Exposição do schema `barbearia_001` no PostgREST** — presumivelmente ok (as RPCs de fila já são chamadas pelo app), mas não conferido explicitamente.
+1. **Exposição do schema `barbearia_001` no PostgREST** — presumivelmente ok (as RPCs de fila já são chamadas pelo app), mas não conferido explicitamente.
+2. **Banner do WhatsApp sempre visível em `/agenda`:** a linha `public.tenants` de `barbearia_001` existe (`id cc55b744…`), com `whatsapp_status = 'desconectado'` — correto enquanto a Evolution API não estiver implementada. Some quando o status virar `'conectado'`.
 3. **Caveat de rollout do drawer de pagamento:** agendamentos criados antes deste deploy já baixaram estoque de cortesia no agendamento; concluí-los agora baixa 2ª vez (a baixa migrou para a conclusão). Ajuste manual de estoque no dia.
 4. **Follow-ups menores** (review final, diferidos, não bloqueiam): `export type Forma` compartilhado em `lib/agenda/types.ts` (union re-escrita em ~7 lugares); estreitar `mudarStatus` para `Exclude<StatusAgendamento, "concluido">`; `aria-hidden`/`aria-labelledby` nos `<label>` decorativos do `PagamentoDrawer`; guard da RPC rejeitar também `cancelado`/`nao_compareceu`.
 5. **Finish do impeccable (de antes):** review visual no browser (bloqueado nesta máquina — sem Chrome) e `DESIGN.md` (o `impeccable-documenter` grava depois do review).
