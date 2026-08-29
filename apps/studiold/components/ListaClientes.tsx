@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PerfilClienteDrawer } from "@/components/PerfilClienteDrawer";
+import { NovoClienteDrawer } from "@/components/NovoClienteDrawer";
+import { Icon } from "@/components/agenda/Icon";
 import { desde } from "@/lib/agenda/time";
 import styles from "@/app/agenda/agenda.module.css";
 
@@ -23,6 +26,8 @@ function normalizar(s: string): string {
 export function ListaClientes({ clientes }: { clientes: ClienteLista[] }) {
   const [busca, setBusca] = useState("");
   const [selecionado, setSelecionado] = useState<string | null>(null);
+  const [criando, setCriando] = useState(false);
+  const router = useRouter();
 
   const filtrados = useMemo(() => {
     const q = normalizar(busca.trim());
@@ -37,6 +42,13 @@ export function ListaClientes({ clientes }: { clientes: ClienteLista[] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <button
+        type="button"
+        className={`${styles.btn} ${styles["btn--primary"]} self-start`}
+        onClick={() => setCriando(true)}
+      >
+        <Icon name="plus" size={14} /> Novo cliente
+      </button>
       <input
         className={styles.clientesBusca}
         placeholder="Buscar por nome ou telefone"
@@ -82,6 +94,17 @@ export function ListaClientes({ clientes }: { clientes: ClienteLista[] }) {
         <PerfilClienteDrawer
           clienteId={selecionado}
           onClose={() => setSelecionado(null)}
+        />
+      )}
+
+      {criando && (
+        <NovoClienteDrawer
+          onClose={() => setCriando(false)}
+          onCriado={(id) => {
+            setCriando(false);
+            setSelecionado(id);
+            router.refresh();
+          }}
         />
       )}
     </div>
