@@ -37,7 +37,7 @@ export function PerfilClienteDrawer({
 }) {
   const [perfil, setPerfil] = useState<PerfilCliente | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [carregando, iniciarCarga] = useTransition();
+  const [, iniciarCarga] = useTransition();
   const [salvando, iniciarSalvar] = useTransition();
 
   // form de preferências (controlado)
@@ -49,16 +49,20 @@ export function PerfilClienteDrawer({
   function carregar() {
     setErro(null);
     iniciarCarga(async () => {
-      const r = await getPerfilCliente(clienteId);
-      if (!r.ok) {
-        setErro(r.error);
-        return;
+      try {
+        const r = await getPerfilCliente(clienteId);
+        if (!r.ok) {
+          setErro(r.error);
+          return;
+        }
+        setPerfil(r.perfil);
+        setCortesiaId(r.perfil.cortesia_favorita_id ?? "");
+        setEstiloId(r.perfil.estilo_musica_id ?? "");
+        setObs(r.perfil.observacoes_fixas ?? "");
+        setAvisoPref(null);
+      } catch {
+        setErro("Não deu para carregar. Tente de novo.");
       }
-      setPerfil(r.perfil);
-      setCortesiaId(r.perfil.cortesia_favorita_id ?? "");
-      setEstiloId(r.perfil.estilo_musica_id ?? "");
-      setObs(r.perfil.observacoes_fixas ?? "");
-      setAvisoPref(null);
     });
   }
 
@@ -79,16 +83,20 @@ export function PerfilClienteDrawer({
     if (!dirty || salvando) return;
     setAvisoPref(null);
     iniciarSalvar(async () => {
-      const r = await atualizarPreferencias(clienteId, {
-        cortesiaFavoritaId: cortesiaId || null,
-        estiloMusicaId: estiloId || null,
-        observacoesFixas: obs || null,
-      });
-      if (!r.ok) {
+      try {
+        const r = await atualizarPreferencias(clienteId, {
+          cortesiaFavoritaId: cortesiaId || null,
+          estiloMusicaId: estiloId || null,
+          observacoesFixas: obs || null,
+        });
+        if (!r.ok) {
+          setAvisoPref("Não deu para salvar. Tente de novo.");
+          return;
+        }
+        carregar();
+      } catch {
         setAvisoPref("Não deu para salvar. Tente de novo.");
-        return;
       }
-      carregar();
     });
   };
 
@@ -105,7 +113,7 @@ export function PerfilClienteDrawer({
             Tentar de novo
           </button>
         </div>
-      ) : carregando && !perfil ? (
+      ) : !perfil ? (
         <div className="flex flex-col gap-3">
           <div className={styles.perfilSkel} />
           <div className={styles.perfilSkel} />
@@ -216,13 +224,15 @@ export function PerfilClienteDrawer({
                   </span>
                   <span className={styles.perfilHistRow__svc}>
                     {v.servico}{" "}
-                    <span
-                      className={styles.finBadge}
-                      data-m={v.forma_pagamento}
-                      style={{ marginLeft: "0.25rem" }}
-                    >
-                      {BADGE_CURTO[v.forma_pagamento] ?? v.forma_pagamento}
-                    </span>
+                    {v.forma_pagamento && (
+                      <span
+                        className={styles.finBadge}
+                        data-m={v.forma_pagamento}
+                        style={{ marginLeft: "0.25rem" }}
+                      >
+                        {BADGE_CURTO[v.forma_pagamento] ?? v.forma_pagamento}
+                      </span>
+                    )}
                   </span>
                   <span className={styles.perfilHistRow__val}>
                     {fmtPreco(v.valor)}

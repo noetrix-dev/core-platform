@@ -65,7 +65,7 @@ export function HeroFicha({
                 <button
                   type="button"
                   onClick={() => setVerPerfil(true)}
-                  className="text-left underline decoration-transparent underline-offset-2 hover:decoration-inherit"
+                  className="cursor-pointer text-left underline decoration-dotted decoration-[color:var(--chrome)] underline-offset-2 hover:decoration-inherit"
                   aria-label={`Ver perfil de ${cliente?.nome ?? "cliente"}`}
                 >
                   {cliente?.nome}

@@ -12,7 +12,12 @@ export default async function ClientesPage() {
   const db = tenantDb();
   const [cliRes, atendRes] = await Promise.all([
     db.from("clientes").select("id, nome, telefone").eq("ativo", true).order("nome"),
-    db.from("atendimentos").select("cliente_id, realizado_em"),
+    db
+      .from("atendimentos")
+      .select("cliente_id, realizado_em")
+      // ponytail: teto explícito (PostgREST corta em db-max-rows silenciosamente).
+      // Upgrade real: RPC/view com count(*) group by cliente_id.
+      .limit(50000),
   ]);
   if (cliRes.error) throw new Error(`clientes: ${cliRes.error.message}`);
   if (atendRes.error) throw new Error(`clientes/atendimentos: ${atendRes.error.message}`);
