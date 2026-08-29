@@ -6,6 +6,7 @@ import { useAgenda } from "@/lib/agenda/store";
 import { desde, fmtPreco, minToHm } from "@/lib/agenda/time";
 import { Icon } from "./Icon";
 import { PagamentoDrawer } from "./PagamentoDrawer";
+import { PerfilClienteDrawer } from "@/components/PerfilClienteDrawer";
 import styles from "@/app/agenda/agenda.module.css";
 
 export function HeroFicha({
@@ -21,6 +22,7 @@ export function HeroFicha({
   const naCadeira = ag.em_atendimento;
 
   const [pagando, setPagando] = useState(false);
+  const [verPerfil, setVerPerfil] = useState(false);
 
   const confirmarPagamento = (p: {
     valor: number;
@@ -59,7 +61,16 @@ export function HeroFicha({
         <div className={styles.hero__body}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h2 className={styles.hero__name}>{cliente?.nome}</h2>
+              <h2 className={styles.hero__name}>
+                <button
+                  type="button"
+                  onClick={() => setVerPerfil(true)}
+                  className="text-left underline decoration-transparent underline-offset-2 hover:decoration-inherit"
+                  aria-label={`Ver perfil de ${cliente?.nome ?? "cliente"}`}
+                >
+                  {cliente?.nome}
+                </button>
+              </h2>
               <p className={styles.hero__svc}>
                 {servico?.nome}{" "}
                 <span className={styles.hero__num}>
@@ -146,6 +157,13 @@ export function HeroFicha({
           cortesiaIdInicial={ag.cortesia_id}
           onConfirmar={confirmarPagamento}
           onClose={() => setPagando(false)}
+        />
+      )}
+
+      {verPerfil && (
+        <PerfilClienteDrawer
+          clienteId={ag.cliente_id}
+          onClose={() => setVerPerfil(false)}
         />
       )}
     </>

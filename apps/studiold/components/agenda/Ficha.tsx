@@ -6,6 +6,7 @@ import { useAgenda } from "@/lib/agenda/store";
 import { desde, fmtPreco, minToHm } from "@/lib/agenda/time";
 import { Icon } from "./Icon";
 import { PagamentoDrawer } from "./PagamentoDrawer";
+import { PerfilClienteDrawer } from "@/components/PerfilClienteDrawer";
 import styles from "@/app/agenda/agenda.module.css";
 
 const SELO_TXT: Record<string, string> = {
@@ -33,6 +34,7 @@ export function Ficha({ item }: { item: ItemFicha }) {
   const faixa = `${minToHm(item.inicioMin)}–${minToHm(item.fimMin)}`;
 
   const [pagando, setPagando] = useState(false);
+  const [verPerfil, setVerPerfil] = useState(false);
 
   const confirmarPagamento = (p: {
     valor: number;
@@ -62,7 +64,16 @@ export function Ficha({ item }: { item: ItemFicha }) {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className={styles.ficha__name}>{nome}</h3>
+            <h3 className={styles.ficha__name}>
+              <button
+                type="button"
+                onClick={() => setVerPerfil(true)}
+                className="text-left underline decoration-transparent underline-offset-2 hover:decoration-inherit"
+                aria-label={`Ver perfil de ${nome}`}
+              >
+                {nome}
+              </button>
+            </h3>
             <p className={styles.ficha__meta}>
               {svcNome} · <span className={styles.tnum}>{preco}</span>
               {ag.origem !== "whatsapp" && (
@@ -171,6 +182,13 @@ export function Ficha({ item }: { item: ItemFicha }) {
           cortesiaIdInicial={ag.cortesia_id}
           onConfirmar={confirmarPagamento}
           onClose={() => setPagando(false)}
+        />
+      )}
+
+      {verPerfil && (
+        <PerfilClienteDrawer
+          clienteId={ag.cliente_id}
+          onClose={() => setVerPerfil(false)}
         />
       )}
     </div>
