@@ -1,6 +1,7 @@
 import { tenantDb } from "@/lib/supabase/server";
 import { Icon } from "@/components/agenda/Icon";
 import { Topbar } from "@/components/Topbar";
+import { fmtPreco } from "@/lib/agenda/time";
 import styles from "@/app/agenda/agenda.module.css";
 import * as A from "./actions";
 import { EstoqueEditavel } from "./EstoqueEditavel";
@@ -15,20 +16,39 @@ type Cortesia = {
   quantidade_estoque: number;
 };
 type Estilo = { id: string; nome: string; ativo: boolean };
+type Servico = {
+  id: string;
+  nome: string;
+  preco: number;
+  duracao_minutos: number;
+  ativo: boolean;
+};
 
 export default async function ConfiguracoesPage() {
   const db = tenantDb();
-  const [cRes, eRes] = await Promise.all([
+  const [cRes, eRes, sRes] = await Promise.all([
     db
       .from("cortesias")
       .select("id, nome, descricao, ativo, quantidade_estoque")
       .order("nome"),
     db.from("estilos_musica").select("id, nome, ativo").order("nome"),
+    db
+      .from("servicos")
+      .select("id, nome, preco, duracao_minutos, ativo")
+      .order("nome"),
   ]);
   if (cRes.error) throw new Error(`configuracoes/cortesias: ${cRes.error.message}`);
   if (eRes.error) throw new Error(`configuracoes/estilos: ${eRes.error.message}`);
+  if (sRes.error) throw new Error(`configuracoes/servicos: ${sRes.error.message}`);
   const cortesias = (cRes.data ?? []) as Cortesia[];
   const estilos = (eRes.data ?? []) as Estilo[];
+  const servicos = ((sRes.data ?? []) as Array<Record<string, unknown>>).map((s) => ({
+    id: s.id as string,
+    nome: s.nome as string,
+    preco: Number(s.preco),
+    duracao_minutos: s.duracao_minutos as number,
+    ativo: s.ativo as boolean,
+  })) satisfies Servico[];
 
   return (
     <div className={styles.shell}>
@@ -219,6 +239,119 @@ export default async function ConfiguracoesPage() {
                     aria-label={`Nome de ${e.nome}`}
                     required
                     maxLength={120}
+                  />
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles["btn--primary"]}`}
+                  >
+                    Salvar
+                  </button>
+                </form>
+              </details>
+            </div>
+          ))}
+        </section>
+
+        {/* ---- SERVIÇOS ---- */}
+        <section className={styles.cfgSection}>
+          <header>
+            <Icon name="scissors" size={15} /> Serviços
+          </header>
+
+          <form action={A.criarServico} className={styles.cfgAddbar}>
+            <input
+              name="nome"
+              placeholder="Novo serviço"
+              aria-label="Nome do novo serviço"
+              required
+              maxLength={120}
+            />
+            <input
+              name="preco"
+              inputMode="decimal"
+              placeholder="Preço (R$)"
+              aria-label="Preço do novo serviço"
+              required
+            />
+            <input
+              type="number"
+              name="duracao_minutos"
+              min={1}
+              max={600}
+              placeholder="min"
+              aria-label="Duração em minutos do novo serviço"
+              required
+            />
+            <button
+              type="submit"
+              className={`${styles.btn} ${styles["btn--primary"]}`}
+            >
+              <Icon name="plus" size={14} /> Adicionar
+            </button>
+          </form>
+
+          {servicos.length === 0 && (
+            <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+              Nenhum serviço cadastrado.
+            </p>
+          )}
+
+          {servicos.map((s) => (
+            <div
+              key={s.id}
+              className={styles.cfgRow}
+              data-inativo={s.ativo ? undefined : "true"}
+            >
+              <div>
+                <p className={styles.cfgRow__nome}>{s.nome}</p>
+                <p className={styles.cfgRow__meta}>
+                  {fmtPreco(s.preco)} · {s.duracao_minutos} min
+                </p>
+              </div>
+
+              <div className={styles.cfgRow__acoes}>
+                <form action={A.toggleServicoAtivo}>
+                  <input type="hidden" name="id" value={s.id} />
+                  <input type="hidden" name="ativo" value={String(!s.ativo)} />
+                  <button
+                    type="submit"
+                    className={styles.cfgSwitch}
+                    data-on={s.ativo}
+                    aria-label={`${s.ativo ? "Desativar" : "Ativar"} ${s.nome}`}
+                  />
+                </form>
+              </div>
+
+              <details className={styles.cfgEdit}>
+                <summary
+                  className={`${styles.cfgSummary} ${styles.btn} ${styles["btn--ghost"]}`}
+                >
+                  Editar
+                </summary>
+                <form action={A.editarServico}>
+                  <input type="hidden" name="id" value={s.id} />
+                  <input
+                    name="nome"
+                    defaultValue={s.nome}
+                    aria-label={`Nome de ${s.nome}`}
+                    required
+                    maxLength={120}
+                  />
+                  <input
+                    name="preco"
+                    inputMode="decimal"
+                    defaultValue={String(s.preco).replace(".", ",")}
+                    aria-label={`Preço de ${s.nome}`}
+                    required
+                  />
+                  <input
+                    type="number"
+                    name="duracao_minutos"
+                    defaultValue={s.duracao_minutos}
+                    min={1}
+                    max={600}
+                    aria-label={`Duração de ${s.nome}`}
+                    required
                   />
                   <button
                     type="submit"
