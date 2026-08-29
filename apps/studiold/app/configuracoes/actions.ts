@@ -5,6 +5,8 @@
 
 import { revalidatePath } from "next/cache";
 import { tenantDb } from "@/lib/supabase/server";
+import { parsePrecoBRL } from "@/lib/dinheiro";
+import { DIAS_SEMANA_LONGO } from "@/lib/agenda/time";
 
 const ROTA = "/configuracoes";
 
@@ -19,6 +21,13 @@ function idDe(fd: FormData): string {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("id inválido");
   return id;
 }
+
+function inteiro(fd: FormData, campo: string): number | null {
+  const n = Number(fd.get(campo));
+  return Number.isInteger(n) ? n : null;
+}
+
+const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // --- cortesias -------------------------------------------------------------
 
@@ -126,4 +135,119 @@ export async function toggleEstiloAtivo(fd: FormData): Promise<void> {
     .eq("id", id);
   if (error) throw new Error(`toggleEstiloAtivo: ${error.message}`);
   revalidatePath(ROTA);
+}
+
+// --- serviços ---------------------------------------------------------
+
+export async function criarServico(fd: FormData): Promise<void> {
+  const nome = texto(fd, "nome");
+  const preco = parsePrecoBRL((fd.get("preco") ?? "").toString());
+  const dur = inteiro(fd, "duracao_minutos");
+  if (!nome || preco == null || dur == null || dur < 1 || dur > 600) return;
+  const { error } = await tenantDb()
+    .from("servicos")
+    .insert({ nome, preco, duracao_minutos: dur });
+  if (error) throw new Error(`criarServico: ${error.message}`);
+  revalidatePath(ROTA);
+}
+
+export async function editarServico(fd: FormData): Promise<void> {
+  const id = idDe(fd);
+  const nome = texto(fd, "nome");
+  const preco = parsePrecoBRL((fd.get("preco") ?? "").toString());
+  const dur = inteiro(fd, "duracao_minutos");
+  if (!nome || preco == null || dur == null || dur < 1 || dur > 600) return;
+  const { error } = await tenantDb()
+    .from("servicos")
+    .update({ nome, preco, duracao_minutos: dur })
+    .eq("id", id);
+  if (error) throw new Error(`editarServico: ${error.message}`);
+  revalidatePath(ROTA);
+}
+
+export async function toggleServicoAtivo(fd: FormData): Promise<void> {
+  const id = idDe(fd);
+  const ativo = fd.get("ativo") === "true";
+  const { error } = await tenantDb()
+    .from("servicos")
+    .update({ ativo })
+    .eq("id", id);
+  if (error) throw new Error(`toggleServicoAtivo: ${error.message}`);
+  revalidatePath(ROTA);
+}
+
+// --- horário de funcionamento --------------------------------------
+
+type DiaPayload = {
+  dia_semana: number;
+  aberto: boolean;
+  hora_abertura: string;
+  hora_fechamento: string;
+};
+type AlmocoPayload = { id: string; hora_inicio: string; hora_fim: string } | null;
+
+export async function salvarHorarios(
+  dias: DiaPayload[],
+  almoco: AlmocoPayload,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Array.isArray(dias) || dias.length !== 7) {
+    return { ok: false, error: "payload inválido" };
+  }
+  for (const d of dias) {
+    if (!Number.isInteger(d.dia_semana) || d.dia_semana < 0 || d.dia_semana > 6) {
+      return { ok: false, error: "dia da semana inválido" };
+    }
+    if (d.aberto) {
+      if (!HM.test(d.hora_abertura) || !HM.test(d.hora_fechamento)) {
+        return {
+          ok: false,
+          error: `Preencha os horários de ${DIAS_SEMANA_LONGO[d.dia_semana]}.`,
+        };
+      }
+      if (d.hora_abertura >= d.hora_fechamento) {
+        return {
+          ok: false,
+          error: `Em ${DIAS_SEMANA_LONGO[d.dia_semana]}, a abertura deve ser antes do fechamento.`,
+        };
+      }
+    }
+  }
+  if (almoco) {
+    if (!/^[0-9a-f-]{36}$/i.test(almoco.id)) {
+      return { ok: false, error: "id do almoço inválido" };
+    }
+    if (
+      !HM.test(almoco.hora_inicio) ||
+      !HM.test(almoco.hora_fim) ||
+      almoco.hora_inicio >= almoco.hora_fim
+    ) {
+      return { ok: false, error: "Horário do almoço inválido." };
+    }
+  }
+
+  const db = tenantDb();
+  for (const d of dias) {
+    const { error } = await db
+      .from("horarios_funcionamento")
+      .update({
+        aberto: d.aberto,
+        hora_abertura: d.aberto ? d.hora_abertura : null,
+        hora_fechamento: d.aberto ? d.hora_fechamento : null,
+      })
+      .eq("dia_semana", d.dia_semana);
+    if (error) {
+      return { ok: false, error: `salvarHorarios/dia ${d.dia_semana}: ${error.message}` };
+    }
+  }
+  if (almoco) {
+    const { error } = await db
+      .from("bloqueios_fixos")
+      .update({ hora_inicio: almoco.hora_inicio, hora_fim: almoco.hora_fim })
+      .eq("id", almoco.id);
+    if (error) {
+      return { ok: false, error: `salvarHorarios/almoço: ${error.message}` };
+    }
+  }
+  revalidatePath(ROTA);
+  return { ok: true };
 }
