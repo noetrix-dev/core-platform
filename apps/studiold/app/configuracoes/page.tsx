@@ -5,6 +5,7 @@ import { fmtPreco } from "@/lib/agenda/time";
 import styles from "@/app/agenda/agenda.module.css";
 import * as A from "./actions";
 import { EstoqueEditavel } from "./EstoqueEditavel";
+import { HorariosForm } from "./HorariosForm";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ type Servico = {
 
 export default async function ConfiguracoesPage() {
   const db = tenantDb();
-  const [cRes, eRes, sRes] = await Promise.all([
+  const [cRes, eRes, sRes, hRes, bRes] = await Promise.all([
     db
       .from("cortesias")
       .select("id, nome, descricao, ativo, quantidade_estoque")
@@ -36,10 +37,23 @@ export default async function ConfiguracoesPage() {
       .from("servicos")
       .select("id, nome, preco, duracao_minutos, ativo")
       .order("nome"),
+    db
+      .from("horarios_funcionamento")
+      .select("dia_semana, aberto, hora_abertura, hora_fechamento")
+      .order("dia_semana"),
+    db
+      .from("bloqueios_fixos")
+      .select("id, hora_inicio, hora_fim")
+      .eq("tipo", "suave")
+      .order("id")
+      .limit(1),
   ]);
   if (cRes.error) throw new Error(`configuracoes/cortesias: ${cRes.error.message}`);
   if (eRes.error) throw new Error(`configuracoes/estilos: ${eRes.error.message}`);
   if (sRes.error) throw new Error(`configuracoes/servicos: ${sRes.error.message}`);
+  if (hRes.error) throw new Error(`configuracoes/horarios: ${hRes.error.message}`);
+  if (bRes.error) throw new Error(`configuracoes/bloqueios: ${bRes.error.message}`);
+
   const cortesias = (cRes.data ?? []) as Cortesia[];
   const estilos = (eRes.data ?? []) as Estilo[];
   const servicos = ((sRes.data ?? []) as Array<Record<string, unknown>>).map((s) => ({
@@ -49,6 +63,20 @@ export default async function ConfiguracoesPage() {
     duracao_minutos: s.duracao_minutos as number,
     ativo: s.ativo as boolean,
   })) satisfies Servico[];
+  const dias = ((hRes.data ?? []) as Array<Record<string, unknown>>).map((h) => ({
+    dia_semana: h.dia_semana as number,
+    aberto: (h.aberto as boolean) ?? false,
+    hora_abertura: ((h.hora_abertura as string) ?? "").slice(0, 5),
+    hora_fechamento: ((h.hora_fechamento as string) ?? "").slice(0, 5),
+  }));
+  const b0 = ((bRes.data ?? []) as Array<Record<string, unknown>>)[0];
+  const almoco = b0
+    ? {
+        id: b0.id as string,
+        hora_inicio: (b0.hora_inicio as string).slice(0, 5),
+        hora_fim: (b0.hora_fim as string).slice(0, 5),
+      }
+    : null;
 
   return (
     <div className={styles.shell}>
@@ -364,6 +392,8 @@ export default async function ConfiguracoesPage() {
             </div>
           ))}
         </section>
+
+        <HorariosForm dias={dias} almoco={almoco} />
       </main>
     </div>
   );

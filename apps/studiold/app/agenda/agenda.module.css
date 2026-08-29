@@ -1320,6 +1320,54 @@
   white-space: nowrap;
 }
 
+/* ---- /configuracoes: horário de funcionamento -------------------- */
+.cfgHorarioRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0.85rem;
+  box-shadow: inset 0 -1px 0 0 var(--chrome);
+}
+.cfgHorarioRow[data-fechado="true"] {
+  opacity: 0.55;
+}
+.cfgHorarioDia {
+  font-family: var(--font-barlow-cond), sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+.cfgHorarioTimes {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.cfgHorarioTimes span {
+  color: var(--ink-2);
+  font-size: 0.82rem;
+}
+.cfgHorarioTimes input {
+  background: #fbfaf6;
+  box-shadow: inset 0 0 0 1px var(--chrome);
+  border-radius: var(--r);
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.cfgHorarioTimes input:disabled {
+  opacity: 0.4;
+}
+.cfgHorarioTimes input:focus {
+  outline: 2px solid var(--oxblood);
+  outline-offset: 1px;
+}
+.cfgHorarioSalvar {
+  padding: 0.85rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell *,
   .shell *::before,
