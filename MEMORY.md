@@ -5,10 +5,13 @@
 ## Estado atual
 
 - Infraestrutura pronta: monorepo Turborepo + pnpm, apps e packages criados, tooling configurado (typecheck, lint, build, hooks de path protegido e build-before-stop).
-- App `apps/studiold`: rota `/agenda` construída (mundo visual **A Estação do Barbeiro**, via impeccable). Cobre a agenda do dia (pilha de fichas + ficha "no espelho"), fila de espera, pedidos de encaixe, walk-in, novo agendamento, bloqueio pontual, banner de status do WhatsApp. `/` redireciona para `/agenda`.
-- Rota `/configuracoes` (link pela engrenagem no topbar da agenda): CRUD de `cortesias` e `estilos_musica` via Server Actions, sem JS de cliente (forms nativos + `<details>`). Depende da migration `docs/migration-cortesias-musicas-preferencias.sql` ser aplicada — 500 até lá.
-- Camada de dados da agenda **ligada ao Supabase (path A: service-role só no servidor)**: `lib/supabase/server.ts` (service-role, `.schema` do tenant), `lib/agenda/load.ts` (RSC lê o schema e devolve `AgendaData`), `app/agenda/actions.ts` (Server Actions por mutação; fila/encaixe via RPC `fn_*` com `FOR UPDATE`). O reducer (`lib/agenda/reducer.ts`) continua puro — cliente faz update otimista e `router.refresh()` reconcilia via `HYDRATE`. `lib/agenda/seed.ts` sobrou só como fixture do `check`.
-- Migrations Supabase aplicadas: `public.tenants` + `public.tenant_usuarios` com RLS, schema `barbearia_001` completo, seed real da StudiOLD (horários, almoço, 13 serviços).
+- App `apps/studiold`, mundo visual **A Estação do Barbeiro** (via impeccable), navegação por drawer hambúrguer no topbar compartilhado (`components/Topbar.tsx`). `/` redireciona para `/agenda`. Rotas:
+  - `/agenda` — agenda do dia (pilha de fichas + ficha "no espelho"), fila de espera, pedidos de encaixe, walk-in, novo agendamento, bloqueio pontual, banner de status do WhatsApp. Status de agendamento no modelo `agendado → confirmado → concluido / nao_compareceu / cancelado`. Concluir abre o **drawer de pagamento** (`PagamentoDrawer`): valor cobrado, forma de pagamento, cortesia servida → grava `atendimentos` + baixa estoque numa RPC transacional (`fn_concluir_atendimento`).
+  - `/configuracoes` — CRUD de `cortesias` (com estoque editável inline) e `estilos_musica` via Server Actions, sem JS de cliente (forms nativos + `<details>`).
+  - `/financeiro` (Caixa) — atendimentos por período (hoje/semana/mês via `?periodo=`), total faturado, ticket médio, quebra por forma de pagamento, lista de atendimentos.
+- Camada de dados **ligada ao Supabase (path A: service-role só no servidor)**: `lib/supabase/server.ts` (service-role, `.schema` do tenant), `lib/agenda/load.ts` (RSC lê o schema e devolve `AgendaData`), `app/agenda/actions.ts` + `app/configuracoes/actions.ts` (Server Actions por mutação; fila/encaixe/conclusão via RPC `fn_*` com `FOR UPDATE`/transação). Reducer (`lib/agenda/reducer.ts`) puro — update otimista + `router.refresh()` reconcilia via `HYDRATE`. `lib/agenda/seed.ts` sobrou só como fixture do `check`.
+- **Banco `nnybwmuhkaobsdtzospc` totalmente migrado** (verificado ao vivo): `public.tenants`/`public.tenant_usuarios` com RLS; schema `barbearia_001` com 13 tabelas (inclui `cortesias`, `estilos_musica`); `agendamentos.status` no modelo de 5 valores; `atendimentos.cortesia_id` e `agendamentos.cortesia_id`; 5 funções `fn_*` (4 de fila + `fn_concluir_atendimento`) com `GRANT EXECUTE` para `service_role`. Seed real da StudiOLD (horários, almoço, 13 serviços). A tabela `supabase_migrations` está vazia — tudo foi aplicado fora do tracking (SQL direto / `db push`), então `list_migrations` mente; conferir o estado real por `information_schema`/`pg_proc`.
+- **O MCP do Supabase alcança `nnybwmuhkaobsdtzospc` por `project_id` direto** (`execute_sql`, `apply_migration`), mesmo que `list_projects` não mostre (org fora do escopo do token).
 - Integrações com variável de ambiente reservada mas não implementadas: Evolution API (WhatsApp) e OpenAI (assistente).
 - MCPs configurados: Supabase, Context7, Playwright.
 
@@ -28,21 +31,19 @@
 ## Próximos passos
 
 1. Implementar a camada `packages/whatsapp` sobre a Evolution API (enviar mensagem com jitter, receber webhook).
-2. Substituir o boilerplate de `apps/studiold` pelo dashboard real da equipe (agenda, clientes, serviços, bloqueios, fila, encaixe).
-3. Ligar o assistente de conversa (OpenAI) ao fluxo de agendamento pelo WhatsApp.
+2. Ligar o assistente de conversa (OpenAI) ao fluxo de agendamento pelo WhatsApp.
+3. Dashboard `apps/studiold`: agenda/configurações/caixa prontos; falta cadastro de clientes e config de horários/serviços/bloqueios por tela (hoje só via `/configuracoes` para cortesias/músicas).
 
 ## Onde parei
 
-Camada de dados da `/agenda` ligada ao Supabase (path A). `pnpm typecheck/lint/build` e `pnpm --filter studiold check` verdes. Build é CI-safe (`force-dynamic`, sem tocar o banco em build). **Não commitado ainda.**
+Drawer de pagamento na conclusão do atendimento: entregue e pushado em `main` (`de5a6d9..30a2586`; plano em `docs/superpowers/plans/2026-08-28-drawer-pagamento-conclusao.md`, executado subagent-driven). Migration `fn_concluir_atendimento` + `atendimentos.cortesia_id` **já aplicada no banco** (verificado ao vivo, bate com `docs/migration-concluir-atendimento.sql`). `pnpm typecheck/lint/build` e `pnpm --filter studiold check` verdes.
 
-**Não testado contra o banco real** — o projeto linkado (`nnybwmuhkaobsdtzospc`, `supabase/.temp/project-ref`) está numa org que o MCP do Supabase da sessão não enxerga. Para a agenda funcionar de verdade, falta:
+Aberto:
 
-1. Aplicar `docs/agenda-rpc.sql` como migration à mão (`pnpm supabase migration new agenda_rpc_fila`, colar, revisar, `db push`). Sem as funções `fn_*`, cancelar/notificar/confirmar/encaixe retornam erro e o cliente só recarrega.
-2. Expor o schema `barbearia_001` no PostgREST (Dashboard > Settings > API > Exposed schemas).
-3. Inserir uma linha em `public.tenants` com `slug = 'barbearia_001'` — o seed não insere. Sem ela, `load.ts` não acha o tenant e o banner do WhatsApp fica sempre "desconectado".
-4. Conferir `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_TENANT` no ambiente.
-5. Rodar e validar as queries (filtro `slots!inner`, cross-schema `public.tenants`, conversão de fuso SP).
-
-Pendente do finish do impeccable (de antes): review visual no browser (bloqueado nesta máquina — sem Chrome) e `DESIGN.md` (o `impeccable-documenter` grava depois do review).
+1. **`public.tenants` sem linha `slug = 'barbearia_001'`** (não confirmei; se faltar, `load.ts` não acha o tenant e o banner do WhatsApp fica sempre "desconectado").
+2. **Exposição do schema `barbearia_001` no PostgREST** — presumivelmente ok (as RPCs de fila já são chamadas pelo app), mas não conferido explicitamente.
+3. **Caveat de rollout do drawer de pagamento:** agendamentos criados antes deste deploy já baixaram estoque de cortesia no agendamento; concluí-los agora baixa 2ª vez (a baixa migrou para a conclusão). Ajuste manual de estoque no dia.
+4. **Follow-ups menores** (review final, diferidos, não bloqueiam): `export type Forma` compartilhado em `lib/agenda/types.ts` (union re-escrita em ~7 lugares); estreitar `mudarStatus` para `Exclude<StatusAgendamento, "concluido">`; `aria-hidden`/`aria-labelledby` nos `<label>` decorativos do `PagamentoDrawer`; guard da RPC rejeitar também `cancelado`/`nao_compareceu`.
+5. **Finish do impeccable (de antes):** review visual no browser (bloqueado nesta máquina — sem Chrome) e `DESIGN.md` (o `impeccable-documenter` grava depois do review).
 
 "Na cadeira" (`em_atendimento`) é estado de sessão só do cliente — não há coluna no schema; some no reload. Vira coluna se precisar persistir.
