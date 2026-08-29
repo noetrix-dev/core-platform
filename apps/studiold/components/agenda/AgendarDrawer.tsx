@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, useTransition, type FormEvent } from "react";
+import { getPreferenciasCliente } from "@/app/clientes/actions";
+import type { PreferenciasCliente } from "@/lib/clientes/types";
 import { useAgenda } from "@/lib/agenda/store";
 import { vagasLivres } from "@/lib/agenda/timeline";
 import { minToHm } from "@/lib/agenda/time";
@@ -24,6 +26,8 @@ export function AgendarDrawer({
   const [naCadeira, setNaCadeira] = useState(modo === "walkin");
   const [horario, setHorario] = useState<number | null>(null);
   const [cortesiaId, setCortesiaId] = useState<string | null>(null);
+  const [prefs, setPrefs] = useState<PreferenciasCliente | null>(null);
+  const [, carregarPrefs] = useTransition();
 
   const cortesiasDisponiveis = data.cortesias.filter(
     (c) => c.ativo && c.quantidade_estoque > 0,
@@ -73,7 +77,29 @@ export function AgendarDrawer({
           <select
             id="cli-exist"
             value={clienteId}
-            onChange={(e) => setClienteId(e.target.value)}
+            onChange={(e) => {
+              const id = e.target.value;
+              setClienteId(id);
+              setPrefs(null);
+              if (!id) return;
+              carregarPrefs(async () => {
+                try {
+                  const r = await getPreferenciasCliente(id);
+                  if (!r.ok) return;
+                  setPrefs(r.prefs);
+                  if (
+                    r.prefs.cortesiaFavoritaId &&
+                    cortesiasDisponiveis.some(
+                      (c) => c.id === r.prefs.cortesiaFavoritaId,
+                    )
+                  ) {
+                    setCortesiaId(r.prefs.cortesiaFavoritaId);
+                  }
+                } catch {
+                  // preferências são um extra; falha não bloqueia o agendamento
+                }
+              });
+            }}
           >
             <option value="">— novo cliente —</option>
             {data.clientes
@@ -86,6 +112,14 @@ export function AgendarDrawer({
               ))}
           </select>
         </div>
+
+        {clienteExistente && prefs && (
+          <div className={`${styles.slip__meta} flex flex-col gap-0.5`}>
+            <span>Cortesia favorita: {prefs.cortesiaNome ?? "—"}</span>
+            <span>Estilo musical: {prefs.estiloNome ?? "—"}</span>
+            {prefs.observacoesFixas && <span>Obs.: {prefs.observacoesFixas}</span>}
+          </div>
+        )}
 
         {!clienteExistente && (
           <>
