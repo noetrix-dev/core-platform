@@ -54,7 +54,7 @@ Bloqueio fixo: almoço 11:30 às 12:30, tipo `suave` (não bloqueia de forma rí
 ## Regras de negócio
 
 - Agenda é **fila única**: o schema atual não modela múltiplos barbeiros. Suporte a mais de um profissional está em aberto, não assumir.
-- Status de agendamento: `confirmado`, `pendente`, `cancelado`, `concluido`, `nao_compareceu`.
+- Status de agendamento (modelo de 5, já migrado no banco): `agendado → confirmado → concluido / nao_compareceu / cancelado`. `confirmado` = presença confirmada (cliente respondeu/apareceu).
 - Bloqueio `suave` (almoço) pode ser cedido para encaixe; bloqueio `rigido` não.
 - Config de agenda (horários, serviços, bloqueios) reflete a operação real e é editável pela equipe.
 - Envio de WhatsApp em lote sempre com intervalo aleatório (jitter) entre mensagens.
