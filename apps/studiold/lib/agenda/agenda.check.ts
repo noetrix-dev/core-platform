@@ -7,6 +7,7 @@ import { initState, reducer } from "./reducer.ts";
 import { buildTimeline, vagasLivres } from "./timeline.ts";
 import { hmToMin, minToHm } from "./time.ts";
 import { resumirAtendimentos, visitasPorCliente } from "../clientes/resumo.ts";
+import { parsePrecoBRL } from "../dinheiro.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
 
@@ -188,6 +189,20 @@ assert.equal(minToHm(1020), "17:00");
   assert.equal(vpc.get("a")?.ultima, "2026-08-05T00:00:00.000Z");
   assert.equal(vpc.get("b")?.total, 1);
   assert.equal(vpc.get("c"), undefined);
+}
+
+// --- parsePrecoBRL --------------------------------------------------
+{
+  assert.equal(parsePrecoBRL("55"), 55);
+  assert.equal(parsePrecoBRL("55,50"), 55.5);
+  assert.equal(parsePrecoBRL("1.234,56"), 1234.56);
+  assert.equal(parsePrecoBRL("55.50"), 55.5, "ponto = decimal quando não há vírgula");
+  assert.equal(parsePrecoBRL("  80,00  "), 80, "trim");
+  assert.equal(parsePrecoBRL("10,999"), 11, "arredonda para 2 casas");
+  assert.equal(parsePrecoBRL(""), null);
+  assert.equal(parsePrecoBRL("abc"), null);
+  assert.equal(parsePrecoBRL("-3"), null);
+  assert.equal(parsePrecoBRL("R$ 55"), null, "sem limpeza de símbolo — entrada tem que ser numérica");
 }
 
 console.log("agenda.check: OK");
