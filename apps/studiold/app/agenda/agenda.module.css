@@ -694,7 +694,8 @@
   color: var(--ink-2);
 }
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   background: #fbfaf6;
   box-shadow: inset 0 0 0 1px var(--chrome);
@@ -704,7 +705,8 @@
   color: var(--ink);
 }
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: 2px solid var(--oxblood);
   outline-offset: 1px;
 }
