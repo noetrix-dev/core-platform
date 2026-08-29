@@ -8,6 +8,7 @@ import { buildTimeline, vagasLivres } from "./timeline.ts";
 import { hmToMin, minToHm } from "./time.ts";
 import { resumirAtendimentos, visitasPorCliente } from "../clientes/resumo.ts";
 import { parsePrecoBRL } from "../dinheiro.ts";
+import { normalizarTelefone } from "../clientes/telefone.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
 
@@ -203,6 +204,19 @@ assert.equal(minToHm(1020), "17:00");
   assert.equal(parsePrecoBRL("abc"), null);
   assert.equal(parsePrecoBRL("-3"), null);
   assert.equal(parsePrecoBRL("R$ 55"), null, "sem limpeza de símbolo — entrada tem que ser numérica");
+}
+
+// --- normalizarTelefone --------------------------------------------------
+{
+  assert.equal(normalizarTelefone("11990001234"), "+5511990001234", "celular 11 dígitos sem código país");
+  assert.equal(normalizarTelefone("(11) 99000-1234"), "+5511990001234", "tira máscara");
+  assert.equal(normalizarTelefone("+55 11 99000-1234"), "+5511990001234", "já vem com +55");
+  assert.equal(normalizarTelefone("5511990001234"), "+5511990001234", "13 dígitos com 55 na frente");
+  assert.equal(normalizarTelefone("1132201234"), "+551132201234", "fixo 10 dígitos");
+  assert.equal(normalizarTelefone("0800 123 4567"), null, "não é celular/fixo com DDD");
+  assert.equal(normalizarTelefone("999"), null, "curto demais");
+  assert.equal(normalizarTelefone(""), null, "vazio");
+  assert.equal(normalizarTelefone("abc"), null, "sem dígitos");
 }
 
 console.log("agenda.check: OK");
