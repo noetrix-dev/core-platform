@@ -41,6 +41,7 @@ export function HorariosForm({
         error: "Falha de conexão. Tente de novo.",
       }));
       if (!r.ok) {
+        router.refresh();
         setAviso(r.error);
         return;
       }
@@ -95,7 +96,7 @@ export function HorariosForm({
       <div className={styles.cfgHorarioRow}>
         <span className={styles.cfgHorarioDia}>Almoço</span>
         {almoco ? (
-          <div className={styles.cfgHorarioTimes} style={{ gridColumn: "1 / -1" }}>
+          <div className={styles.cfgHorarioTimes}>
             <input
               type="time"
               step={900}
@@ -119,7 +120,7 @@ export function HorariosForm({
         ) : (
           <span
             className={styles.cfgHorarioTimes}
-            style={{ gridColumn: "1 / -1", color: "var(--ink-2)" }}
+            style={{ color: "var(--ink-2)" }}
           >
             Nenhum bloqueio de almoço configurado.
           </span>

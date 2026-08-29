@@ -45,7 +45,8 @@ export default async function ConfiguracoesPage() {
       .from("bloqueios_fixos")
       .select("id, hora_inicio, hora_fim")
       .eq("tipo", "suave")
-      .order("id")
+      .eq("ativo", true)
+      .is("dia_semana", null)
       .limit(1),
   ]);
   if (cRes.error) throw new Error(`configuracoes/cortesias: ${cRes.error.message}`);
@@ -297,6 +298,8 @@ export default async function ConfiguracoesPage() {
             <input
               name="preco"
               inputMode="decimal"
+              pattern="[0-9.]*[0-9]([,][0-9]{1,2})?"
+              title="Use apenas números, vírgula para centavos. Ex.: 55,50"
               placeholder="Preço (R$)"
               aria-label="Preço do novo serviço"
               required
@@ -368,6 +371,8 @@ export default async function ConfiguracoesPage() {
                   <input
                     name="preco"
                     inputMode="decimal"
+                    pattern="[0-9.]*[0-9]([,][0-9]{1,2})?"
+                    title="Use apenas números, vírgula para centavos. Ex.: 55,50"
                     defaultValue={String(s.preco).replace(".", ",")}
                     aria-label={`Preço de ${s.nome}`}
                     required
@@ -393,7 +398,7 @@ export default async function ConfiguracoesPage() {
           ))}
         </section>
 
-        <HorariosForm dias={dias} almoco={almoco} />
+        <HorariosForm key={JSON.stringify(dias)} dias={dias} almoco={almoco} />
       </main>
     </div>
   );

@@ -236,7 +236,8 @@ export async function salvarHorarios(
       })
       .eq("dia_semana", d.dia_semana);
     if (error) {
-      return { ok: false, error: `salvarHorarios/dia ${d.dia_semana}: ${error.message}` };
+      console.error(`salvarHorarios/dia ${d.dia_semana}:`, error.message);
+      return { ok: false, error: "Não foi possível salvar os horários. Tente de novo." };
     }
   }
   if (almoco) {
@@ -245,7 +246,8 @@ export async function salvarHorarios(
       .update({ hora_inicio: almoco.hora_inicio, hora_fim: almoco.hora_fim })
       .eq("id", almoco.id);
     if (error) {
-      return { ok: false, error: `salvarHorarios/almoço: ${error.message}` };
+      console.error(`salvarHorarios/almoço:`, error.message);
+      return { ok: false, error: "Não foi possível salvar os horários. Tente de novo." };
     }
   }
   revalidatePath(ROTA);
