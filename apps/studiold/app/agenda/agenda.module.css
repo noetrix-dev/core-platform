@@ -1182,6 +1182,85 @@
   background: linear-gradient(to top, var(--enamel) 72%, transparent);
 }
 
+/* ---- painel de perfil de cliente ---------------------------------- */
+.perfilResumo {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+}
+@media (min-width: 26rem) {
+  .perfilResumo {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.perfilBloco {
+  background: var(--enamel-hi);
+  border-radius: var(--r);
+  box-shadow: inset 0 0 0 1px var(--chrome);
+  padding: 0.7rem 0.8rem;
+}
+.perfilBloco__k {
+  font-family: var(--font-barlow-cond), sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.66rem;
+  color: var(--ink-2);
+}
+.perfilBloco__v {
+  margin-top: 0.3rem;
+  font-family: var(--font-barlow-cond), sans-serif;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+.perfilBloco[data-tom="gasto"] .perfilBloco__v {
+  color: var(--oxblood);
+}
+.perfilHistRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+  padding: 0.55rem 0.85rem;
+  box-shadow: inset 0 -1px 0 0 var(--chrome);
+}
+.perfilHistRow:last-child {
+  box-shadow: none;
+}
+.perfilHistRow__data {
+  font-family: var(--font-barlow-cond), sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+}
+.perfilHistRow__svc {
+  font-size: 0.9rem;
+}
+.perfilHistRow__val {
+  font-family: var(--font-barlow-cond), sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: right;
+}
+.perfilSkel {
+  height: 3.5rem;
+  border-radius: var(--r);
+  background: linear-gradient(
+    90deg,
+    var(--enamel-lo) 25%,
+    var(--enamel-hi) 50%,
+    var(--enamel-lo) 75%
+  );
+  background-size: 200% 100%;
+  animation: perfilSkel 1.2s ease-in-out infinite;
+}
+@keyframes perfilSkel {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell *,
   .shell *::before,
