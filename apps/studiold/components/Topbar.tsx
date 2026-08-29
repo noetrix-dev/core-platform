@@ -13,11 +13,12 @@ import styles from "@/app/agenda/agenda.module.css";
 type ItemNav = {
   href: string;
   label: string;
-  icone: "calendar" | "cash" | "music";
+  icone: "calendar" | "cash" | "music" | "user";
 };
 
 const PRINCIPAIS: ItemNav[] = [
   { href: "/agenda", label: "Agenda", icone: "calendar" },
+  { href: "/clientes", label: "Clientes", icone: "user" },
   { href: "/financeiro", label: "Caixa", icone: "cash" },
 ];
 
