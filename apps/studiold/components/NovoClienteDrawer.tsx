@@ -88,7 +88,7 @@ export function NovoClienteDrawer({
         </div>
 
         {aviso && (
-          <p className={styles.slip__meta} style={{ color: "var(--oxblood)" }}>
+          <p className={styles.msgQuiet} data-tom="erro">
             {aviso}
           </p>
         )}

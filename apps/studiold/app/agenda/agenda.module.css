@@ -76,6 +76,27 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* papéis de tipo reutilizáveis: título de tela e mensagem discreta.
+   Um <h1> de rota usa .pageTitle (condensada, mesmo desenho de .hero__name).
+   Estado vazio / aviso inline usa .msgQuiet — mesmo tom que .cfgRow__meta,
+   sem tamanho avulso do Tailwind. data-tom="erro" pinta de oxblood. */
+.pageTitle {
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.08;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.msgQuiet {
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.msgQuiet[data-tom="erro"] {
+  color: var(--oxblood);
+}
+
 /* ---- estrutura: barra de topo preto-fosco --------------------------------- */
 .topbar {
   background: var(--matte);
@@ -95,6 +116,10 @@
 }
 .daylabel {
   color: var(--matte-ink);
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
 .navbtn {

@@ -17,10 +17,10 @@ export default async function LoginPage() {
           src="/studiold-logo.svg"
           alt="StudiOLD"
           className="mb-8 h-10 w-auto self-start"
-          style={{ filter: "brightness(0) invert(1)" }}
+          style={{ filter: "brightness(0)", opacity: 0.9 }}
         />
-        <h1 className="mb-1 text-lg font-semibold">Entrar</h1>
-        <p className={`${styles.slip__meta} mb-6`}>Acesso restrito à equipe.</p>
+        <h1 className={`${styles.pageTitle} mb-1`}>Entrar</h1>
+        <p className={`${styles.msgQuiet} mb-6`}>Acesso restrito à equipe.</p>
         <LoginForm />
       </main>
     </div>

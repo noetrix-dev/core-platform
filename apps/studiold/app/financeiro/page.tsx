@@ -176,7 +176,7 @@ export default async function FinanceiroPage({
             <span className={`${styles.tray__count} ${styles.tnum}`}>{qtd}</span>
           </div>
           {linhas.length === 0 ? (
-            <p className="px-3.5 py-6 text-sm" style={{ color: "var(--ink-2)" }}>
+            <p className={`${styles.msgQuiet} px-3.5 py-6`}>
               Nenhum atendimento registrado neste período.
             </p>
           ) : (

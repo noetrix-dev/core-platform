@@ -51,7 +51,7 @@ export default async function CortesiasPage() {
       </form>
 
       {cortesias.length === 0 && (
-        <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+        <p className={`${styles.msgQuiet} px-3.5 py-5`}>
           Nenhuma cortesia cadastrada.
         </p>
       )}

@@ -131,9 +131,7 @@ function AgendaScreen({
       <Topbar
         titulo="Agenda"
         sub={
-          <h1 className={`${styles.daylabel} text-lg font-semibold`}>
-            {fmtDataLonga(dayKey)}
-          </h1>
+          <h1 className={styles.daylabel}>{fmtDataLonga(dayKey)}</h1>
         }
       >
         <button

@@ -38,7 +38,7 @@ export default async function EstilosPage() {
       </form>
 
       {estilos.length === 0 && (
-        <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+        <p className={`${styles.msgQuiet} px-3.5 py-5`}>
           Nenhum estilo cadastrado.
         </p>
       )}

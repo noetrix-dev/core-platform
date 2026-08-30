@@ -60,11 +60,11 @@ export function ListaClientes({ clientes }: { clientes: ClienteLista[] }) {
 
       <div className={styles.tray}>
         {clientes.length === 0 ? (
-          <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+          <p className={`${styles.msgQuiet} px-3.5 py-5`}>
             Nenhum cliente cadastrado.
           </p>
         ) : filtrados.length === 0 ? (
-          <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+          <p className={`${styles.msgQuiet} px-3.5 py-5`}>
             Nenhum cliente encontrado.
           </p>
         ) : (

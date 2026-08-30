@@ -104,7 +104,7 @@ export function PerfilClienteDrawer({
     <Drawer titulo={perfil?.nome ?? "Cliente"} onClose={onClose}>
       {erro ? (
         <div className="flex flex-col gap-3">
-          <p className={styles.slip__meta}>{erro}</p>
+          <p className={styles.msgQuiet} data-tom="erro">{erro}</p>
           <button
             type="button"
             className={`${styles.btn} ${styles["btn--ghost"]}`}
@@ -121,10 +121,7 @@ export function PerfilClienteDrawer({
         </div>
       ) : perfil ? (
         <div className="flex flex-col gap-5">
-          <p
-            className="flex items-center gap-1.5 text-sm"
-            style={{ color: "var(--ink-2)" }}
-          >
+          <p className={`${styles.msgQuiet} flex items-center gap-1.5`}>
             <Icon name="phone" size={14} />
             <span className={styles.tnum}>{perfil.telefone}</span>
           </p>
@@ -195,7 +192,7 @@ export function PerfilClienteDrawer({
               />
             </div>
             {avisoPref && (
-              <p className={styles.slip__meta} style={{ color: "var(--oxblood)" }}>
+              <p className={styles.msgQuiet} data-tom="erro">
                 {avisoPref}
               </p>
             )}
@@ -213,7 +210,7 @@ export function PerfilClienteDrawer({
               <span>Últimas visitas</span>
             </div>
             {perfil.resumo.historico.length === 0 ? (
-              <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+              <p className={`${styles.msgQuiet} px-3.5 py-5`}>
                 Nenhuma visita registrada.
               </p>
             ) : (

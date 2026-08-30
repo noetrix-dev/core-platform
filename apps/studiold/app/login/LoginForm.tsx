@@ -35,11 +35,7 @@ export function LoginForm() {
       </div>
 
       {estado.erro && (
-        <p
-          role="alert"
-          className={styles.slip__meta}
-          style={{ color: "var(--oxblood)" }}
-        >
+        <p role="alert" className={styles.msgQuiet} data-tom="erro">
           {estado.erro}
         </p>
       )}

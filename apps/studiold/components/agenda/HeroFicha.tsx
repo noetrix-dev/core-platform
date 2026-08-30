@@ -87,10 +87,7 @@ export function HeroFicha({
                 </span>
               </p>
               {ag.cortesia_nome && (
-                <p
-                  className="mt-1 flex items-center gap-1.5 text-sm"
-                  style={{ color: "var(--ink-2)" }}
-                >
+                <p className={`${styles.msgQuiet} mt-1 flex items-center gap-1.5`}>
                   <Icon name="cup" size={14} /> {ag.cortesia_nome}
                 </p>
               )}
@@ -98,7 +95,7 @@ export function HeroFicha({
           </div>
 
           {cliente?.telefone && (
-            <p className="mt-2 flex items-center gap-1.5 text-sm" style={{ color: "var(--ink-2)" }}>
+            <p className={`${styles.msgQuiet} mt-2 flex items-center gap-1.5`}>
               <Icon name="phone" size={15} />
               <span className={styles.tnum}>{cliente.telefone}</span>
             </p>

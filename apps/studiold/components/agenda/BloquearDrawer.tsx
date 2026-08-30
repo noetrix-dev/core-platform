@@ -62,7 +62,7 @@ export function BloquearDrawer({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         {!valido && (
-          <p className={styles.slip__meta} style={{ color: "var(--oxblood)" }}>
+          <p className={styles.msgQuiet} data-tom="erro">
             O fim precisa ser depois do início.
           </p>
         )}

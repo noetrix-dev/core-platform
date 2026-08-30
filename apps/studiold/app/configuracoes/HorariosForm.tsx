@@ -118,20 +118,14 @@ export function HorariosForm({
             />
           </div>
         ) : (
-          <span
-            className={styles.cfgHorarioTimes}
-            style={{ color: "var(--ink-2)" }}
-          >
+          <span className={`${styles.cfgHorarioTimes} ${styles.msgQuiet}`}>
             Nenhum bloqueio de almoço configurado.
           </span>
         )}
       </div>
 
       {aviso && (
-        <p
-          className="px-3.5 pt-3 text-sm"
-          style={{ color: "var(--oxblood)" }}
-        >
+        <p className={`${styles.msgQuiet} px-3.5 pt-3`} data-tom="erro">
           {aviso}
         </p>
       )}
