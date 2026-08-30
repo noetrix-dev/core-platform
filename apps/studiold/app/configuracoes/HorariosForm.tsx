@@ -50,7 +50,7 @@ export function HorariosForm({
   };
 
   return (
-    <section className={`${styles.cfgSection} scroll-mt-20`} id="horarios">
+    <section className={styles.cfgSection}>
       <header>
         <Icon name="clock" size={15} /> Horário de funcionamento
       </header>
