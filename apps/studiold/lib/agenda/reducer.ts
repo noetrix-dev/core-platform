@@ -19,6 +19,13 @@ export type Action =
       valor: number;
       forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro";
       cortesiaId?: string;
+      itens: {
+        tipo: "servico" | "produto";
+        refId: string;
+        descricao: string;
+        quantidade: number;
+        precoUnitario: number;
+      }[];
     }
   | { type: "FALTOU"; agId: string }
   | { type: "CANCELAR"; agId: string }
@@ -141,12 +148,35 @@ export function reducer(state: State, action: Action): State {
               : c,
           )
         : d.cortesias;
+      const baixaProduto = new Map<string, number>();
+      for (const it of action.itens) {
+        if (it.tipo === "produto") {
+          baixaProduto.set(
+            it.refId,
+            (baixaProduto.get(it.refId) ?? 0) + it.quantidade,
+          );
+        }
+      }
+      const produtos = baixaProduto.size
+        ? d.produtos.map((p) =>
+            baixaProduto.has(p.id)
+              ? {
+                  ...p,
+                  quantidade_estoque: Math.max(
+                    0,
+                    p.quantidade_estoque - (baixaProduto.get(p.id) ?? 0),
+                  ),
+                }
+              : p,
+          )
+        : d.produtos;
       return avisar(
         {
           ...state,
           data: {
             ...d,
             cortesias,
+            produtos,
             agendamentos: upd(d.agendamentos, action.agId, {
               status: "concluido",
               em_atendimento: false,

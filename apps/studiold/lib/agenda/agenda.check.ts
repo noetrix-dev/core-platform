@@ -106,6 +106,7 @@ const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
     valor: 115,
     forma: "pix",
     cortesiaId: "cor-cerveja",
+    itens: [],
   });
   const ag = s.data.agendamentos.find((a) => a.id === "ag-05")!;
   assert.equal(ag.status, "concluido");
@@ -125,6 +126,7 @@ const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
     agId: "ag-05",
     valor: 100,
     forma: "dinheiro",
+    itens: [],
   });
   const soma1 = s.data.cortesias.reduce((n, c) => n + c.quantidade_estoque, 0);
   assert.equal(soma1, soma0, "sem cortesia, estoque intacto");

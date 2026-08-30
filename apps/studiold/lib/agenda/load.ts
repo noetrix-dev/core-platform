@@ -69,6 +69,7 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
     encRes,
     atendRes,
     cortesiasRes,
+    produtosRes,
   ] = await Promise.all([
     db.schema("public").from("tenants").select("nome, whatsapp_status").eq("slug", TENANT_SCHEMA).maybeSingle(),
     db.from("clientes").select("id, nome, telefone, genero, observacoes").eq("ativo", true),
@@ -94,6 +95,11 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
       .from("cortesias")
       .select("id, nome, descricao, ativo, quantidade_estoque")
       .order("nome"),
+    db
+      .from("produtos")
+      .select("id, nome, descricao, preco_venda, quantidade_estoque, ativo")
+      .eq("ativo", true)
+      .order("nome"),
   ]);
 
   const tenant = must(tenantRes, "tenants");
@@ -107,6 +113,7 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
   const encRows = must(encRes, "pedidos_encaixe") as Row[];
   const atendRows = must(atendRes, "atendimentos") as Row[];
   const cortesiasRows = must(cortesiasRes, "cortesias") as Row[];
+  const produtosRows = must(produtosRes, "produtos") as Row[];
 
   // histórico do cliente derivado de `atendimentos`
   const hist = new Map<string, { total: number; ultima?: string }>();
@@ -171,7 +178,14 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
       ativo: c.ativo as boolean,
       quantidade_estoque: (c.quantidade_estoque as number) ?? 0,
     })),
-    produtos: [], // ponytail: stopgap — Task 5 troca pelo fetch real
+    produtos: produtosRows.map((p) => ({
+      id: p.id as string,
+      nome: p.nome as string,
+      descricao: (p.descricao as string) ?? undefined,
+      preco_venda: Number(p.preco_venda),
+      quantidade_estoque: (p.quantidade_estoque as number) ?? 0,
+      ativo: p.ativo as boolean,
+    })),
 
     horarios: horariosRows.map((h) => ({
       dia_semana: h.dia_semana as number,

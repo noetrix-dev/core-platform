@@ -164,11 +164,20 @@ export async function aceitarEncaixe(encId: string): Promise<R> {
   return error ? falha(error, "aceitarEncaixe") : { ok: true };
 }
 
+type ItemRPC = {
+  tipo: "servico" | "produto";
+  refId: string;
+  descricao: string;
+  quantidade: number;
+  precoUnitario: number;
+};
+
 export async function concluirAtendimento(
   agId: string,
   valor: number,
   forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro",
   cortesiaId?: string,
+  itens: ItemRPC[] = [],
 ): Promise<R> {
   await requireUser();
   if (!/^[0-9a-f-]{36}$/i.test(agId)) {
@@ -182,11 +191,35 @@ export async function concluirAtendimento(
   }
   const cor = /^[0-9a-f-]{36}$/i.test(cortesiaId ?? "") ? cortesiaId! : null;
 
+  const pItens = [];
+  for (const it of itens) {
+    if (it.tipo !== "servico" && it.tipo !== "produto") {
+      return { ok: false, error: "item com tipo inválido" };
+    }
+    if (!/^[0-9a-f-]{36}$/i.test(it.refId)) {
+      return { ok: false, error: "item com referência inválida" };
+    }
+    if (!Number.isInteger(it.quantidade) || it.quantidade < 1 || it.quantidade > 99) {
+      return { ok: false, error: "quantidade de item inválida" };
+    }
+    if (!Number.isFinite(it.precoUnitario) || it.precoUnitario < 0) {
+      return { ok: false, error: "preço de item inválido" };
+    }
+    pItens.push({
+      tipo: it.tipo,
+      ref_id: it.refId,
+      descricao: (it.descricao ?? "").slice(0, 120),
+      quantidade: it.quantidade,
+      preco_unitario: it.precoUnitario,
+    });
+  }
+
   const { error } = await tenantDb().rpc("fn_concluir_atendimento", {
     p_agendamento_id: agId,
     p_valor: valor,
     p_forma_pagamento: forma,
     p_cortesia_id: cor,
+    p_itens: pItens,
   });
   return error ? falha(error, "concluirAtendimento") : { ok: true };
 }

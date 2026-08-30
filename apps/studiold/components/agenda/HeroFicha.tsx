@@ -28,6 +28,13 @@ export function HeroFicha({
     valor: number;
     forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro";
     cortesiaId?: string;
+    itens: {
+      tipo: "servico" | "produto";
+      refId: string;
+      descricao: string;
+      quantidade: number;
+      precoUnitario: number;
+    }[];
   }) => {
     setPagando(false);
     setCarimbo(true);
@@ -154,6 +161,8 @@ export function HeroFicha({
       {pagando && (
         <PagamentoDrawer
           valorSugerido={servico?.preco ?? 0}
+          servicoId={servico?.id ?? ""}
+          servicoNome={servico?.nome ?? "Serviço"}
           cortesiaIdInicial={ag.cortesia_id}
           onConfirmar={confirmarPagamento}
           onClose={() => setPagando(false)}

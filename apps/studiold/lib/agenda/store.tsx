@@ -56,6 +56,7 @@ async function persistir(
         action.valor,
         action.forma,
         action.cortesiaId,
+        action.itens,
       );
     case "FALTOU":
       return mudarStatus(action.agId, "nao_compareceu");
