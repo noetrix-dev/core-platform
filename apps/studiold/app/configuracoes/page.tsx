@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/supabase/auth";
 import styles from "@/app/agenda/agenda.module.css";
 import * as A from "./actions";
 import { EstoqueEditavel } from "./EstoqueEditavel";
+import { EstoqueProdutoEditavel } from "./EstoqueProdutoEditavel";
 import { HorariosForm } from "./HorariosForm";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ type Servico = {
 export default async function ConfiguracoesPage() {
   await requireUser();
   const db = tenantDb();
-  const [cRes, eRes, sRes, hRes, bRes] = await Promise.all([
+  const [cRes, eRes, sRes, pRes, hRes, bRes] = await Promise.all([
     db
       .from("cortesias")
       .select("id, nome, descricao, ativo, quantidade_estoque")
@@ -38,6 +39,10 @@ export default async function ConfiguracoesPage() {
     db
       .from("servicos")
       .select("id, nome, preco, duracao_minutos, ativo")
+      .order("nome"),
+    db
+      .from("produtos")
+      .select("id, nome, descricao, preco_venda, quantidade_estoque, ativo")
       .order("nome"),
     db
       .from("horarios_funcionamento")
@@ -54,6 +59,7 @@ export default async function ConfiguracoesPage() {
   if (cRes.error) throw new Error(`configuracoes/cortesias: ${cRes.error.message}`);
   if (eRes.error) throw new Error(`configuracoes/estilos: ${eRes.error.message}`);
   if (sRes.error) throw new Error(`configuracoes/servicos: ${sRes.error.message}`);
+  if (pRes.error) throw new Error(`configuracoes/produtos: ${pRes.error.message}`);
   if (hRes.error) throw new Error(`configuracoes/horarios: ${hRes.error.message}`);
   if (bRes.error) throw new Error(`configuracoes/bloqueios: ${bRes.error.message}`);
 
@@ -66,6 +72,22 @@ export default async function ConfiguracoesPage() {
     duracao_minutos: s.duracao_minutos as number,
     ativo: s.ativo as boolean,
   })) satisfies Servico[];
+  type Produto = {
+    id: string;
+    nome: string;
+    descricao: string | null;
+    preco_venda: number;
+    quantidade_estoque: number;
+    ativo: boolean;
+  };
+  const produtos = ((pRes.data ?? []) as Array<Record<string, unknown>>).map((p) => ({
+    id: p.id as string,
+    nome: p.nome as string,
+    descricao: (p.descricao as string) ?? null,
+    preco_venda: Number(p.preco_venda),
+    quantidade_estoque: (p.quantidade_estoque as number) ?? 0,
+    ativo: p.ativo as boolean,
+  })) satisfies Produto[];
   const dias = ((hRes.data ?? []) as Array<Record<string, unknown>>).map((h) => ({
     dia_semana: h.dia_semana as number,
     aberto: (h.aberto as boolean) ?? false,
@@ -387,6 +409,126 @@ export default async function ConfiguracoesPage() {
                     max={600}
                     aria-label={`Duração de ${s.nome}`}
                     required
+                  />
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles["btn--primary"]}`}
+                  >
+                    Salvar
+                  </button>
+                </form>
+              </details>
+            </div>
+          ))}
+        </section>
+
+        {/* ---- PRODUTOS ---- */}
+        <section className={`${styles.cfgSection} scroll-mt-20`} id="produtos">
+          <header>
+            <Icon name="box" size={15} /> Produtos
+          </header>
+
+          <form action={A.criarProduto} className={styles.cfgAddbar}>
+            <input
+              name="nome"
+              placeholder="Novo produto"
+              aria-label="Nome do novo produto"
+              required
+              maxLength={120}
+            />
+            <input
+              name="preco_venda"
+              inputMode="decimal"
+              pattern="[0-9.]*[0-9]([,][0-9]{1,2})?"
+              title="Use apenas números, vírgula para centavos. Ex.: 25,90"
+              placeholder="Preço (R$)"
+              aria-label="Preço de venda do novo produto"
+              required
+            />
+            <input
+              name="descricao"
+              placeholder="Descrição (opcional)"
+              aria-label="Descrição do novo produto"
+              maxLength={280}
+            />
+            <button
+              type="submit"
+              className={`${styles.btn} ${styles["btn--primary"]}`}
+            >
+              <Icon name="plus" size={14} /> Adicionar
+            </button>
+          </form>
+
+          {produtos.length === 0 && (
+            <p className="px-3.5 py-5 text-sm" style={{ color: "var(--ink-2)" }}>
+              Nenhum produto cadastrado.
+            </p>
+          )}
+
+          {produtos.map((p) => (
+            <div
+              key={p.id}
+              className={styles.cfgRow}
+              data-inativo={p.ativo ? undefined : "true"}
+            >
+              <div>
+                <p className={styles.cfgRow__nome}>{p.nome}</p>
+                {p.descricao && (
+                  <p className={styles.cfgRow__meta}>{p.descricao}</p>
+                )}
+                <p className={styles.cfgRow__meta}>
+                  {fmtPreco(p.preco_venda)} · Estoque:{" "}
+                  <EstoqueProdutoEditavel
+                    id={p.id}
+                    valor={p.quantidade_estoque}
+                    nome={p.nome}
+                  />
+                </p>
+              </div>
+
+              <div className={styles.cfgRow__acoes}>
+                <form action={A.toggleProdutoAtivo}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <input type="hidden" name="ativo" value={String(!p.ativo)} />
+                  <button
+                    type="submit"
+                    className={styles.cfgSwitch}
+                    data-on={p.ativo}
+                    aria-label={`${p.ativo ? "Desativar" : "Ativar"} ${p.nome}`}
+                  />
+                </form>
+              </div>
+
+              <details className={styles.cfgEdit}>
+                <summary
+                  className={`${styles.cfgSummary} ${styles.btn} ${styles["btn--ghost"]}`}
+                >
+                  Editar
+                </summary>
+                <form action={A.editarProduto}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <input
+                    name="nome"
+                    defaultValue={p.nome}
+                    aria-label={`Nome de ${p.nome}`}
+                    required
+                    maxLength={120}
+                  />
+                  <input
+                    name="preco_venda"
+                    inputMode="decimal"
+                    pattern="[0-9.]*[0-9]([,][0-9]{1,2})?"
+                    title="Use apenas números, vírgula para centavos. Ex.: 25,90"
+                    defaultValue={String(p.preco_venda).replace(".", ",")}
+                    aria-label={`Preço de ${p.nome}`}
+                    required
+                  />
+                  <input
+                    name="descricao"
+                    defaultValue={p.descricao ?? ""}
+                    placeholder="Descrição"
+                    aria-label={`Descrição de ${p.nome}`}
+                    maxLength={280}
                   />
                   <button
                     type="submit"

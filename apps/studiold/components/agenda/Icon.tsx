@@ -19,7 +19,8 @@ type Name =
   | "music"
   | "menu"
   | "calendar"
-  | "cash";
+  | "cash"
+  | "box";
 
 const PATHS: Record<Name, React.ReactNode> = {
   prev: <polyline points="13,4 7,10 13,16" />,
@@ -117,6 +118,12 @@ const PATHS: Record<Name, React.ReactNode> = {
       <circle cx="10" cy="10" r="2.1" />
       <line x1="5.5" y1="6" x2="5.5" y2="14" />
       <line x1="14.5" y1="6" x2="14.5" y2="14" />
+    </>
+  ),
+  box: (
+    <>
+      <path d="M3 7l9-4 9 4v10l-9 4-9-4z" />
+      <path d="M3 7l9 4 9-4M12 11v10" />
     </>
   ),
 };
