@@ -3,6 +3,7 @@ import { tenantDb } from "@/lib/supabase/server";
 import { Topbar } from "@/components/Topbar";
 import { Icon } from "@/components/agenda/Icon";
 import { fmtPreco } from "@/lib/agenda/time";
+import { requireUser } from "@/lib/supabase/auth";
 import styles from "@/app/agenda/agenda.module.css";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,7 @@ export default async function FinanceiroPage({
 }: {
   searchParams: Promise<{ periodo?: string }>;
 }) {
+  await requireUser();
   const sp = await searchParams;
   const periodo: Periodo = PERIODOS.some((p) => p.key === sp.periodo)
     ? (sp.periodo as Periodo)

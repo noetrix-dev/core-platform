@@ -2,6 +2,7 @@ import { tenantDb } from "@/lib/supabase/server";
 import { Icon } from "@/components/agenda/Icon";
 import { Topbar } from "@/components/Topbar";
 import { fmtPreco } from "@/lib/agenda/time";
+import { requireUser } from "@/lib/supabase/auth";
 import styles from "@/app/agenda/agenda.module.css";
 import * as A from "./actions";
 import { EstoqueEditavel } from "./EstoqueEditavel";
@@ -26,6 +27,7 @@ type Servico = {
 };
 
 export default async function ConfiguracoesPage() {
+  await requireUser();
   const db = tenantDb();
   const [cRes, eRes, sRes, hRes, bRes] = await Promise.all([
     db

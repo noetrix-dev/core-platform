@@ -1,5 +1,6 @@
 import { AgendaShell } from "@/components/agenda/AgendaShell";
 import { loadAgendaData } from "@/lib/agenda/load";
+import { requireUser } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function AgendaPage({
 }: {
   searchParams: Promise<{ d?: string; wa?: string }>;
 }) {
+  await requireUser();
   const { d, wa } = await searchParams;
   const dayKey = /^\d{4}-\d{2}-\d{2}$/.test(d ?? "") ? d! : hojeKey();
   const data = await loadAgendaData(dayKey);

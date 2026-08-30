@@ -2,6 +2,7 @@ import { tenantDb } from "@/lib/supabase/server";
 import { Topbar } from "@/components/Topbar";
 import { visitasPorCliente } from "@/lib/clientes/resumo";
 import { ListaClientes } from "@/components/ListaClientes";
+import { requireUser } from "@/lib/supabase/auth";
 import styles from "@/app/agenda/agenda.module.css";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 type Row = Record<string, unknown>;
 
 export default async function ClientesPage() {
+  await requireUser();
   const db = tenantDb();
   const [cliRes, atendRes] = await Promise.all([
     db.from("clientes").select("id, nome, telefone").eq("ativo", true).order("nome"),
