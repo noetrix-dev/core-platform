@@ -26,7 +26,7 @@ export function SecondaryNav() {
         <Link
           key={s.href}
           href={s.href}
-          className={styles.chip}
+          className={`${styles.chip} shrink-0 whitespace-nowrap`}
           data-on={pathname === s.href}
           aria-current={pathname === s.href ? "page" : undefined}
         >
