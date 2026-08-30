@@ -191,11 +191,18 @@ export async function concluirAtendimento(
   }
   const cor = /^[0-9a-f-]{36}$/i.test(cortesiaId ?? "") ? cortesiaId! : null;
 
+  if (!Array.isArray(itens) || itens.length > 50) {
+    return { ok: false, error: "itens inválidos" };
+  }
+
   const pItens = [];
   for (const it of itens) {
     if (it.tipo !== "servico" && it.tipo !== "produto") {
       return { ok: false, error: "item com tipo inválido" };
     }
+    // serviço principal de um serviço desativado: sem refId — grava só a descrição,
+    // o atendimentos.servico_id já registra o serviço principal.
+    if (it.tipo === "servico" && !it.refId) continue;
     if (!/^[0-9a-f-]{36}$/i.test(it.refId)) {
       return { ok: false, error: "item com referência inválida" };
     }
@@ -204,6 +211,9 @@ export async function concluirAtendimento(
     }
     if (!Number.isFinite(it.precoUnitario) || it.precoUnitario < 0) {
       return { ok: false, error: "preço de item inválido" };
+    }
+    if (typeof it.descricao !== "string") {
+      return { ok: false, error: "descrição de item inválida" };
     }
     pItens.push({
       tipo: it.tipo,

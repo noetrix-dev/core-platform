@@ -113,7 +113,7 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
   const encRows = must(encRes, "pedidos_encaixe") as Row[];
   const atendRows = must(atendRes, "atendimentos") as Row[];
   const cortesiasRows = must(cortesiasRes, "cortesias") as Row[];
-  const produtosRows = must(produtosRes, "produtos") as Row[];
+  const produtosRows = produtosRes.error ? [] : ((produtosRes.data ?? []) as Row[]);
 
   // histórico do cliente derivado de `atendimentos`
   const hist = new Map<string, { total: number; ultima?: string }>();

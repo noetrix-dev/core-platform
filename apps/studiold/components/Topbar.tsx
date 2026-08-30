@@ -25,9 +25,9 @@ const PRINCIPAIS: ItemNav[] = [
 
 const GERENCIAR: ItemNav[] = [
   { href: "/configuracoes#cortesias", label: "Cortesias", icone: "cup" },
-  { href: "/configuracoes#produtos", label: "Produtos", icone: "box" },
   { href: "/configuracoes#estilos", label: "Estilos de música", icone: "music" },
   { href: "/configuracoes#servicos", label: "Serviços", icone: "scissors" },
+  { href: "/configuracoes#produtos", label: "Produtos", icone: "box" },
   { href: "/configuracoes#horarios", label: "Horário de funcionamento", icone: "clock" },
 ];
 

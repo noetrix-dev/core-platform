@@ -275,9 +275,11 @@ export async function criarProduto(fd: FormData): Promise<void> {
   const preco = parsePrecoBRL((fd.get("preco_venda") ?? "").toString());
   const descricao = texto(fd, "descricao", 280);
   if (!nome || preco == null) return;
+  const est = Number(fd.get("quantidade_estoque"));
+  const estoque = Number.isInteger(est) && est >= 0 && est <= 100_000 ? est : 0;
   const { error } = await tenantDb()
     .from("produtos")
-    .insert({ nome, preco_venda: preco, descricao: descricao || null });
+    .insert({ nome, preco_venda: preco, descricao: descricao || null, quantidade_estoque: estoque });
   if (error) throw new Error(`criarProduto: ${error.message}`);
   revalidatePath(ROTA);
 }

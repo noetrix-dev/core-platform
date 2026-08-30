@@ -85,7 +85,7 @@ BEGIN
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_itens)
     LOOP
       v_qtd   := GREATEST(1, COALESCE((v_item->>'quantidade')::int, 1));
-      v_preco := GREATEST(0, COALESCE((v_item->>'preco_unitario')::numeric, 0));
+      v_preco := ROUND(GREATEST(0, COALESCE((v_item->>'preco_unitario')::numeric, 0)), 2);
 
       INSERT INTO barbearia_001.atendimento_itens
         (atendimento_id, tipo, servico_id, produto_id, descricao, quantidade, preco_unitario, subtotal)
@@ -126,3 +126,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION
   barbearia_001.fn_concluir_atendimento(uuid, numeric, text, uuid, jsonb) TO service_role;
+
+-- PostgREST cacheia o schema; força um reload após aplicar (o histórico do repo
+-- mostra RPCs aplicadas fora do tracking de migration).
+NOTIFY pgrst, 'reload schema';

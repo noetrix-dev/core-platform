@@ -136,6 +136,27 @@ const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
   );
 }
 
+// --- CONCLUIR_PAGAMENTO baixa estoque de produto (soma + piso) ------
+{
+  const s0 = initState(DIA);
+  const agId = s0.data.agendamentos.find((a) => a.status === "agendado")!.id; // ag-07
+  const s1 = reducer(s0, {
+    type: "CONCLUIR_PAGAMENTO",
+    agId,
+    valor: 85,
+    forma: "dinheiro",
+    itens: [
+      { tipo: "produto", refId: "prod-1", descricao: "Pomada", quantidade: 2, precoUnitario: 30 },
+      { tipo: "produto", refId: "prod-1", descricao: "Pomada", quantidade: 1, precoUnitario: 30 },
+      { tipo: "produto", refId: "prod-2", descricao: "Cera", quantidade: 3, precoUnitario: 25 },
+    ],
+  });
+  const p1 = s1.data.produtos.find((p) => p.id === "prod-1");
+  const p2 = s1.data.produtos.find((p) => p.id === "prod-2");
+  assert.equal(p1?.quantidade_estoque, 2, "prod-1: 5 - (2+1) = 2 (soma de linhas do mesmo produto)");
+  assert.equal(p2?.quantidade_estoque, 0, "prod-2: 1 - 3 → piso em 0");
+}
+
 // --- expiração pelo TICK --------------------------------------------
 {
   let s = initState(DIA);

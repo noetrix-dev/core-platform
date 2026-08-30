@@ -451,6 +451,15 @@ export default async function ConfiguracoesPage() {
               aria-label="Descrição do novo produto"
               maxLength={280}
             />
+            <input
+              type="number"
+              name="quantidade_estoque"
+              min={0}
+              max={99999}
+              defaultValue={0}
+              placeholder="Estoque"
+              aria-label="Estoque inicial do novo produto"
+            />
             <button
               type="submit"
               className={`${styles.btn} ${styles["btn--primary"]}`}

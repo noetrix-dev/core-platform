@@ -122,8 +122,8 @@ const PATHS: Record<Name, React.ReactNode> = {
   ),
   box: (
     <>
-      <path d="M3 7l9-4 9 4v10l-9 4-9-4z" />
-      <path d="M3 7l9 4 9-4M12 11v10" />
+      <path d="M3 6l7-3 7 3v8l-7 3-7-3z" />
+      <path d="M3 6l7 3 7-3M10 9v8" />
     </>
   ),
 };
