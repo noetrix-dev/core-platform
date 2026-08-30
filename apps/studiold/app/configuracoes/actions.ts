@@ -266,3 +266,62 @@ export async function salvarHorarios(
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+// --- produtos ---------------------------------------------------------
+
+export async function criarProduto(fd: FormData): Promise<void> {
+  await requireUser();
+  const nome = texto(fd, "nome");
+  const preco = parsePrecoBRL((fd.get("preco_venda") ?? "").toString());
+  const descricao = texto(fd, "descricao", 280);
+  if (!nome || preco == null) return;
+  const { error } = await tenantDb()
+    .from("produtos")
+    .insert({ nome, preco_venda: preco, descricao: descricao || null });
+  if (error) throw new Error(`criarProduto: ${error.message}`);
+  revalidatePath(ROTA);
+}
+
+export async function editarProduto(fd: FormData): Promise<void> {
+  await requireUser();
+  const id = idDe(fd);
+  const nome = texto(fd, "nome");
+  const preco = parsePrecoBRL((fd.get("preco_venda") ?? "").toString());
+  const descricao = texto(fd, "descricao", 280);
+  if (!nome || preco == null) return;
+  const { error } = await tenantDb()
+    .from("produtos")
+    .update({ nome, preco_venda: preco, descricao: descricao || null })
+    .eq("id", id);
+  if (error) throw new Error(`editarProduto: ${error.message}`);
+  revalidatePath(ROTA);
+}
+
+export async function toggleProdutoAtivo(fd: FormData): Promise<void> {
+  await requireUser();
+  const id = idDe(fd);
+  const ativo = fd.get("ativo") === "true";
+  const { error } = await tenantDb()
+    .from("produtos")
+    .update({ ativo })
+    .eq("id", id);
+  if (error) throw new Error(`toggleProdutoAtivo: ${error.message}`);
+  revalidatePath(ROTA);
+}
+
+export async function definirProdutoEstoque(
+  id: string,
+  quantidade: number,
+): Promise<void> {
+  await requireUser();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("id inválido");
+  if (!Number.isInteger(quantidade) || quantidade < 0 || quantidade > 100_000) {
+    return;
+  }
+  const { error } = await tenantDb()
+    .from("produtos")
+    .update({ quantidade_estoque: quantidade })
+    .eq("id", id);
+  if (error) throw new Error(`definirProdutoEstoque: ${error.message}`);
+  revalidatePath(ROTA);
+}
