@@ -9,6 +9,7 @@ import { hmToMin, minToHm } from "./time.ts";
 import { resumirAtendimentos, visitasPorCliente } from "../clientes/resumo.ts";
 import { parsePrecoBRL } from "../dinheiro.ts";
 import { normalizarTelefone } from "../clientes/telefone.ts";
+import { somaItens, type ItemPagamento } from "./pagamento.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
 
@@ -217,6 +218,34 @@ assert.equal(minToHm(1020), "17:00");
   assert.equal(normalizarTelefone("999"), null, "curto demais");
   assert.equal(normalizarTelefone(""), null, "vazio");
   assert.equal(normalizarTelefone("abc"), null, "sem dígitos");
+}
+
+// --- somaItens -----------------------------------------------------------
+{
+  const it = (over: Partial<ItemPagamento>): ItemPagamento => ({
+    key: "k", tipo: "servico", refId: "r", descricao: "d",
+    quantidade: 1, precoUnitario: 0, fixo: false, ...over,
+  });
+  assert.equal(somaItens([]), 0, "lista vazia");
+  assert.equal(somaItens([it({ precoUnitario: 55 })]), 55, "um item qtd 1");
+  assert.equal(
+    somaItens([it({ quantidade: 3, precoUnitario: 12.5 })]),
+    37.5,
+    "qtd × preço",
+  );
+  assert.equal(
+    somaItens([
+      it({ fixo: true, precoUnitario: 55 }),
+      it({ tipo: "produto", quantidade: 2, precoUnitario: 8.9 }),
+    ]),
+    72.8,
+    "fixo + produto, 2 casas",
+  );
+  assert.equal(
+    somaItens([it({ quantidade: 3, precoUnitario: 0.1 })]),
+    0.3,
+    "arredonda cada subtotal antes de somar (evita 0.30000000000000004)",
+  );
 }
 
 console.log("agenda.check: OK");

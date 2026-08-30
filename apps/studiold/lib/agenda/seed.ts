@@ -91,6 +91,7 @@ export function buildSeed(dayKey: string): AgendaData {
       { id: "cor-suco", nome: "Suco", ativo: true, quantidade_estoque: 0 },
       { id: "cor-cha", nome: "Chá", ativo: false, quantidade_estoque: 5 },
     ],
+    produtos: [],
     horarios: HORARIOS,
     bloqueios_fixos: [
       { id: "blf-almoco", descricao: "Almoço", dia_semana: null, hora_inicio: "11:30", hora_fim: "12:30", tipo: "suave" },

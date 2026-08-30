@@ -171,6 +171,8 @@ export async function loadAgendaData(dayKey: string): Promise<AgendaData> {
       ativo: c.ativo as boolean,
       quantidade_estoque: (c.quantidade_estoque as number) ?? 0,
     })),
+    produtos: [], // ponytail: stopgap — Task 5 troca pelo fetch real
+
     horarios: horariosRows.map((h) => ({
       dia_semana: h.dia_semana as number,
       aberto: h.aberto as boolean,

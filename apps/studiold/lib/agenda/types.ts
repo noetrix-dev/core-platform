@@ -30,6 +30,15 @@ export interface Cortesia {
   quantidade_estoque: number;
 }
 
+export interface Produto {
+  id: string;
+  nome: string;
+  descricao?: string;
+  preco_venda: number;
+  quantidade_estoque: number;
+  ativo: boolean;
+}
+
 export interface HorarioFuncionamento {
   dia_semana: number; // 0=domingo … 6=sábado
   aberto: boolean;
@@ -123,6 +132,7 @@ export interface AgendaData {
   clientes: Cliente[];
   servicos: Servico[];
   cortesias: Cortesia[];
+  produtos: Produto[];
   horarios: HorarioFuncionamento[];
   bloqueios_fixos: BloqueioFixo[];
   bloqueios_pontuais: BloqueioPontual[];
