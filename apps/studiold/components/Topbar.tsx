@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "./agenda/Icon";
+import { LogoutButton } from "@/components/LogoutButton";
 import styles from "@/app/agenda/agenda.module.css";
 
 type ItemNav = {
@@ -148,6 +149,9 @@ function NavDrawer({ onClose }: { onClose: () => void }) {
               {it.label}
             </Link>
           ))}
+
+          <div className={styles.navDivider} role="separator" />
+          <LogoutButton />
         </div>
       </nav>
     </>
