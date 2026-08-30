@@ -41,7 +41,7 @@ export async function criarCortesia(fd: FormData): Promise<void> {
     .from("cortesias")
     .insert({ nome, descricao: descricao || null });
   if (error) throw new Error(`criarCortesia: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function editarCortesia(fd: FormData): Promise<void> {
@@ -55,7 +55,7 @@ export async function editarCortesia(fd: FormData): Promise<void> {
     .update({ nome, descricao: descricao || null })
     .eq("id", id);
   if (error) throw new Error(`editarCortesia: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function toggleCortesiaAtivo(fd: FormData): Promise<void> {
@@ -67,7 +67,7 @@ export async function toggleCortesiaAtivo(fd: FormData): Promise<void> {
     .update({ ativo })
     .eq("id", id);
   if (error) throw new Error(`toggleCortesiaAtivo: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function adicionarEstoque(fd: FormData): Promise<void> {
@@ -89,7 +89,7 @@ export async function adicionarEstoque(fd: FormData): Promise<void> {
     .update({ quantidade_estoque: novo })
     .eq("id", id);
   if (error) throw new Error(`adicionarEstoque: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 /** define a quantidade absoluta (edição inline do número). */
@@ -107,7 +107,7 @@ export async function definirEstoque(
     .update({ quantidade_estoque: quantidade })
     .eq("id", id);
   if (error) throw new Error(`definirEstoque: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 // --- estilos de música --------------------------------------------------
@@ -118,7 +118,7 @@ export async function criarEstilo(fd: FormData): Promise<void> {
   if (!nome) return;
   const { error } = await tenantDb().from("estilos_musica").insert({ nome });
   if (error) throw new Error(`criarEstilo: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function editarEstilo(fd: FormData): Promise<void> {
@@ -131,7 +131,7 @@ export async function editarEstilo(fd: FormData): Promise<void> {
     .update({ nome })
     .eq("id", id);
   if (error) throw new Error(`editarEstilo: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function toggleEstiloAtivo(fd: FormData): Promise<void> {
@@ -143,7 +143,7 @@ export async function toggleEstiloAtivo(fd: FormData): Promise<void> {
     .update({ ativo })
     .eq("id", id);
   if (error) throw new Error(`toggleEstiloAtivo: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 // --- serviços ---------------------------------------------------------
@@ -158,7 +158,7 @@ export async function criarServico(fd: FormData): Promise<void> {
     .from("servicos")
     .insert({ nome, preco, duracao_minutos: dur });
   if (error) throw new Error(`criarServico: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function editarServico(fd: FormData): Promise<void> {
@@ -173,7 +173,7 @@ export async function editarServico(fd: FormData): Promise<void> {
     .update({ nome, preco, duracao_minutos: dur })
     .eq("id", id);
   if (error) throw new Error(`editarServico: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function toggleServicoAtivo(fd: FormData): Promise<void> {
@@ -185,7 +185,7 @@ export async function toggleServicoAtivo(fd: FormData): Promise<void> {
     .update({ ativo })
     .eq("id", id);
   if (error) throw new Error(`toggleServicoAtivo: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 // --- horário de funcionamento --------------------------------------
@@ -263,7 +263,7 @@ export async function salvarHorarios(
       return { ok: false, error: "Não foi possível salvar os horários. Tente de novo." };
     }
   }
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
   return { ok: true };
 }
 
@@ -281,7 +281,7 @@ export async function criarProduto(fd: FormData): Promise<void> {
     .from("produtos")
     .insert({ nome, preco_venda: preco, descricao: descricao || null, quantidade_estoque: estoque });
   if (error) throw new Error(`criarProduto: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function editarProduto(fd: FormData): Promise<void> {
@@ -296,7 +296,7 @@ export async function editarProduto(fd: FormData): Promise<void> {
     .update({ nome, preco_venda: preco, descricao: descricao || null })
     .eq("id", id);
   if (error) throw new Error(`editarProduto: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function toggleProdutoAtivo(fd: FormData): Promise<void> {
@@ -308,7 +308,7 @@ export async function toggleProdutoAtivo(fd: FormData): Promise<void> {
     .update({ ativo })
     .eq("id", id);
   if (error) throw new Error(`toggleProdutoAtivo: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }
 
 export async function definirProdutoEstoque(
@@ -325,5 +325,5 @@ export async function definirProdutoEstoque(
     .update({ quantidade_estoque: quantidade })
     .eq("id", id);
   if (error) throw new Error(`definirProdutoEstoque: ${error.message}`);
-  revalidatePath(ROTA);
+  revalidatePath(ROTA, "layout");
 }

@@ -24,11 +24,11 @@ const PRINCIPAIS: ItemNav[] = [
 ];
 
 const GERENCIAR: ItemNav[] = [
-  { href: "/configuracoes#cortesias", label: "Cortesias", icone: "cup" },
-  { href: "/configuracoes#estilos", label: "Estilos de música", icone: "music" },
-  { href: "/configuracoes#servicos", label: "Serviços", icone: "scissors" },
-  { href: "/configuracoes#produtos", label: "Produtos", icone: "box" },
-  { href: "/configuracoes#horarios", label: "Horário de funcionamento", icone: "clock" },
+  { href: "/configuracoes/cortesias", label: "Cortesias", icone: "cup" },
+  { href: "/configuracoes/estilos", label: "Estilos de música", icone: "music" },
+  { href: "/configuracoes/servicos", label: "Serviços", icone: "scissors" },
+  { href: "/configuracoes/produtos", label: "Produtos", icone: "box" },
+  { href: "/configuracoes/horarios", label: "Horário de funcionamento", icone: "clock" },
 ];
 
 export function Topbar({
@@ -84,8 +84,7 @@ export function Topbar({
 function NavDrawer({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
   const ativo = (href: string) =>
-    !href.includes("#") &&
-    (pathname === href || pathname.startsWith(`${href}/`));
+    pathname === href || pathname.startsWith(`${href}/`);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
