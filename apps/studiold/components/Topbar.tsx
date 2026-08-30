@@ -14,7 +14,7 @@ import styles from "@/app/agenda/agenda.module.css";
 type ItemNav = {
   href: string;
   label: string;
-  icone: "calendar" | "cash" | "music" | "user" | "gear";
+  icone: "calendar" | "cash" | "music" | "user" | "gear" | "box" | "cup" | "scissors" | "clock";
 };
 
 const PRINCIPAIS: ItemNav[] = [
@@ -24,7 +24,11 @@ const PRINCIPAIS: ItemNav[] = [
 ];
 
 const GERENCIAR: ItemNav[] = [
-  { href: "/configuracoes", label: "Ajustes", icone: "gear" },
+  { href: "/configuracoes#cortesias", label: "Cortesias", icone: "cup" },
+  { href: "/configuracoes#produtos", label: "Produtos", icone: "box" },
+  { href: "/configuracoes#estilos", label: "Estilos de música", icone: "music" },
+  { href: "/configuracoes#servicos", label: "Serviços", icone: "scissors" },
+  { href: "/configuracoes#horarios", label: "Horário de funcionamento", icone: "clock" },
 ];
 
 export function Topbar({
@@ -80,7 +84,8 @@ export function Topbar({
 function NavDrawer({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
   const ativo = (href: string) =>
-    pathname === href || pathname.startsWith(`${href}/`);
+    !href.includes("#") &&
+    (pathname === href || pathname.startsWith(`${href}/`));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

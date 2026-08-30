@@ -109,7 +109,7 @@ export default async function ConfiguracoesPage() {
 
       <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-5 sm:px-6">
         {/* ---- CORTESIAS ---- */}
-        <section className={styles.cfgSection}>
+        <section className={`${styles.cfgSection} scroll-mt-20`} id="cortesias">
           <header>
             <Icon name="cup" size={15} /> Cortesias
           </header>
@@ -230,7 +230,7 @@ export default async function ConfiguracoesPage() {
         </section>
 
         {/* ---- ESTILOS DE MÚSICA ---- */}
-        <section className={styles.cfgSection}>
+        <section className={`${styles.cfgSection} scroll-mt-20`} id="estilos">
           <header>
             <Icon name="music" size={15} /> Estilos de música
           </header>
@@ -306,7 +306,7 @@ export default async function ConfiguracoesPage() {
         </section>
 
         {/* ---- SERVIÇOS ---- */}
-        <section className={styles.cfgSection}>
+        <section className={`${styles.cfgSection} scroll-mt-20`} id="servicos">
           <header>
             <Icon name="scissors" size={15} /> Serviços
           </header>
