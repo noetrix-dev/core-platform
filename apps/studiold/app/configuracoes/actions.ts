@@ -5,6 +5,7 @@
 
 import { revalidatePath } from "next/cache";
 import { tenantDb } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/supabase/auth";
 import { parsePrecoBRL } from "@/lib/dinheiro";
 import { DIAS_SEMANA_LONGO } from "@/lib/agenda/time";
 
@@ -32,6 +33,7 @@ const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 // --- cortesias -------------------------------------------------------------
 
 export async function criarCortesia(fd: FormData): Promise<void> {
+  await requireUser();
   const nome = texto(fd, "nome");
   if (!nome) return;
   const descricao = texto(fd, "descricao", 280);
@@ -43,6 +45,7 @@ export async function criarCortesia(fd: FormData): Promise<void> {
 }
 
 export async function editarCortesia(fd: FormData): Promise<void> {
+  await requireUser();
   const id = idDe(fd);
   const nome = texto(fd, "nome");
   if (!nome) return;
@@ -56,6 +59,7 @@ export async function editarCortesia(fd: FormData): Promise<void> {
 }
 
 export async function toggleCortesiaAtivo(fd: FormData): Promise<void> {
+  await requireUser();
   const id = idDe(fd);
   const ativo = fd.get("ativo") === "true";
   const { error } = await tenantDb()
@@ -67,6 +71,7 @@ export async function toggleCortesiaAtivo(fd: FormData): Promise<void> {
 }
 
 export async function adicionarEstoque(fd: FormData): Promise<void> {
+  await requireUser();
   const id = idDe(fd);
   const n = Number(fd.get("n"));
   if (!Number.isInteger(n) || n <= 0 || n > 10_000) return;
@@ -92,6 +97,7 @@ export async function definirEstoque(
   id: string,
   quantidade: number,
 ): Promise<void> {
+  await requireUser();
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("id inválido");
   if (!Number.isInteger(quantidade) || quantidade < 0 || quantidade > 100_000) {
     return;
@@ -107,6 +113,7 @@ export async function definirEstoque(
 // --- estilos de música --------------------------------------------------
 
 export async function criarEstilo(fd: FormData): Promise<void> {
+  await requireUser();
   const nome = texto(fd, "nome");
   if (!nome) return;
   const { error } = await tenantDb().from("estilos_musica").insert({ nome });
@@ -115,6 +122,7 @@ export async function criarEstilo(fd: FormData): Promise<void> {
 }
 
 export async function editarEstilo(fd: FormData): Promise<void> {
+  await requireUser();
   const id = idDe(fd);
   const nome = texto(fd, "nome");
   if (!nome) return;
@@ -127,6 +135,7 @@ export async function editarEstilo(fd: FormData): Promise<void> {
 }
 
 export async function toggleEstiloAtivo(fd: FormData): Promise<void> {
+  await requireUser();
   const id = idDe(fd);
   const ativo = fd.get("ativo") === "true";
   const { error } = await tenantDb()
@@ -140,6 +149,7 @@ export async function toggleEstiloAtivo(fd: FormData): Promise<void> {
 // --- serviços ---------------------------------------------------------
 
 export async function criarServico(fd: FormData): Promise<void> {
+  await requireUser();
   const nome = texto(fd, "nome");
   const preco = parsePrecoBRL((fd.get("preco") ?? "").toString());
   const dur = inteiro(fd, "duracao_minutos");
@@ -152,6 +162,7 @@ export async function criarServico(fd: FormData): Promise<void> {
 }
 
 export async function editarServico(fd: FormData): Promise<void> {
+  await requireUser();
   const id = idDe(fd);
   const nome = texto(fd, "nome");
   const preco = parsePrecoBRL((fd.get("preco") ?? "").toString());
@@ -166,6 +177,7 @@ export async function editarServico(fd: FormData): Promise<void> {
 }
 
 export async function toggleServicoAtivo(fd: FormData): Promise<void> {
+  await requireUser();
   const id = idDe(fd);
   const ativo = fd.get("ativo") === "true";
   const { error } = await tenantDb()
@@ -190,6 +202,7 @@ export async function salvarHorarios(
   dias: DiaPayload[],
   almoco: AlmocoPayload,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireUser();
   if (!Array.isArray(dias) || dias.length !== 7) {
     return { ok: false, error: "payload inválido" };
   }

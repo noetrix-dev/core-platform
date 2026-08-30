@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 
 import { tenantDb } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/supabase/auth";
 import { resumirAtendimentos, type AtendimentoRow } from "@/lib/clientes/resumo";
 import { normalizarTelefone } from "@/lib/clientes/telefone";
 import type {
@@ -28,6 +29,7 @@ function embNome(v: unknown): string {
 export async function getPerfilCliente(
   clienteId: string,
 ): Promise<PerfilResultado> {
+  await requireUser();
   if (!UUID.test(clienteId)) return { ok: false, error: "id inválido" };
   const db = tenantDb();
 
@@ -89,6 +91,7 @@ export async function atualizarPreferencias(
   clienteId: string,
   patch: PreferenciasPatch,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireUser();
   if (!UUID.test(clienteId)) return { ok: false, error: "id inválido" };
   const obs = (patch.observacoesFixas ?? "").trim().slice(0, 500) || null;
   const { error } = await tenantDb()
@@ -110,6 +113,7 @@ const GENEROS = new Set(["masculino", "feminino", "nao_informado"]);
 export async function criarCliente(
   fd: FormData,
 ): Promise<CriarClienteResultado> {
+  await requireUser();
   const nome = (fd.get("nome") ?? "").toString().trim().slice(0, 120);
   if (!nome) return { ok: false, error: "Informe o nome do cliente." };
 
@@ -173,6 +177,7 @@ export async function criarCliente(
 export async function getPreferenciasCliente(
   clienteId: string,
 ): Promise<PreferenciasResultado> {
+  await requireUser();
   if (!UUID.test(clienteId)) return { ok: false, error: "id inválido" };
   const db = tenantDb();
 

@@ -4,6 +4,7 @@ import { LoginForm } from "./LoginForm";
 import styles from "@/app/agenda/agenda.module.css";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Entrar — StudiOLD" };
 
 export default async function LoginPage() {
   if (await getUserOpcional()) redirect("/agenda");

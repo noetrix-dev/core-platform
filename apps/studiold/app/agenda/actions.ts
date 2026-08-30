@@ -8,6 +8,7 @@
 // a migration não for aplicada, elas retornam erro e o cliente recarrega.
 
 import { tenantDb } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/supabase/auth";
 import type { StatusAgendamento } from "@/lib/agenda/types";
 
 type R = { ok: true } | { ok: false; error: string };
@@ -28,6 +29,7 @@ export async function mudarStatus(
   agId: string,
   status: StatusAgendamento,
 ): Promise<R> {
+  await requireUser();
   const { error } = await tenantDb()
     .from("agendamentos")
     .update({ status, atualizado_em: new Date().toISOString() })
@@ -36,6 +38,7 @@ export async function mudarStatus(
 }
 
 export async function recusarEncaixe(encId: string): Promise<R> {
+  await requireUser();
   const { error } = await tenantDb()
     .from("pedidos_encaixe")
     .update({ status: "recusado", atualizado_em: new Date().toISOString() })
@@ -49,6 +52,7 @@ export async function bloquear(p: {
   horaFim: string;
   descricao: string;
 }): Promise<R> {
+  await requireUser();
   const { error } = await tenantDb()
     .from("bloqueios_pontuais")
     .insert({
@@ -70,6 +74,7 @@ export async function agendar(p: {
   naCadeira?: boolean;
   dayKey: string;
 }): Promise<R> {
+  await requireUser();
   const db = tenantDb();
 
   let clienteId = p.clienteId;
@@ -125,6 +130,7 @@ export async function agendar(p: {
 // --- fila / encaixe: FOR UPDATE dentro de função plpgsql -----------------
 
 export async function cancelar(agId: string): Promise<R> {
+  await requireUser();
   const { error } = await tenantDb().rpc("fn_cancelar_agendamento", {
     p_agendamento_id: agId,
   });
@@ -132,6 +138,7 @@ export async function cancelar(agId: string): Promise<R> {
 }
 
 export async function notificarFila(filaId: string): Promise<R> {
+  await requireUser();
   const { error } = await tenantDb().rpc("fn_notificar_fila", { p_fila_id: filaId });
   return error ? falha(error, "notificarFila") : { ok: true };
 }
@@ -141,6 +148,7 @@ export async function confirmarFila(
   inicioMin: number,
   dayKey: string,
 ): Promise<R> {
+  await requireUser();
   const { error } = await tenantDb().rpc("fn_confirmar_fila", {
     p_fila_id: filaId,
     p_inicio: instante(dayKey, inicioMin),
@@ -149,6 +157,7 @@ export async function confirmarFila(
 }
 
 export async function aceitarEncaixe(encId: string): Promise<R> {
+  await requireUser();
   const { error } = await tenantDb().rpc("fn_aceitar_encaixe", {
     p_pedido_id: encId,
   });
@@ -161,6 +170,7 @@ export async function concluirAtendimento(
   forma: "pix" | "cartao_debito" | "cartao_credito" | "dinheiro",
   cortesiaId?: string,
 ): Promise<R> {
+  await requireUser();
   if (!/^[0-9a-f-]{36}$/i.test(agId)) {
     return { ok: false, error: "id de agendamento inválido" };
   }

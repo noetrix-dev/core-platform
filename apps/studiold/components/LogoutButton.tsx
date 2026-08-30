@@ -14,7 +14,7 @@ export function LogoutButton() {
     if (saindo) return;
     setSaindo(true);
     try {
-      await browserSupabase().auth.signOut();
+      await browserSupabase().auth.signOut({ scope: "local" });
     } catch {
       // mesmo que o signOut falhe no servidor, o cookie local é limpo;
       // seguimos pro /login e o proxy resolve o resto.

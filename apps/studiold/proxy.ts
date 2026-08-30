@@ -41,6 +41,7 @@ export async function proxy(request: NextRequest) {
   if (!user && !emLogin) {
     const destino = request.nextUrl.clone();
     destino.pathname = "/login";
+    destino.search = "";
     const r = NextResponse.redirect(destino);
     response.cookies.getAll().forEach((c) => r.cookies.set(c));
     return r;
@@ -49,6 +50,7 @@ export async function proxy(request: NextRequest) {
   if (user && emLogin) {
     const destino = request.nextUrl.clone();
     destino.pathname = "/agenda";
+    destino.search = "";
     const r = NextResponse.redirect(destino);
     response.cookies.getAll().forEach((c) => r.cookies.set(c));
     return r;
@@ -58,5 +60,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.svg$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.svg$).*)"],
 };

@@ -35,14 +35,18 @@ export function LoginForm() {
       </div>
 
       {estado.erro && (
-        <p className={styles.slip__meta} style={{ color: "var(--oxblood)" }}>
+        <p
+          role="alert"
+          className={styles.slip__meta}
+          style={{ color: "var(--oxblood)" }}
+        >
           {estado.erro}
         </p>
       )}
 
       <button
         type="submit"
-        className={`${styles.btn} ${styles["btn--primary"]}`}
+        className={`${styles.btn} ${styles["btn--primary"]} justify-center`}
         disabled={pendente}
       >
         {pendente ? "Entrando…" : "Entrar"}
