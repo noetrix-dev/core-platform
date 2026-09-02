@@ -18,6 +18,7 @@ export function NovoClienteDrawer({
 }) {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [email, setEmail] = useState("");
   const [genero, setGenero] = useState("nao_informado");
   const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, iniciar] = useTransition();
@@ -29,6 +30,7 @@ export function NovoClienteDrawer({
     const fd = new FormData();
     fd.set("nome", nome);
     fd.set("telefone", telefone);
+    fd.set("email", email);
     fd.set("genero", genero);
     iniciar(async () => {
       try {
@@ -75,6 +77,18 @@ export function NovoClienteDrawer({
           />
         </div>
         <div className={`${styles.field} flex flex-col gap-1.5`}>
+          <label htmlFor="nc-email">E-mail (opcional)</label>
+          <input
+            id="nc-email"
+            type="email"
+            inputMode="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="nome@exemplo.com"
+            autoComplete="off"
+          />
+        </div>
+        <div className={`${styles.field} flex flex-col gap-1.5`}>
           <label htmlFor="nc-genero">Gênero</label>
           <select
             id="nc-genero"
@@ -84,6 +98,7 @@ export function NovoClienteDrawer({
             <option value="nao_informado">Não informado</option>
             <option value="masculino">Masculino</option>
             <option value="feminino">Feminino</option>
+            <option value="infantil">Infantil</option>
           </select>
         </div>
 

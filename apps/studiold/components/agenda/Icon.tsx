@@ -12,6 +12,7 @@ type Name =
   | "bell"
   | "user"
   | "phone"
+  | "mail"
   | "lock"
   | "chat"
   | "gear"
@@ -67,6 +68,12 @@ const PATHS: Record<Name, React.ReactNode> = {
   ),
   phone: (
     <path d="M6 3.5 8.5 4l1 3-1.6 1.4a9 9 0 0 0 3.7 3.7L13 13.5l3 1 .5 2.5c-6 1-12.5-5.5-11.5-11.5z" />
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="14" height="10" />
+      <polyline points="3,6 10,11 17,6" />
+    </>
   ),
   lock: (
     <>

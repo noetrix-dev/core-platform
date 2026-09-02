@@ -2,7 +2,7 @@
 // Campos em snake_case de propósito, para a troca por queries do Supabase client
 // ser um recorte contido e não um rename espalhado.
 
-export type Genero = "masculino" | "feminino" | "nao_informado";
+export type Genero = "masculino" | "feminino" | "infantil" | "nao_informado";
 
 export interface Cliente {
   id: string;

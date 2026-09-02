@@ -9,6 +9,7 @@ import { tenantDb } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/supabase/auth";
 import { resumirAtendimentos, type AtendimentoRow } from "@/lib/clientes/resumo";
 import { normalizarTelefone } from "@/lib/clientes/telefone";
+import { limparEmail } from "@/lib/clientes/email";
 import type {
   PerfilResultado,
   PreferenciasPatch,
@@ -37,7 +38,7 @@ export async function getPerfilCliente(
     db
       .from("clientes")
       .select(
-        "id, nome, telefone, cortesia_favorita_id, estilo_musica_id, observacoes_fixas",
+        "id, nome, telefone, email, cortesia_favorita_id, estilo_musica_id, observacoes_fixas",
       )
       .eq("id", clienteId)
       .maybeSingle(),
@@ -71,6 +72,7 @@ export async function getPerfilCliente(
       id: c.id as string,
       nome: c.nome as string,
       telefone: c.telefone as string,
+      email: (c.email as string) ?? null,
       cortesia_favorita_id: (c.cortesia_favorita_id as string) ?? null,
       estilo_musica_id: (c.estilo_musica_id as string) ?? null,
       observacoes_fixas: (c.observacoes_fixas as string) ?? null,
@@ -108,7 +110,7 @@ export async function atualizarPreferencias(
     : { ok: true };
 }
 
-const GENEROS = new Set(["masculino", "feminino", "nao_informado"]);
+const GENEROS = new Set(["masculino", "feminino", "infantil", "nao_informado"]);
 
 export async function criarCliente(
   fd: FormData,
@@ -124,6 +126,11 @@ export async function criarCliente(
 
   const generoRaw = (fd.get("genero") ?? "nao_informado").toString();
   const genero = GENEROS.has(generoRaw) ? generoRaw : "nao_informado";
+
+  const email = limparEmail((fd.get("email") ?? "").toString());
+  if (email === "invalido") {
+    return { ok: false, error: "E-mail inválido." };
+  }
 
   const db = tenantDb();
 
@@ -147,7 +154,7 @@ export async function criarCliente(
 
   const ins = await db
     .from("clientes")
-    .insert({ nome, telefone, genero })
+    .insert({ nome, telefone, genero, email })
     .select("id")
     .single();
   if (ins.error) {

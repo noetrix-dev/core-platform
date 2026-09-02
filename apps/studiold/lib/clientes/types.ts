@@ -4,6 +4,7 @@ export interface PerfilCliente {
   id: string;
   nome: string;
   telefone: string;
+  email: string | null;
   cortesia_favorita_id: string | null;
   estilo_musica_id: string | null;
   observacoes_fixas: string | null;

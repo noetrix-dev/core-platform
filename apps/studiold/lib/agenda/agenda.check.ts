@@ -9,6 +9,7 @@ import { hmToMin, minToHm } from "./time.ts";
 import { resumirAtendimentos, visitasPorCliente } from "../clientes/resumo.ts";
 import { parsePrecoBRL } from "../dinheiro.ts";
 import { normalizarTelefone } from "../clientes/telefone.ts";
+import { limparEmail } from "../clientes/email.ts";
 import { somaItens, type ItemPagamento } from "./pagamento.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
@@ -269,6 +270,17 @@ assert.equal(minToHm(1020), "17:00");
     0.3,
     "arredonda cada subtotal antes de somar (evita 0.30000000000000004)",
   );
+}
+
+// --- limparEmail -------------------------------------------------------
+{
+  assert.equal(limparEmail(""), null, "vazio → null (campo opcional)");
+  assert.equal(limparEmail("   "), null, "só espaço → null");
+  assert.equal(limparEmail("Joao@Exemplo.COM"), "joao@exemplo.com", "trim + lowercase");
+  assert.equal(limparEmail("  ana@teste.com.br  "), "ana@teste.com.br", "trim das pontas");
+  assert.equal(limparEmail("semarroba.com"), "invalido", "sem @");
+  assert.equal(limparEmail("a@b"), "invalido", "sem ponto no domínio");
+  assert.equal(limparEmail("a b@c.com"), "invalido", "espaço no meio");
 }
 
 console.log("agenda.check: OK");

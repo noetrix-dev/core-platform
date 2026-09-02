@@ -121,10 +121,18 @@ export function PerfilClienteDrawer({
         </div>
       ) : perfil ? (
         <div className="flex flex-col gap-5">
-          <p className={`${styles.msgQuiet} flex items-center gap-1.5`}>
-            <Icon name="phone" size={14} />
-            <span className={styles.tnum}>{perfil.telefone}</span>
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <p className={`${styles.msgQuiet} flex items-center gap-1.5`}>
+              <Icon name="phone" size={14} />
+              <span className={styles.tnum}>{perfil.telefone}</span>
+            </p>
+            {perfil.email && (
+              <p className={`${styles.msgQuiet} flex items-center gap-1.5`}>
+                <Icon name="mail" size={14} />
+                <span>{perfil.email}</span>
+              </p>
+            )}
+          </div>
 
           <div className={styles.perfilResumo}>
             <div className={styles.perfilBloco}>
