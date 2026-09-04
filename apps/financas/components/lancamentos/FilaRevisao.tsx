@@ -158,72 +158,73 @@ export function FilaRevisao({
             }
 
             return (
-              <li key={c.externalId} className="p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
+              <li key={c.externalId} className="p-2 flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={atrib.incluir}
                     onChange={(e) => atualizarAtrib(c.externalId, { incluir: e.target.checked })}
                     aria-label={`Incluir ${c.memo || "lançamento"} na importação`}
                   />
-                  <p className="text-sm">
-                    {c.dataIso} · {brl(c.valor)}
-                  </p>
+                  <span className="text-gray-500 shrink-0">{c.dataIso}</span>
+                  <span className="font-medium shrink-0">{brl(c.valor)}</span>
                 </div>
 
-                <input
-                  value={atrib.memo}
-                  onChange={(e) => atualizarAtrib(c.externalId, { memo: e.target.value })}
-                  aria-label="Descrição do lançamento"
-                  className="border px-4 py-3"
-                />
+                <div className="flex gap-1 overflow-x-auto">
+                  <input
+                    value={atrib.memo}
+                    onChange={(e) => atualizarAtrib(c.externalId, { memo: e.target.value })}
+                    aria-label="Descrição do lançamento"
+                    className="border px-2 py-1 text-sm w-36 shrink-0"
+                  />
 
-                <select
-                  value={atrib.movement}
-                  onChange={(e) =>
-                    atualizarAtrib(c.externalId, { movement: e.target.value as "income" | "expense" })
-                  }
-                  aria-label="Movimento do lançamento"
-                  className="border px-4 py-3"
-                >
-                  <option value="income">Receita</option>
-                  <option value="expense">Despesa</option>
-                </select>
+                  <select
+                    value={atrib.movement}
+                    onChange={(e) =>
+                      atualizarAtrib(c.externalId, { movement: e.target.value as "income" | "expense" })
+                    }
+                    aria-label="Movimento do lançamento"
+                    className="border px-1 py-1 text-sm shrink-0"
+                  >
+                    <option value="income">Receita</option>
+                    <option value="expense">Despesa</option>
+                  </select>
 
-                <select
-                  value={atrib.category_id ?? ""}
-                  onChange={(e) =>
-                    atualizarAtrib(c.externalId, {
-                      category_id: e.target.value || null,
-                      subcategory_id: null,
-                    })
-                  }
-                  aria-label="Categoria do lançamento"
-                  className="border px-4 py-3"
-                >
-                  <option value="">Sem categoria</option>
-                  {categorias.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  <select
+                    value={atrib.category_id ?? ""}
+                    onChange={(e) =>
+                      atualizarAtrib(c.externalId, {
+                        category_id: e.target.value || null,
+                        subcategory_id: null,
+                      })
+                    }
+                    aria-label="Categoria do lançamento"
+                    className="border px-1 py-1 text-sm w-28 shrink-0"
+                  >
+                    <option value="">Sem categoria</option>
+                    {categorias.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
 
-                <select
-                  value={atrib.subcategory_id ?? ""}
-                  onChange={(e) =>
-                    atualizarAtrib(c.externalId, { subcategory_id: e.target.value || null })
-                  }
-                  aria-label="Subcategoria do lançamento"
-                  className="border px-4 py-3"
-                >
-                  <option value="">Sem subcategoria</option>
-                  {subcategoriasFiltradas.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  <select
+                    value={atrib.subcategory_id ?? ""}
+                    onChange={(e) =>
+                      atualizarAtrib(c.externalId, { subcategory_id: e.target.value || null })
+                    }
+                    aria-label="Subcategoria do lançamento"
+                    className="border px-1 py-1 text-sm w-28 shrink-0"
+                  >
+                    <option value="">Sem subcategoria</option>
+                    {subcategoriasFiltradas.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </li>
             );
           })}
