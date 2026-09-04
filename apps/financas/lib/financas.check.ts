@@ -5,6 +5,7 @@ import { gerarTransacoesDoMes } from "./lancamentos/recorrentes.ts";
 import { derivarStatus } from "./lancamentos/overdue.ts";
 import { agregarMes } from "./cockpit/agrega.ts";
 import { calcularSplit } from "./cockpit/split.ts";
+import { calcularKpis, agregarPorCategoria, agregarDistribuicao } from "./cockpit/roscas.ts";
 import type { CategoryRow, TransactionRow } from "./financas/types.ts";
 
 // --- datas ---
@@ -166,6 +167,49 @@ assert.equal(derivarStatus({ status: "overdue", due_date: "2026-03-01" }, "2026-
   const s = calcularSplit(0, { necessidade: 50, desejo: 0, investimento: 0, sem_classificacao: 0 });
   assert.deepEqual(s.metas, { necessidade: 0, desejo: 0, investimento: 0 });
   assert.equal(s.estouro.necessidade, true, "meta 0 e real > 0 estoura");
+}
+
+// --- calcularKpis / agregarPorCategoria / agregarDistribuicao ---
+{
+  const tx = [
+    { movement: "income", amount: 4000, status: "paid", due_date: "2026-02-05" },
+    { movement: "expense", amount: 1200, status: "paid", due_date: "2026-02-03" },
+    { movement: "expense", amount: 300, status: "pending", due_date: "2026-03-01" },
+    { movement: "expense", amount: 90, status: "pending", due_date: "2026-01-01" }, // vencida
+    { movement: "investment", amount: 500, status: "paid", due_date: "2026-02-10" },
+  ] as unknown as TransactionRow[];
+  const k = calcularKpis(tx, "2026-02-15");
+  assert.equal(k.entradas, 4000);
+  assert.equal(k.saidas, 1200);
+  assert.equal(k.aVencer, 300);
+  assert.equal(k.vencidas, 90);
+  assert.equal(k.investimentos, 500);
+  assert.equal(k.saldo, 2300, "4000 - 1200 - 500");
+}
+{
+  const cats = [{ id: "c1", name: "Mercado" }, { id: "c2", name: "Aporte" }] as unknown as CategoryRow[];
+  const tx = [
+    { movement: "expense", amount: 100, category_id: "c1" },
+    { movement: "expense", amount: 50, category_id: "c1" },
+    { movement: "investment", amount: 200, category_id: "c2" },
+    { movement: "expense", amount: 30, category_id: null },
+    { movement: "income", amount: 999, category_id: "c1" },
+  ] as unknown as TransactionRow[];
+  const r = agregarPorCategoria(tx, cats);
+  assert.deepEqual(r, [
+    { categoria: "Aporte", valor: 200 },
+    { categoria: "Mercado", valor: 150 },
+    { categoria: "Sem categoria", valor: 30 },
+  ]);
+}
+{
+  const r = agregarDistribuicao({ entradas: 4000, saidas: 1200, investimentos: 500, dividasNaoPagas: 29500 });
+  assert.deepEqual(r, [
+    { label: "entradas", valor: 4000 },
+    { label: "saidas", valor: 1200 },
+    { label: "investimentos", valor: 500 },
+    { label: "dividas_nao_pagas", valor: 29500 },
+  ]);
 }
 
 console.log("financas.check: OK");
