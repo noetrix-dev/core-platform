@@ -3,6 +3,9 @@ import { somaMesesISO, fimDoMesISO } from "./datas.ts";
 import { expandirParcelas } from "./lancamentos/parcelas.ts";
 import { gerarTransacoesDoMes } from "./lancamentos/recorrentes.ts";
 import { derivarStatus } from "./lancamentos/overdue.ts";
+import { agregarMes } from "./cockpit/agrega.ts";
+import { calcularSplit } from "./cockpit/split.ts";
+import type { CategoryRow, TransactionRow } from "./financas/types.ts";
 
 // --- datas ---
 assert.equal(somaMesesISO("2026-01-15", 1), "2026-02-15");
@@ -127,5 +130,42 @@ assert.equal(derivarStatus({ status: "pending", due_date: "2026-03-01" }, "2026-
 assert.equal(derivarStatus({ status: "pending", due_date: "2026-02-01" }, "2026-02-01"), "pending", "vence hoje");
 assert.equal(derivarStatus({ status: "paid", due_date: "2020-01-01" }, "2026-02-01"), "paid", "paid nunca vira overdue");
 assert.equal(derivarStatus({ status: "overdue", due_date: "2026-03-01" }, "2026-02-01"), "pending", "recalcula a partir da data");
+
+// --- agregarMes / calcularSplit ---
+{
+  const cats = [
+    { id: "c1", name: "Mercado", type: "expense", bucket: "necessidade", color: null, icon: null, ativo: true },
+    { id: "c2", name: "Lazer", type: "expense", bucket: "desejo", color: null, icon: null, ativo: true },
+    { id: "c3", name: "Aporte", type: "investment", bucket: "investimento", color: null, icon: null, ativo: true },
+    { id: "c4", name: "Salário", type: "income", bucket: null, color: null, icon: null, ativo: true },
+  ] as unknown as CategoryRow[];
+  const tx = [
+    { movement: "income", status: "paid", amount: 4000, category_id: "c4" },
+    { movement: "income", status: "pending", amount: 1000, category_id: "c4" },
+    { movement: "expense", status: "paid", amount: 1200, category_id: "c1" },
+    { movement: "expense", status: "pending", amount: 300, category_id: "c2" },
+    { movement: "investment", status: "paid", amount: 500, category_id: "c3" },
+    { movement: "expense", status: "paid", amount: 90, category_id: null },
+  ] as unknown as TransactionRow[];
+
+  const r = agregarMes(tx, cats);
+  assert.equal(r.rendaRecebida, 4000, "só income paid");
+  assert.equal(r.investidoNoMes, 500);
+  assert.equal(r.gastosPorBucket.necessidade, 1200);
+  assert.equal(r.gastosPorBucket.desejo, 300);
+  assert.equal(r.gastosPorBucket.investimento, 500);
+  assert.equal(r.gastosPorBucket.sem_classificacao, 90);
+
+  const s = calcularSplit(r.rendaRecebida, r.gastosPorBucket);
+  assert.deepEqual(s.metas, { necessidade: 2000, desejo: 1200, investimento: 800 });
+  assert.equal(s.estouro.necessidade, false);
+  assert.equal(s.estouro.desejo, false);
+  assert.equal(s.estouro.investimento, false);
+}
+{
+  const s = calcularSplit(0, { necessidade: 50, desejo: 0, investimento: 0, sem_classificacao: 0 });
+  assert.deepEqual(s.metas, { necessidade: 0, desejo: 0, investimento: 0 });
+  assert.equal(s.estouro.necessidade, true, "meta 0 e real > 0 estoura");
+}
 
 console.log("financas.check: OK");
