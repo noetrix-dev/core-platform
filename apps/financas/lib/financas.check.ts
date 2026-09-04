@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { somaMesesISO, fimDoMesISO } from "./datas.ts";
 import { expandirParcelas } from "./lancamentos/parcelas.ts";
+import { gerarTransacoesDoMes } from "./lancamentos/recorrentes.ts";
 
 // --- datas ---
 assert.equal(somaMesesISO("2026-01-15", 1), "2026-02-15");
@@ -84,5 +85,39 @@ assert.throws(() =>
     groupId: "g5",
   }),
 );
+
+// --- gerarTransacoesDoMes ---
+{
+  const tpls = [
+    { id: "t1", description: "Aluguel", amount: 1800, movement: "expense",
+      category_id: "c1", subcategory_id: null, account_id: "a1",
+      day_of_month: 10, type: "fixed", ativo: true },
+    { id: "t2", description: "Salário", amount: 4597, movement: "income",
+      category_id: "c2", subcategory_id: null, account_id: "a1",
+      day_of_month: 5, type: "fixed", ativo: true },
+    { id: "t3", description: "Inativo", amount: 10, movement: "expense",
+      category_id: null, subcategory_id: null, account_id: null,
+      day_of_month: 1, type: "fixed", ativo: false },
+    { id: "t4", description: "Fatura", amount: 500, movement: "expense",
+      category_id: null, subcategory_id: null, account_id: null,
+      day_of_month: 31, type: "fixed", ativo: true },
+  ] as const;
+
+  const out = gerarTransacoesDoMes([...tpls], [], { ano: 2026, mes: 2 });
+  assert.equal(out.length, 3, "t3 inativo fora");
+  const aluguel = out.find((x) => x.recurring_template_id === "t1")!;
+  assert.equal(aluguel.due_date, "2026-02-10");
+  assert.equal(aluguel.is_recurring, true);
+  const fatura = out.find((x) => x.recurring_template_id === "t4")!;
+  assert.equal(fatura.due_date, "2026-02-28", "clamp dia 31 em fevereiro");
+
+  const out2 = gerarTransacoesDoMes(
+    [...tpls],
+    [{ recurring_template_id: "t1", due_date: "2026-02-10" }],
+    { ano: 2026, mes: 2 },
+  );
+  assert.equal(out2.length, 2, "t1 já existe no mês");
+  assert.ok(!out2.some((x) => x.recurring_template_id === "t1"));
+}
 
 console.log("financas.check: OK");
