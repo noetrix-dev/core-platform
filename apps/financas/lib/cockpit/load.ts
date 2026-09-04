@@ -54,7 +54,7 @@ export async function carregarCockpit(mes: string): Promise<CockpitData> {
   const [contasR, catsR, txR, dividasR, noetrixR, proximasR, ultimosR] = await Promise.all([
     db.from("fin_accounts").select("*").eq("ativo", true).order("name"),
     db.from("fin_categories").select("*"),
-    db.from("fin_transactions").select("*").gte("due_date", `${mes}-01`).lte("due_date", `${mes}-31`),
+    db.from("fin_transactions").select("*").gte("due_date", `${mes}-01`).lte("due_date", fimDoMesISO(`${mes}-01`)),
     db.from("fin_debts").select("remaining_amount").eq("status", "ativa"),
     db.from("fin_noetrix_metrics").select("*").eq("mes", `${mes}-01`).maybeSingle(),
     db
