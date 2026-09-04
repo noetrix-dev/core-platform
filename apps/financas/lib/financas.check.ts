@@ -7,7 +7,8 @@ import { agregarMes } from "./cockpit/agrega.ts";
 import { calcularSplit } from "./cockpit/split.ts";
 import { calcularKpis, agregarPorCategoria, agregarDistribuicao } from "./cockpit/roscas.ts";
 import { calcularProjecao } from "./cockpit/projecao.ts";
-import type { CategoryRow, TransactionRow } from "./financas/types.ts";
+import { progressoDivida, progressoAgregado } from "./dividas/progresso.ts";
+import type { CategoryRow, TransactionRow, DebtRow } from "./financas/types.ts";
 
 // --- datas ---
 assert.equal(somaMesesISO("2026-01-15", 1), "2026-02-15");
@@ -234,6 +235,29 @@ assert.equal(derivarStatus({ status: "overdue", due_date: "2026-03-01" }, "2026-
   ] as unknown as TransactionRow[];
   const r = calcularProjecao({ saldoContas: 1000, transacoes: tx, fimDoMesIso: "2026-02-28" });
   assert.equal(r.projetado, -6091, "não faz clamp");
+}
+
+// --- progressoDivida / progressoAgregado ---
+assert.equal(progressoDivida({ total_amount: 1000, remaining_amount: 250 }), 0.75);
+assert.equal(progressoDivida({ total_amount: 1000, remaining_amount: 0 }), 1);
+assert.equal(progressoDivida({ total_amount: 0, remaining_amount: 0 }), 0, "sem NaN");
+assert.equal(progressoDivida({ total_amount: 1000, remaining_amount: 1200 }), 0, "juros nao vira negativo");
+
+{
+  const dv = [
+    { grupo: "consignado", total_amount: 22000, remaining_amount: 20000 },
+    { grupo: "consignado", total_amount: 3000, remaining_amount: 0 },
+    { grupo: "serasa", total_amount: 9500, remaining_amount: 9500 },
+  ] as unknown as DebtRow[];
+  const r = progressoAgregado(dv);
+  assert.equal(r.porGrupo.consignado.total, 25000);
+  assert.equal(r.porGrupo.consignado.restante, 20000);
+  assert.equal(r.porGrupo.consignado.pago, 5000);
+  assert.equal(r.porGrupo.serasa.pago, 0);
+  assert.equal(r.porGrupo.fgts.total, 0, "grupo sem dívida");
+  assert.equal(r.geral.total, 34500);
+  assert.equal(r.geral.restante, 29500);
+  assert.equal(r.geral.pago, 5000);
 }
 
 console.log("financas.check: OK");
