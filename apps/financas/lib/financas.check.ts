@@ -10,6 +10,7 @@ import { calcularProjecao } from "./cockpit/projecao.ts";
 import { progressoDivida, progressoAgregado } from "./dividas/progresso.ts";
 import type { CategoryRow, TransactionRow, DebtRow } from "./financas/types.ts";
 import { parseOfx } from "./import/ofx.ts";
+import { hashTransacao, classificar } from "./import/dedupe.ts";
 
 // --- datas ---
 assert.equal(somaMesesISO("2026-01-15", 1), "2026-02-15");
@@ -304,5 +305,29 @@ OFXHEADER:100
 }
 assert.deepEqual(parseOfx("sem transacoes aqui"), []);
 assert.deepEqual(parseOfx(""), []);
+
+// --- hashTransacao / classificar ---
+{
+  const a = hashTransacao({ accountId: "acc1", dataIso: "2026-02-10", valor: -89.9, memo: "Mercado Extra" });
+  const b = hashTransacao({ accountId: "acc1", dataIso: "2026-02-10", valor: -89.9, memo: "  mercado extra " });
+  assert.equal(a, b, "normaliza memo (trim + lower)");
+  const c = hashTransacao({ accountId: "acc1", dataIso: "2026-02-11", valor: -89.9, memo: "Mercado Extra" });
+  assert.notEqual(a, c, "data diferente muda o hash");
+}
+{
+  const out = classificar(
+    [
+      { hash: "h1", fitid: "F1" },
+      { hash: "h2", fitid: null },
+      { hash: "h3", fitid: "F3" },
+    ],
+    new Set(["F1", "h2"]),
+  );
+  assert.equal(out[0].externalId, "F1");
+  assert.equal(out[0].novo, false, "fitid já importado");
+  assert.equal(out[1].externalId, "h2");
+  assert.equal(out[1].novo, false, "hash já importado (sem fitid)");
+  assert.equal(out[2].novo, true);
+}
 
 console.log("financas.check: OK");
