@@ -9,6 +9,7 @@ import { calcularKpis, agregarPorCategoria, agregarDistribuicao } from "./cockpi
 import { calcularProjecao } from "./cockpit/projecao.ts";
 import { progressoDivida, progressoAgregado } from "./dividas/progresso.ts";
 import type { CategoryRow, TransactionRow, DebtRow } from "./financas/types.ts";
+import { parseOfx } from "./import/ofx.ts";
 
 // --- datas ---
 assert.equal(somaMesesISO("2026-01-15", 1), "2026-02-15");
@@ -259,5 +260,49 @@ assert.equal(progressoDivida({ total_amount: 1000, remaining_amount: 1200 }), 0,
   assert.equal(r.geral.restante, 29500);
   assert.equal(r.geral.pago, 5000);
 }
+
+// --- parseOfx ---
+{
+  const ofx = `
+OFXHEADER:100
+<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>20260210120000[-3:BRT]
+<TRNAMT>-89.90
+<FITID>2026021001
+<MEMO>MERCADO EXTRA
+</STMTTRN>
+<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20260205
+<TRNAMT>4597.00
+<FITID>2026020501
+<NAME>SALARIO
+</STMTTRN>
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+  const r = parseOfx(ofx);
+  assert.equal(r.length, 2);
+  assert.deepEqual(r[0], {
+    dataIso: "2026-02-10",
+    valor: -89.9,
+    memo: "MERCADO EXTRA",
+    fitid: "2026021001",
+    movimentoSugerido: "expense",
+  });
+  assert.equal(r[1].dataIso, "2026-02-05");
+  assert.equal(r[1].valor, 4597);
+  assert.equal(r[1].memo, "SALARIO", "cai no NAME sem MEMO");
+  assert.equal(r[1].movimentoSugerido, "income");
+}
+{
+  const xml = `<OFX><STMTTRN><DTPOSTED>20260101</DTPOSTED><TRNAMT>-10.00</TRNAMT><MEMO>X</MEMO></STMTTRN></OFX>`;
+  const r = parseOfx(xml);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].fitid, null);
+  assert.equal(r[0].valor, -10);
+}
+assert.deepEqual(parseOfx("sem transacoes aqui"), []);
+assert.deepEqual(parseOfx(""), []);
 
 console.log("financas.check: OK");
