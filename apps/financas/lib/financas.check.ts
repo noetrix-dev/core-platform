@@ -6,6 +6,7 @@ import { derivarStatus } from "./lancamentos/overdue.ts";
 import { agregarMes } from "./cockpit/agrega.ts";
 import { calcularSplit } from "./cockpit/split.ts";
 import { calcularKpis, agregarPorCategoria, agregarDistribuicao } from "./cockpit/roscas.ts";
+import { calcularProjecao } from "./cockpit/projecao.ts";
 import type { CategoryRow, TransactionRow } from "./financas/types.ts";
 
 // --- datas ---
@@ -210,6 +211,29 @@ assert.equal(derivarStatus({ status: "overdue", due_date: "2026-03-01" }, "2026-
     { label: "investimentos", valor: 500 },
     { label: "dividas_nao_pagas", valor: 29500 },
   ]);
+}
+
+// --- calcularProjecao ---
+{
+  const tx = [
+    { movement: "income", status: "pending", amount: 4597, due_date: "2026-02-05" },
+    { movement: "income", status: "pending", amount: 999, due_date: "2026-03-05" }, // fora do mês
+    { movement: "income", status: "paid", amount: 100, due_date: "2026-02-01" }, // já pago, ignora
+    { movement: "expense", status: "pending", amount: 1800, due_date: "2026-02-10" },
+    { movement: "expense", status: "overdue", amount: 300, due_date: "2026-01-20" },
+    { movement: "investment", status: "pending", amount: 500, due_date: "2026-02-15" },
+  ] as unknown as TransactionRow[];
+  const r = calcularProjecao({ saldoContas: 1000, transacoes: tx, fimDoMesIso: "2026-02-28" });
+  assert.equal(r.entradasPrevistas, 4597);
+  assert.equal(r.saidasPrevistas, 2600, "1800 + 300 + 500");
+  assert.equal(r.projetado, 2997, "1000 + 4597 - 2600");
+}
+{
+  const tx = [
+    { movement: "expense", status: "pending", amount: 7091, due_date: "2026-02-10" },
+  ] as unknown as TransactionRow[];
+  const r = calcularProjecao({ saldoContas: 1000, transacoes: tx, fimDoMesIso: "2026-02-28" });
+  assert.equal(r.projetado, -6091, "não faz clamp");
 }
 
 console.log("financas.check: OK");
