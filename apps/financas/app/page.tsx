@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function Home() {
-  return <main className="p-6">financas — scaffold</main>;
+  redirect("/cockpit");
 }
