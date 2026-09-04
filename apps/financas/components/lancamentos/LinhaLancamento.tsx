@@ -1,4 +1,5 @@
 import type { LinhaComStatus } from "@/lib/lancamentos/load";
+import type { AccountRow, CategoryRow, SubcategoryRow } from "@/lib/financas/types";
 import {
   mudarStatus,
   editarLancamento,
@@ -20,7 +21,17 @@ const movementLabel: Record<LinhaComStatus["movement"], string> = {
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export function LinhaLancamento({ linha }: { linha: LinhaComStatus }) {
+export function LinhaLancamento({
+  linha,
+  contas,
+  categorias,
+  subcategorias,
+}: {
+  linha: LinhaComStatus;
+  contas: AccountRow[];
+  categorias: CategoryRow[];
+  subcategorias: SubcategoryRow[];
+}) {
   const pago = linha.status === "paid";
   const alvoToggle = pago ? "pending" : "paid";
 
@@ -62,9 +73,6 @@ export function LinhaLancamento({ linha }: { linha: LinhaComStatus }) {
           className="flex flex-col gap-2 mt-2"
         >
           <input type="hidden" name="id" value={linha.id} />
-          <input type="hidden" name="account_id" value={linha.account_id ?? ""} />
-          <input type="hidden" name="category_id" value={linha.category_id ?? ""} />
-          <input type="hidden" name="subcategory_id" value={linha.subcategory_id ?? ""} />
           <input
             name="description"
             defaultValue={linha.description}
@@ -99,6 +107,45 @@ export function LinhaLancamento({ linha }: { linha: LinhaComStatus }) {
             required
             className="border px-4 py-3"
           />
+          <select
+            name="account_id"
+            defaultValue={linha.account_id ?? ""}
+            aria-label={`Conta de ${linha.description}`}
+            className="border px-4 py-3"
+          >
+            <option value="">Sem conta</option>
+            {contas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <select
+            name="category_id"
+            defaultValue={linha.category_id ?? ""}
+            aria-label={`Categoria de ${linha.description}`}
+            className="border px-4 py-3"
+          >
+            <option value="">Sem categoria</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <select
+            name="subcategory_id"
+            defaultValue={linha.subcategory_id ?? ""}
+            aria-label={`Subcategoria de ${linha.description}`}
+            className="border px-4 py-3"
+          >
+            <option value="">Sem subcategoria</option>
+            {subcategorias.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="border px-4 py-3">
             Salvar
           </button>

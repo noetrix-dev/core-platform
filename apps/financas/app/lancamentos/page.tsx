@@ -69,7 +69,13 @@ export default async function LancamentosPage({
 
       <ul className="flex flex-col divide-y">
         {data.linhas.map((l) => (
-          <LinhaLancamento key={l.id} linha={l} />
+          <LinhaLancamento
+            key={l.id}
+            linha={l}
+            contas={data.contas}
+            categorias={data.categorias}
+            subcategorias={data.subcategorias}
+          />
         ))}
       </ul>
     </main>
