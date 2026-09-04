@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { somaMesesISO, fimDoMesISO } from "./datas.ts";
 import { expandirParcelas } from "./lancamentos/parcelas.ts";
 import { gerarTransacoesDoMes } from "./lancamentos/recorrentes.ts";
+import { derivarStatus } from "./lancamentos/overdue.ts";
 
 // --- datas ---
 assert.equal(somaMesesISO("2026-01-15", 1), "2026-02-15");
@@ -119,5 +120,12 @@ assert.throws(() =>
   assert.equal(out2.length, 2, "t1 já existe no mês");
   assert.ok(!out2.some((x) => x.recurring_template_id === "t1"));
 }
+
+// --- derivarStatus ---
+assert.equal(derivarStatus({ status: "pending", due_date: "2026-01-01" }, "2026-02-01"), "overdue");
+assert.equal(derivarStatus({ status: "pending", due_date: "2026-03-01" }, "2026-02-01"), "pending");
+assert.equal(derivarStatus({ status: "pending", due_date: "2026-02-01" }, "2026-02-01"), "pending", "vence hoje");
+assert.equal(derivarStatus({ status: "paid", due_date: "2020-01-01" }, "2026-02-01"), "paid", "paid nunca vira overdue");
+assert.equal(derivarStatus({ status: "overdue", due_date: "2026-03-01" }, "2026-02-01"), "pending", "recalcula a partir da data");
 
 console.log("financas.check: OK");
