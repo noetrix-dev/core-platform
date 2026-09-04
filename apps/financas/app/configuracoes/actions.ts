@@ -273,7 +273,7 @@ export async function editarTemplate(fd: FormData): Promise<Resultado> {
 }
 
 export async function salvarMetricaNoetrix(fd: FormData): Promise<Resultado> {
-  const user = await requireUser();
+  await requireUser();
   try {
     const mes = str(fd, "mes");
     if (!/^\d{4}-\d{2}$/.test(mes)) return { ok: false, erro: "Mês inválido." };
@@ -306,7 +306,6 @@ export async function salvarMetricaNoetrix(fd: FormData): Promise<Resultado> {
       .from("fin_noetrix_metrics")
       .upsert(
         {
-          user_id: user.id,
           mes: `${mes}-01`,
           mrr,
           clientes_pagantes,
