@@ -22,19 +22,33 @@ Incluído:
 2. **Lançamentos** — entrada de renda (CLT, freela, Noetrix), gastos por
    categoria, status pago/pendente/atrasado, compras parceladas com vencimento,
    templates recorrentes com ação "gerar mês", importação de extrato OFX.
-3. **Cockpit** — saldos por conta, painel comparativo 50/30/20 sobre a renda
-   recebida, saldo projetado para o fim do mês, alerta vermelho quando a projeção
-   fica negativa.
+3. **Cockpit** — seletor de mês; 6 KPIs (Entradas, Saídas, A vencer, Vencidas,
+   Investimentos, Saldo); rosca de gastos por categoria (incl. investimentos);
+   rosca de distribuição entradas/saídas/investimentos/dívidas não pagas;
+   painel comparativo 50/30/20 sobre a renda recebida; próximas contas a
+   vencer em 7 dias; bloco Noetrix (clientes pagantes, MRR, semáforo dos 3
+   gatilhos CLT, entrada manual); bloco Cartões Nubank/Inter (fatura atual e
+   limite disponível, entrada manual); últimos lançamentos (7 dias por
+   `payment_date`). Mês não vigente: KPIs mostram o fechamento real daquele
+   mês; cartões e "próximas contas" passam a usar o dia 1 do mês selecionado
+   em vez de "hoje".
 4. **Dívidas** — mapa do passivo por grupo (FGTS, consignado, Serasa,
    pessoal/rotativo, família, cartões), progresso de quitação, registrar
    pagamento.
 
+Decisão revisada durante o `/impeccable shape`: o bloco Cartões (fatura atual +
+limite disponível, **entrada manual**, sem fatura detalhada/parcelamento) e o
+bloco Noetrix (MRR, clientes pagantes, semáforo, **entrada manual**) entram na
+Fase 1 como parte do Cockpit — não são mais "fora do escopo". O que continua
+fora é a tela/módulo completo de Cartões (fatura linha a linha, parcelamento de
+fatura) e de Metas CLT — esses seguem Fase 2/3.
+
 Fora da Fase 1 (registrado para não reabrir a discussão):
 
-- **Fase 2**: Calendário de vencimentos, Cartões (faturas Inter/Nubank),
-  importação de CSV por banco.
-- **Fase 3**: Investimentos, Metas CLT (gatilhos Noetrix), Saúde financeira
-  (score mensal).
+- **Fase 2**: Calendário de vencimentos, tela completa de Cartões (fatura
+  linha a linha, parcelamento), importação de CSV por banco.
+- **Fase 3**: Investimentos, tela de Metas CLT (progresso dos 3 gatilhos),
+  Saúde financeira (score mensal).
 - Sem `fin_budgets` na Fase 1 — o painel 50/30/20 é calculado a partir da renda
   recebida, não de linhas de orçamento por categoria.
 - Sem `fin_month_closures` na Fase 1 — chega junto com Investimentos/Saúde, que
@@ -163,10 +177,13 @@ caso o schema um dia vire multiusuário ou seja compartilhado com outro app.
 | `type`                | `text not null check (type in ('corrente','poupanca','investimento'))` |
 | `balance`             | `numeric(14,2) not null default 0`                                 |
 | `balance_updated_at`  | `timestamptz default now()`                                        |
+| `fatura_atual`        | `numeric(14,2)` — fatura do cartão no mês, **entrada manual** (Fase 1 não lê fatura de banco) |
+| `limite_disponivel`   | `numeric(14,2)` — limite disponível do cartão, **entrada manual**  |
 | `ativo`               | `boolean not null default true`                                    |
 
 Adicionar um banco novo exige uma migration nova (o `check` é fechado — decisão
-explícita do dono).
+explícita do dono). `fatura_atual`/`limite_disponivel` só fazem sentido para
+contas de cartão (Nubank/Inter no seed); ficam `null` nas demais.
 
 ### `fin_categories`
 
@@ -264,6 +281,24 @@ mesmo mês não duplica. A ação retorna quantas linhas criou.
 Editar `remaining_amount` pela UI é permitido (renegociação, ajuste de juros) —
 sem trilha de auditoria na Fase 1.
 
+### `fin_noetrix_metrics`
+
+| Coluna               | Tipo / regra                                          |
+| -------------------- | ------------------------------------------------------ |
+| `mes`                | `date not null` — dia 1 do mês (`YYYY-MM-01`), `unique (user_id, mes)` |
+| `mrr`                | `numeric(14,2) not null default 0`                    |
+| `clientes_pagantes`  | `int not null default 0`                              |
+| `churn_pct`          | `numeric(5,2)`                                        |
+| `custo_operacional`  | `numeric(14,2)`                                       |
+| `reserva_meses`      | `numeric(5,2)` — meses de reserva de emergência cobertos, **entrada manual** |
+
+Entrada 100% manual pela tela de Configurações, um registro por mês. Usada só
+pelo bloco Noetrix do Cockpit (MRR, clientes pagantes) e pelo semáforo dos 3
+gatilhos CLT — 80 clientes Noetrix (`clientes_pagantes >= 80`), churn < 5%
+(`churn_pct < 5`), reserva de 4 meses (`reserva_meses >= 4`) — os três lidos
+direto dos campos manuais, sem cálculo derivado. Sem tela própria de Metas CLT
+na Fase 1 — só o semáforo dentro do Cockpit.
+
 ### RPC `fn_registrar_pagamento_divida`
 
 Assinatura: `fn_registrar_pagamento_divida(p_debt_id uuid, p_amount numeric,
@@ -293,6 +328,10 @@ tracking `supabase_migrations`, como o resto do monorepo).
 3. `2026XXXXXX_seed_financas.sql` — 3 contas (Inter, Nubank, Bradesco), os 6
    grupos de dívida somando ~R$ 56.891, e um conjunto básico de categorias com
    `bucket` preenchido. O Ewerton edita os números depois pela UI.
+4. `2026XXXXXX_financas_cockpit_extra.sql` — `ALTER TABLE fin_accounts ADD
+   COLUMN fatura_atual`/`limite_disponivel` + `CREATE TABLE
+   fin_noetrix_metrics`. Adicionado depois do `/impeccable shape` do Cockpit,
+   quando os blocos Cartões e Noetrix entraram na Fase 1.
 
 Cada arquivo termina com:
 
@@ -311,11 +350,44 @@ Passo manual antes do primeiro deploy: expor o schema `financas` no PostgREST
 
 ### Cockpit (`/cockpit`)
 
-RSC com `force-dynamic`. Um fetch largo via `financasDb()`: contas ativas,
-transações do mês corrente, dívidas ativas. Deriva tudo em TypeScript puro:
+RSC com `force-dynamic`. Seletor de mês no topo (`?mes=YYYY-MM`, default mês
+corrente). Um fetch largo via `financasDb()` para o mês selecionado: contas
+ativas, transações do mês, categorias, dívidas ativas, o registro de
+`fin_noetrix_metrics` daquele mês (se houver). Deriva tudo em TypeScript puro.
 
-- **Saldos** — soma de `balance` das contas ativas, com uma linha por conta.
-- **50/30/20** — `renda recebida` = soma de `amount` das transações
+**Mês vigente vs. não vigente:** "hoje" só é usado quando o mês selecionado é o
+mês corrente. Num mês não vigente (passado ou futuro), os KPIs mostram o
+fechamento real daquele mês (`derivarStatus` continua contra o hoje real —
+`due_date` já ancora no mês certo) e "próximas contas" passa a usar o dia 1 do
+mês selecionado como referência da janela de 7 dias. Saldo projetado só existe
+no mês vigente (`null` fora dele — projetar o fim de um mês já fechado ou
+muito futuro não é o que a projeção resolve). `fatura_atual`/`limite_disponivel`
+são valor manual único, não historizado por mês — o bloco Cartões mostra o
+mesmo valor em qualquer mês selecionado, sem depender da referência de data.
+
+Ordem da página (topo → base):
+
+1. **Seletor de mês.**
+2. **6 KPIs** (hero + ticker, tratamento visual do `/impeccable shape`):
+   - `Entradas` = soma de `amount` onde `movement = income`, `status = paid`.
+   - `Saídas` = soma de `amount` onde `movement = expense`, `status = paid`
+     (não inclui investimento).
+   - `A vencer` = soma de `amount` onde `movement = expense`, status efetivo
+     `pending` (via `derivarStatus`).
+   - `Vencidas` = soma de `amount` onde `movement = expense`, status efetivo
+     `overdue`.
+   - `Investimentos` = soma de `amount` onde `movement = investment`, qualquer
+     status, no mês.
+   - `Saldo` = `Entradas − Saídas − Investimentos`.
+3. **Rosca 1 — gastos por categoria** (inclui investimento): soma de `amount`
+   das transações `expense`/`investment` do mês, agrupadas por `category_id`
+   (nome da categoria). Vazio (nenhum gasto no mês) → estado empty explícito,
+   não gráfico quebrado.
+4. **Rosca 2 — distribuição do mês**: `entradas` (soma `income` `paid`),
+   `saídas` (soma `expense` `paid`), `investimentos` (soma `investment`),
+   `dívidas não pagas` (soma `remaining_amount` de `fin_debts` com
+   `status = 'ativa'` — valor do passivo em aberto, não um movimento do mês).
+5. **50/30/20** — `renda recebida` = soma de `amount` das transações
   `movement = 'income'` e `status = 'paid'` no mês. Metas = `0,50 / 0,30 / 0,20`
   vezes a renda recebida. Gasto real por balde = soma de `amount` das transações
   `expense` e `investment` do mês, agrupadas por `category.bucket`
@@ -323,10 +395,22 @@ transações do mês corrente, dívidas ativas. Deriva tudo em TypeScript puro:
   balde; estouro sinalizado em vermelho. Categorias com `bucket = null` caem num
   balde "sem classificação" e não quebram o cálculo. Sem renda recebida no mês, o
   painel mostra o estado "aguardando a primeira renda do mês".
-- **Saldo projetado** — `soma dos balances` + `soma das rendas pending com
-  due_date <= fim do mês` − `soma de (expense + investment) pending ou overdue
-  com due_date <= fim do mês`. `due_date` posterior ao fim do mês é excluído. O
-  resultado é retornado como está — negativo não é zerado.
+6. **Próximas contas a vencer em 7 dias**: transações `expense` com status
+   efetivo `pending`, `due_date` entre a referência (hoje, ou dia 1 do mês
+   selecionado se não vigente) e `+7` dias.
+7. **Bloco Noetrix**: `clientes_pagantes`, `mrr` do registro de
+   `fin_noetrix_metrics` do mês; semáforo dos 3 gatilhos
+   (`clientes_pagantes >= 80`, `churn_pct < 5`, `reserva_meses >= 4`). Sem
+   registro no mês → estado "sem dado lançado", sem quebrar a página.
+8. **Cartões Nubank/Inter**: `fatura_atual`/`limite_disponivel` das contas
+   `bank in ('nubank','inter')` — valor manual, direto de `fin_accounts`.
+9. **Últimos lançamentos**: até N transações com `payment_date` nos últimos 7
+   dias (a partir de "hoje"), ordenadas por `payment_date` desc.
+- **Saldo projetado** (mantido do desenho original, exibido junto ao bloco de
+  saldo) — `soma dos balances` + `soma das rendas pending com due_date <= fim
+  do mês` − `soma de (expense + investment) pending ou overdue com due_date <=
+  fim do mês`. `due_date` posterior ao fim do mês é excluído. O resultado é
+  retornado como está — negativo não é zerado.
 - **Alerta vermelho** — quando o saldo projetado é negativo, uma faixa no topo do
   Cockpit mostra o tamanho do rombo.
 - **Card "pague-se primeiro"** — mostra a meta de 20% da renda recebida e quanto
@@ -387,9 +471,12 @@ contra R$ restante). Ações:
 
 ### Configurações (`/configuracoes`)
 
-Seções: contas (CRUD + editar `balance`), categorias/subcategorias (CRUD + tag de
-`bucket`), templates recorrentes (CRUD). Forms nativos e `<details>` onde der,
-seguindo o padrão do `studiold`.
+Seções: contas (CRUD + editar `balance`, e `fatura_atual`/`limite_disponivel`
+quando `bank in ('nubank','inter')`), categorias/subcategorias (CRUD + tag de
+`bucket`), templates recorrentes (CRUD), métricas Noetrix (upsert de um
+registro de `fin_noetrix_metrics` por mês: `mes`, `mrr`, `clientes_pagantes`,
+`churn_pct`, `reserva_meses`). Forms nativos e `<details>` onde der, seguindo o
+padrão do `studiold`.
 
 ### Tratamento de erro
 

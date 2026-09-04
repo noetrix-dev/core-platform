@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Entregar `apps/financas` com Contas, Lançamentos (manual + import OFX), Cockpit (50/30/20 comparativo, saldo projetado, alerta) e Dívidas, como app sibling no monorepo `noetrix-platform`.
+**Goal:** Entregar `apps/financas` com Contas, Lançamentos (manual + import OFX), Cockpit (6 KPIs, roscas de categoria/distribuição, 50/30/20 comparativo, saldo projetado, alerta, próximas contas, bloco Noetrix, bloco Cartões manual, últimos lançamentos) e Dívidas, como app sibling no monorepo `noetrix-platform`.
 
 **Architecture:** App Next 16 / React 19 / Tailwind 4 no pnpm workspace + Turborepo. Camada de dados Path A (`financasDb()` service-role, `db:{schema:"financas"}`, só no servidor) e autenticação `@supabase/ssr` (`requireUser()` + `proxy.ts`) copiadas verbatim do `apps/studiold`. RSC lê, Server Actions mutam com `revalidatePath`. Todo cálculo derivado (50/30/20, saldo projetado, progresso de dívida, parcelas, recorrentes, parse OFX, dedupe) é função pura em `lib/`, coberta por `assert` puro rodado com `node --experimental-strip-types`.
 
@@ -51,6 +51,7 @@
 - `docs/migrations-draft/2026-09-04-01-create-schema-financas.sql`
 - `docs/migrations-draft/2026-09-04-02-fn-registrar-pagamento-divida.sql`
 - `docs/migrations-draft/2026-09-04-03-seed-financas.sql`
+- `docs/migrations-draft/2026-09-04-04-financas-cockpit-extra.sql` — `fatura_atual`/`limite_disponivel` em `fin_accounts` + `fin_noetrix_metrics` (Task 3b, adicionada depois do `/impeccable shape` do Cockpit).
 
 **Fundação de tipos e lógica pura**
 - `apps/financas/lib/financas/types.ts` — unions e row types compartilhados.
@@ -64,15 +65,16 @@
 - `apps/financas/lib/cockpit/agrega.ts` — `agregarMes`.
 - `apps/financas/lib/cockpit/split.ts` — `calcularSplit`.
 - `apps/financas/lib/cockpit/projecao.ts` — `calcularProjecao`.
+- `apps/financas/lib/cockpit/roscas.ts` — `calcularKpis`, `agregarPorCategoria`, `agregarDistribuicao` (Task 8b).
 - `apps/financas/lib/dividas/progresso.ts` — `progressoDivida`, `progressoAgregado`.
 - `apps/financas/lib/import/ofx.ts` — `parseOfx`.
 - `apps/financas/lib/import/dedupe.ts` — `hashTransacao`, `classificar`.
 
 **Telas (load + actions + UI)**
-- `apps/financas/lib/configuracoes/load.ts` + `app/configuracoes/{page.tsx,actions.ts}` + `components/configuracoes/*`.
+- `apps/financas/lib/configuracoes/load.ts` + `app/configuracoes/{page.tsx,actions.ts}` + `components/configuracoes/*` (inclui `SecaoNoetrix.tsx` — Task 13 revisada).
 - `apps/financas/lib/lancamentos/load.ts` + `app/lancamentos/{page.tsx,actions.ts}` + `components/lancamentos/*`.
 - `apps/financas/app/lancamentos/importar/{page.tsx,actions.ts}` + `components/lancamentos/FilaRevisao.tsx`.
-- `apps/financas/lib/cockpit/load.ts` + `app/cockpit/page.tsx` + `components/cockpit/*`.
+- `apps/financas/lib/cockpit/load.ts` + `app/cockpit/page.tsx` + `components/cockpit/*` (Task 16 revisada: hero+ticker de KPIs, 2 roscas, próximas contas, bloco Noetrix, bloco cartões, últimos lançamentos).
 - `apps/financas/lib/dividas/load.ts` + `app/dividas/{page.tsx,actions.ts}` + `components/dividas/*`.
 - `apps/financas/components/Shell.tsx` + `components/Topbar.tsx` + `components/LogoutButton.tsx`.
 
@@ -793,6 +795,73 @@ git commit -m "feat(financas): drafts das migrations do schema financas (draft)"
 
 ---
 
+## Task 3b: Migration draft — Cartões e Noetrix no Cockpit
+
+> Adicionada depois do `/impeccable shape` do Cockpit: os blocos Cartões
+> (fatura/limite manual) e Noetrix (MRR/clientes/churn/reserva manual) entraram
+> na Fase 1 (ver PRODUCT.md e spec atualizados). Mesmo regime da Task 3 —
+> draft revisável à mão, sem ciclo de teste automatizado, sem tocar
+> `infra/supabase/migrations/` por ferramenta.
+
+**Files:**
+- Create: `docs/migrations-draft/2026-09-04-04-financas-cockpit-extra.sql`
+
+**Interfaces:**
+- Consumes: `fin_accounts` (Task 3).
+- Produces: colunas `fatura_atual`/`limite_disponivel` em `fin_accounts`; tabela
+  `financas.fin_noetrix_metrics(mes, mrr, clientes_pagantes, churn_pct,
+  custo_operacional, reserva_meses)`, `unique (user_id, mes)`. Nomes que a
+  Task 4 (tipos) e a Task 16 (Cockpit) consomem.
+
+- [ ] **Step 1: Criar `2026-09-04-04-financas-cockpit-extra.sql`**
+
+```sql
+-- Cockpit Fase 1 revisado: blocos Cartões (manual) e Noetrix (manual).
+-- ANTES DE APLICAR: mesma ordem das migrations anteriores (depois da 01/02/03).
+
+ALTER TABLE financas.fin_accounts
+  ADD COLUMN fatura_atual NUMERIC(14,2),
+  ADD COLUMN limite_disponivel NUMERIC(14,2);
+
+CREATE TABLE financas.fin_noetrix_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL DEFAULT '<UUID_EWERTON>',
+  mes DATE NOT NULL,
+  mrr NUMERIC(14,2) NOT NULL DEFAULT 0,
+  clientes_pagantes INT NOT NULL DEFAULT 0,
+  churn_pct NUMERIC(5,2),
+  custo_operacional NUMERIC(14,2),
+  reserva_meses NUMERIC(5,2),
+  criado_em TIMESTAMPTZ DEFAULT now(),
+  atualizado_em TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, mes)
+);
+
+GRANT ALL ON ALL TABLES IN SCHEMA financas TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA financas TO service_role;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA financas TO service_role;
+NOTIFY pgrst, 'reload schema';
+```
+
+- [ ] **Step 2: Commit do draft**
+
+```bash
+git add docs/migrations-draft
+git commit -m "feat(financas): draft de migration para cartoes e noetrix no cockpit"
+```
+
+- [ ] **Step 3: Checklist de aplicação (Ewerton, manual — fora do ciclo da task)**
+
+Mesmo fluxo da Task 3 Step 5: `<UUID_EWERTON>` já resolvido nas migrations
+anteriores, então este arquivo não tem placeholder. `pnpm supabase migration
+new financas_cockpit_extra`, colar o conteúdo, revisar à mão, aplicar via SQL
+Editor/`db push` **depois** das migrations 01–03. Conferir:
+`select fatura_atual, limite_disponivel from financas.fin_accounts limit 1;`
+e `select * from financas.fin_noetrix_metrics;` (vazia é esperado até o
+primeiro lançamento manual em Configurações).
+
+---
+
 ## Task 4: Fundação de tipos, datas e harness de teste
 
 **Files:**
@@ -804,7 +873,7 @@ git commit -m "feat(financas): drafts das migrations do schema financas (draft)"
 - Consumes: scaffold (Task 1).
 - Produces:
   - Tipos: `Movement = "income" | "expense" | "investment"`, `TxStatus = "pending" | "paid" | "overdue"`, `TxType = "fixed" | "variable" | "installment"`, `Bucket = "necessidade" | "desejo" | "investimento"`, `Grupo = "fgts" | "consignado" | "serasa" | "pessoal" | "familia" | "cartao"`.
-  - Row types: `AccountRow`, `CategoryRow`, `SubcategoryRow`, `DebtRow`, `TemplateRow`, `TransactionRow` (campos = colunas do schema, snake_case, datas como `string` ISO).
+  - Row types: `AccountRow`, `CategoryRow`, `SubcategoryRow`, `DebtRow`, `TemplateRow`, `TransactionRow`, `NoetrixMetricRow` (campos = colunas do schema, snake_case, datas como `string` ISO). `AccountRow` inclui `fatura_atual`/`limite_disponivel` (Task 3b).
   - `NovaTransacao` — shape de insert em `fin_transactions` (sem `id`/`user_id`/timestamps; todos os campos opcionais exceto `description`, `amount`, `movement`, `due_date`).
   - `somaMesesISO(iso: string, n: number): string` — soma `n` meses a uma data `YYYY-MM-DD`, faz clamp do dia no último dia do mês de destino ("2026-01-31" + 1 → "2026-02-28"), vira o ano.
   - `fimDoMesISO(iso: string): string` — último dia do mês da data dada.
@@ -856,7 +925,19 @@ export type AccountRow = {
   type: "corrente" | "poupanca" | "investimento";
   balance: number;
   balance_updated_at: string | null;
+  fatura_atual: number | null;
+  limite_disponivel: number | null;
   ativo: boolean;
+};
+
+export type NoetrixMetricRow = {
+  id: string;
+  mes: string;
+  mrr: number;
+  clientes_pagantes: number;
+  churn_pct: number | null;
+  custo_operacional: number | null;
+  reserva_meses: number | null;
 };
 
 export type CategoryRow = {
@@ -1494,6 +1575,169 @@ git commit -m "feat(financas): agregarMes e calcularSplit para o painel 50/30/20
 
 ---
 
+## Task 8b: `calcularKpis` + `agregarPorCategoria` + `agregarDistribuicao` — KPIs e roscas do Cockpit
+
+> Adicionada junto com a Task 3b/16 revisada: o Cockpit confirmado no
+> `/impeccable shape` pede 6 KPIs e 2 roscas que o desenho original (Task 8/9)
+> não cobria.
+
+**Files:**
+- Create: `apps/financas/lib/cockpit/roscas.ts`
+- Modify: `apps/financas/lib/financas.check.ts`
+
+**Interfaces:**
+- Consumes: `TransactionRow`, `CategoryRow`, `TxStatus` (Task 4); `derivarStatus` (Task 7).
+- Produces:
+  - `calcularKpis(transacoes: Pick<TransactionRow, "movement" | "amount" | "status" | "due_date">[], hojeIso: string): KpisCockpit`
+    - `type KpisCockpit = { entradas: number; saidas: number; aVencer: number; vencidas: number; investimentos: number; saldo: number }`
+    - Usa `derivarStatus({status, due_date}, hojeIso)` linha a linha (statusEfetivo). `entradas` = soma `amount` de `movement=income` com statusEfetivo `paid`. `saidas` = soma `amount` de `movement=expense` com statusEfetivo `paid`. `aVencer` = soma `amount` de `movement=expense` com statusEfetivo `pending`. `vencidas` = soma `amount` de `movement=expense` com statusEfetivo `overdue`. `investimentos` = soma `amount` de `movement=investment` (qualquer status). `saldo = entradas - saidas - investimentos`.
+  - `agregarPorCategoria(transacoes: Pick<TransactionRow, "movement" | "amount" | "category_id">[], categorias: Pick<CategoryRow, "id" | "name">[]): LinhaCategoria[]`
+    - `type LinhaCategoria = { categoria: string; valor: number }`
+    - Só `movement` `expense`/`investment`. Agrupa por `category_id` → nome da categoria; `category_id` ausente ou sem match → `"Sem categoria"`. Ordenado por `valor` desc. Array vazio quando não há gasto (estado empty é responsabilidade da UI).
+  - `agregarDistribuicao(input: { entradas: number; saidas: number; investimentos: number; dividasNaoPagas: number }): LinhaDistribuicao[]`
+    - `type LinhaDistribuicao = { label: "entradas" | "saidas" | "investimentos" | "dividas_nao_pagas"; valor: number }`
+    - Empacota os 4 números na ordem fixa acima; nenhum cálculo — os 4 valores já vêm prontos de `calcularKpis` e `progressoAgregado`.
+
+- [ ] **Step 1: Asserts em `lib/financas.check.ts`**
+
+```ts
+import { calcularKpis, agregarPorCategoria, agregarDistribuicao } from "@/lib/cockpit/roscas";
+
+{
+  const tx = [
+    { movement: "income", amount: 4000, status: "paid", due_date: "2026-02-05" },
+    { movement: "expense", amount: 1200, status: "paid", due_date: "2026-02-03" },
+    { movement: "expense", amount: 300, status: "pending", due_date: "2026-03-01" },
+    { movement: "expense", amount: 90, status: "pending", due_date: "2026-01-01" }, // vencida
+    { movement: "investment", amount: 500, status: "paid", due_date: "2026-02-10" },
+  ] as any[];
+  const k = calcularKpis(tx, "2026-02-15");
+  assert.equal(k.entradas, 4000);
+  assert.equal(k.saidas, 1200);
+  assert.equal(k.aVencer, 300);
+  assert.equal(k.vencidas, 90);
+  assert.equal(k.investimentos, 500);
+  assert.equal(k.saldo, 2300, "4000 - 1200 - 500");
+}
+{
+  const cats = [{ id: "c1", name: "Mercado" }, { id: "c2", name: "Aporte" }] as any[];
+  const tx = [
+    { movement: "expense", amount: 100, category_id: "c1" },
+    { movement: "expense", amount: 50, category_id: "c1" },
+    { movement: "investment", amount: 200, category_id: "c2" },
+    { movement: "expense", amount: 30, category_id: null },
+    { movement: "income", amount: 999, category_id: "c1" },
+  ] as any[];
+  const r = agregarPorCategoria(tx, cats);
+  assert.deepEqual(r, [
+    { categoria: "Aporte", valor: 200 },
+    { categoria: "Mercado", valor: 150 },
+    { categoria: "Sem categoria", valor: 30 },
+  ]);
+}
+{
+  const r = agregarDistribuicao({ entradas: 4000, saidas: 1200, investimentos: 500, dividasNaoPagas: 29500 });
+  assert.deepEqual(r, [
+    { label: "entradas", valor: 4000 },
+    { label: "saidas", valor: 1200 },
+    { label: "investimentos", valor: 500 },
+    { label: "dividas_nao_pagas", valor: 29500 },
+  ]);
+}
+```
+
+- [ ] **Step 2: Rodar para ver falhar** — `pnpm --filter financas check` → FAIL (módulo ausente).
+
+- [ ] **Step 3: Escrever `lib/cockpit/roscas.ts`**
+
+```ts
+import { derivarStatus } from "@/lib/lancamentos/overdue";
+import type { CategoryRow, TransactionRow } from "@/lib/financas/types";
+
+type TxKpi = Pick<TransactionRow, "movement" | "amount" | "status" | "due_date">;
+
+export type KpisCockpit = {
+  entradas: number;
+  saidas: number;
+  aVencer: number;
+  vencidas: number;
+  investimentos: number;
+  saldo: number;
+};
+
+const cent = (n: number) => Math.round(n * 100) / 100;
+
+export function calcularKpis(transacoes: TxKpi[], hojeIso: string): KpisCockpit {
+  let entradas = 0, saidas = 0, aVencer = 0, vencidas = 0, investimentos = 0;
+  for (const t of transacoes) {
+    const efetivo = derivarStatus({ status: t.status, due_date: t.due_date }, hojeIso);
+    if (t.movement === "investment") {
+      investimentos = cent(investimentos + t.amount);
+    } else if (t.movement === "income") {
+      if (efetivo === "paid") entradas = cent(entradas + t.amount);
+    } else {
+      if (efetivo === "paid") saidas = cent(saidas + t.amount);
+      else if (efetivo === "pending") aVencer = cent(aVencer + t.amount);
+      else vencidas = cent(vencidas + t.amount);
+    }
+  }
+  return {
+    entradas, saidas, aVencer, vencidas, investimentos,
+    saldo: cent(entradas - saidas - investimentos),
+  };
+}
+
+export type LinhaCategoria = { categoria: string; valor: number };
+
+export function agregarPorCategoria(
+  transacoes: Pick<TransactionRow, "movement" | "amount" | "category_id">[],
+  categorias: Pick<CategoryRow, "id" | "name">[],
+): LinhaCategoria[] {
+  const nomeDe = new Map(categorias.map((c) => [c.id, c.name]));
+  const soma = new Map<string, number>();
+  for (const t of transacoes) {
+    if (t.movement !== "expense" && t.movement !== "investment") continue;
+    const nome = (t.category_id && nomeDe.get(t.category_id)) || "Sem categoria";
+    soma.set(nome, cent((soma.get(nome) ?? 0) + t.amount));
+  }
+  return [...soma.entries()]
+    .map(([categoria, valor]) => ({ categoria, valor }))
+    .sort((a, b) => b.valor - a.valor);
+}
+
+export type LinhaDistribuicao = {
+  label: "entradas" | "saidas" | "investimentos" | "dividas_nao_pagas";
+  valor: number;
+};
+
+export function agregarDistribuicao(input: {
+  entradas: number;
+  saidas: number;
+  investimentos: number;
+  dividasNaoPagas: number;
+}): LinhaDistribuicao[] {
+  return [
+    { label: "entradas", valor: input.entradas },
+    { label: "saidas", valor: input.saidas },
+    { label: "investimentos", valor: input.investimentos },
+    { label: "dividas_nao_pagas", valor: input.dividasNaoPagas },
+  ];
+}
+```
+
+- [ ] **Step 4: Rodar até passar** — PASS.
+
+- [ ] **Step 5: Gate + commit**
+
+Run: `pnpm --filter financas typecheck && pnpm --filter financas lint`
+
+```bash
+git add apps/financas/lib
+git commit -m "feat(financas): kpis e roscas do cockpit (categoria + distribuicao)"
+```
+
+---
+
 ## Task 9: `calcularProjecao` — saldo projetado do mês
 
 **Files:**
@@ -1932,20 +2176,22 @@ git commit -m "feat(financas): hashTransacao e classificar para dedupe do import
 - Create: `apps/financas/components/configuracoes/SecaoContas.tsx`
 - Create: `apps/financas/components/configuracoes/SecaoCategorias.tsx`
 - Create: `apps/financas/components/configuracoes/SecaoRecorrentes.tsx`
+- Create: `apps/financas/components/configuracoes/SecaoNoetrix.tsx`
 
 **Interfaces:**
-- Consumes: `financasDb`, `requireUser` (Task 2); row types (Task 4).
+- Consumes: `financasDb`, `requireUser` (Task 2); row types incl. `NoetrixMetricRow` (Task 4); colunas `fatura_atual`/`limite_disponivel` (Task 3b).
 - Produces:
-  - `carregarConfiguracoes(): Promise<ConfigData>` onde `ConfigData = { contas: AccountRow[]; categorias: CategoryRow[]; subcategorias: SubcategoryRow[]; templates: TemplateRow[] }` (todas as linhas, ativas e inativas, ordenadas por `name`/`description`).
+  - `carregarConfiguracoes(): Promise<ConfigData>` onde `ConfigData = { contas: AccountRow[]; categorias: CategoryRow[]; subcategorias: SubcategoryRow[]; templates: TemplateRow[]; metricasNoetrix: NoetrixMetricRow[] }` (todas as linhas, ativas e inativas, ordenadas por `name`/`description`; `metricasNoetrix` ordenada por `mes` desc, últimos 12 meses).
   - Server Actions, todas `async`, retorno `{ ok: true } | { ok: false; erro: string }`, `requireUser()` no topo, `revalidatePath("/configuracoes")` no fim, `try/catch` com `console.error`:
     - `criarConta(fd: FormData)` — `name`, `bank`, `type`; `balance` opcional (default 0).
-    - `editarConta(fd: FormData)` — `id`, `name`, `bank`, `type`, `balance`, `ativo`.
+    - `editarConta(fd: FormData)` — `id`, `name`, `bank`, `type`, `balance`, `ativo`, e (quando `bank` for `nubank`/`inter`) `fatura_atual`/`limite_disponivel` opcionais.
     - `criarCategoria(fd: FormData)` — `name`, `type`, `bucket` (vazio → null).
     - `editarCategoria(fd: FormData)` — `id`, `name`, `type`, `bucket`, `ativo`.
     - `criarSubcategoria(fd: FormData)` — `category_id`, `name`.
     - `toggleSubcategoria(fd: FormData)` — `id`, `ativo`.
     - `criarTemplate(fd: FormData)` — `description`, `amount`, `movement`, `day_of_month`, opcionais `category_id`/`subcategory_id`/`account_id`/`type`.
     - `editarTemplate(fd: FormData)` — idem + `id` + `ativo`.
+    - `salvarMetricaNoetrix(fd: FormData)` — `mes` (`YYYY-MM`, gravado como `${mes}-01`), `mrr`, `clientes_pagantes`, `churn_pct` opcional, `reserva_meses` opcional; `upsert` em `fin_noetrix_metrics` por `(user_id, mes)` (`onConflict: "user_id,mes"`) — um registro por mês, salvar de novo atualiza o existente. `revalidatePath("/configuracoes")` + `revalidatePath("/cockpit")`.
 
 - [ ] **Step 1: Escrever `lib/configuracoes/load.ts`**
 
@@ -1957,6 +2203,7 @@ import type {
   CategoryRow,
   SubcategoryRow,
   TemplateRow,
+  NoetrixMetricRow,
 } from "@/lib/financas/types";
 
 export type ConfigData = {
@@ -1964,17 +2211,19 @@ export type ConfigData = {
   categorias: CategoryRow[];
   subcategorias: SubcategoryRow[];
   templates: TemplateRow[];
+  metricasNoetrix: NoetrixMetricRow[];
 };
 
 export async function carregarConfiguracoes(): Promise<ConfigData> {
   const db = financasDb();
-  const [contas, categorias, subcategorias, templates] = await Promise.all([
+  const [contas, categorias, subcategorias, templates, metricasNoetrix] = await Promise.all([
     db.from("fin_accounts").select("*").order("name"),
     db.from("fin_categories").select("*").order("name"),
     db.from("fin_subcategories").select("*").order("name"),
     db.from("fin_recurring_templates").select("*").order("description"),
+    db.from("fin_noetrix_metrics").select("*").order("mes", { ascending: false }).limit(12),
   ]);
-  for (const r of [contas, categorias, subcategorias, templates]) {
+  for (const r of [contas, categorias, subcategorias, templates, metricasNoetrix]) {
     if (r.error) throw new Error(r.error.message);
   }
   return {
@@ -1982,6 +2231,7 @@ export async function carregarConfiguracoes(): Promise<ConfigData> {
     categorias: (categorias.data ?? []) as CategoryRow[],
     subcategorias: (subcategorias.data ?? []) as SubcategoryRow[],
     templates: (templates.data ?? []) as TemplateRow[],
+    metricasNoetrix: (metricasNoetrix.data ?? []) as NoetrixMetricRow[],
   };
 }
 ```
@@ -2036,10 +2286,11 @@ export async function criarConta(fd: FormData): Promise<Resultado> {
 ```
 
 Regras específicas:
-- `editarConta`: `update({...}).eq("id", id)`; `balance` sempre revalidado; setar `balance_updated_at: new Date().toISOString()` quando `balance` mudar (comparar com o valor atual carregado é overkill — sempre atualiza o timestamp no submit).
+- `editarConta`: `update({...}).eq("id", id)`; `balance` sempre revalidado; setar `balance_updated_at: new Date().toISOString()` quando `balance` mudar (comparar com o valor atual carregado é overkill — sempre atualiza o timestamp no submit). `fatura_atual`/`limite_disponivel`: só lê e grava esses campos do `FormData` quando `bank` for `nubank`/`inter` (`str()` vazio → `null`).
 - `criarCategoria`/`editarCategoria`: `bucket` vazio → `null`; se `type === "income"` forçar `bucket: null`.
 - `criarSubcategoria`: exige `category_id` válido (vem do `<select>`).
 - `criarTemplate`/`editarTemplate`: `day_of_month` inteiro 1–31, senão erro; `amount` via `num()`, `> 0` senão erro.
+- `salvarMetricaNoetrix`: `mes` no formato `YYYY-MM` (`<input type="month">`), senão erro; grava `mes: `${mes}-01``; `mrr`/`clientes_pagantes` obrigatórios via `num()`; `churn_pct`/`reserva_meses` opcionais (vazio → `null`); `.from("fin_noetrix_metrics").upsert({...}, { onConflict: "user_id,mes" })`.
 
 - [ ] **Step 3: Escrever `app/configuracoes/page.tsx`**
 
@@ -2049,6 +2300,7 @@ import { carregarConfiguracoes } from "@/lib/configuracoes/load";
 import { SecaoContas } from "@/components/configuracoes/SecaoContas";
 import { SecaoCategorias } from "@/components/configuracoes/SecaoCategorias";
 import { SecaoRecorrentes } from "@/components/configuracoes/SecaoRecorrentes";
+import { SecaoNoetrix } from "@/components/configuracoes/SecaoNoetrix";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Configurações — Finanças" };
@@ -2071,14 +2323,15 @@ export default async function ConfiguracoesPage() {
         subcategorias={data.subcategorias}
         contas={data.contas}
       />
+      <SecaoNoetrix metricas={data.metricasNoetrix} />
     </main>
   );
 }
 ```
 
-- [ ] **Step 4: Escrever os 3 componentes de seção**
+- [ ] **Step 4: Escrever os 4 componentes de seção**
 
-Cada seção: lista das linhas + `<form action={serverAction}>` nativo para criar, `<details>` por linha para editar (padrão do `apps/studiold/app/configuracoes`). Sem estado de cliente. Campos por seção conforme os `FormData` das actions. `SecaoContas`: `name`, `<select bank>` (inter/nubank/bradesco/btg), `<select type>`, `balance` (`inputMode="decimal"`). `SecaoCategorias`: form de categoria (`name`, `<select type>`, `<select bucket>` desabilitado quando `type=income`) + sub-lista de subcategorias por categoria com form inline. `SecaoRecorrentes`: `description`, `amount`, `<select movement>`, `day_of_month` (`type="number" min=1 max=31`), selects opcionais de categoria/subcategoria/conta.
+Cada seção: lista das linhas + `<form action={serverAction}>` nativo para criar, `<details>` por linha para editar (padrão do `apps/studiold/app/configuracoes`). Sem estado de cliente. Campos por seção conforme os `FormData` das actions. `SecaoContas`: `name`, `<select bank>` (inter/nubank/bradesco/btg), `<select type>`, `balance` (`inputMode="decimal"`); quando `bank` selecionado for `nubank`/`inter`, mostra também `fatura_atual`/`limite_disponivel` (`inputMode="decimal"`, opcionais). `SecaoCategorias`: form de categoria (`name`, `<select type>`, `<select bucket>` desabilitado quando `type=income`) + sub-lista de subcategorias por categoria com form inline. `SecaoRecorrentes`: `description`, `amount`, `<select movement>`, `day_of_month` (`type="number" min=1 max=31`), selects opcionais de categoria/subcategoria/conta. `SecaoNoetrix`: lista dos últimos `metricas` (mês, MRR, clientes) + `<form action={salvarMetricaNoetrix}>` com `mes` (`type="month"`, default mês corrente), `mrr`, `clientes_pagantes`, `churn_pct` e `reserva_meses` opcionais — salvar de novo no mesmo mês atualiza (upsert), sem duplicar linha.
 
 > Tratamento visual/microcopy: vem do `/impeccable shape /configuracoes`. Esta task entrega estrutura, binding de dados e os forms funcionais.
 
@@ -2094,6 +2347,8 @@ Run: `pnpm --filter financas typecheck && pnpm --filter financas lint && pnpm --
 4. Criar categoria `type=income` → o select de bucket fica desabilitado e grava `null`.
 5. Criar uma subcategoria numa categoria de despesa → aparece aninhada.
 6. Criar um template recorrente dia 10 → aparece na lista.
+7. Editar a conta Nubank com `fatura_atual`/`limite_disponivel` → persiste; conta Bradesco não mostra esses campos.
+8. Salvar métrica Noetrix do mês corrente → aparece na lista; salvar de novo o mesmo mês → atualiza a linha existente (não duplica).
 
 - [ ] **Step 7: Commit**
 
@@ -2695,24 +2950,46 @@ git commit -m "feat(financas): import OFX com fila de revisao e dedupe"
 
 ---
 
-## Task 16: Tela `/cockpit`
+## Task 16: Tela `/cockpit` (revisada — cockpit completo do `/impeccable shape`)
+
+> Reescrita depois do brief de design confirmado: o desenho original desta task
+> (saldos + split + projeção + alerta) virou só um subconjunto. Cobre agora os
+> 6 KPIs, 2 roscas, seletor de mês, próximas contas, bloco Noetrix, bloco
+> Cartões e últimos lançamentos.
 
 **Files:**
 - Create: `apps/financas/lib/cockpit/load.ts`
 - Modify: `apps/financas/app/cockpit/page.tsx` (substitui o stub da Task 2)
+- Create: `apps/financas/components/cockpit/SeletorMes.tsx`
+- Create: `apps/financas/components/cockpit/KpisCockpit.tsx`
+- Create: `apps/financas/components/cockpit/RoscaCategoria.tsx`
+- Create: `apps/financas/components/cockpit/RoscaDistribuicao.tsx`
 - Create: `apps/financas/components/cockpit/PainelSplit.tsx`
+- Create: `apps/financas/components/cockpit/ProximasContas.tsx`
+- Create: `apps/financas/components/cockpit/BlocoNoetrix.tsx`
+- Create: `apps/financas/components/cockpit/BlocoCartoes.tsx`
+- Create: `apps/financas/components/cockpit/UltimosLancamentos.tsx`
 - Create: `apps/financas/components/cockpit/CardsSaldo.tsx`
 
 **Interfaces:**
-- Consumes: `financasDb`, `requireUser` (Task 2); `agregarMes` (Task 8), `calcularSplit` (Task 8), `calcularProjecao` (Task 9); `hojeISO`, `fimDoMesISO` (Task 4); row types.
+- Consumes: `financasDb`, `requireUser` (Task 2); `agregarMes` (Task 8), `calcularSplit` (Task 8), `calcularProjecao` (Task 9); `calcularKpis`, `agregarPorCategoria`, `agregarDistribuicao` (Task 8b); `hojeISO`, `fimDoMesISO` (Task 4); row types incl. `NoetrixMetricRow` (Task 4); colunas `fatura_atual`/`limite_disponivel` (Task 3b).
 - Produces:
-  - `carregarCockpit(mes: string): Promise<CockpitData>`
-  - `type CockpitData = { contas: AccountRow[]; saldoTotal: number; split: SplitResult; projecao: ProjecaoResult; investidoNoMes: number; metaInvestimento: number; alertaNegativo: boolean }`
-    - `saldoTotal` = soma de `balance` das contas ativas.
+  - `carregarCockpit(mes: string): Promise<CockpitData>` — `mes` no formato `YYYY-MM`.
+  - `type CockpitData = { mes: string; mesVigente: boolean; contas: AccountRow[]; saldoTotal: number; kpis: KpisCockpit; projecao: ProjecaoResult | null; split: SplitResult; categorias: LinhaCategoria[]; distribuicao: LinhaDistribuicao[]; proximasContas: TransactionRow[]; ultimosLancamentos: TransactionRow[]; noetrix: NoetrixMetricRow | null; gatilhos: { clientes: boolean; churn: boolean; reserva: boolean }; cartoes: AccountRow[]; investidoNoMes: number; metaInvestimento: number; alertaNegativo: boolean }`
+    - `mesVigente` = `mes === hojeISO().slice(0, 7)`.
+    - `saldoTotal` = soma de `balance` das contas ativas (não depende do mês — é saldo corrente, sem histórico na Fase 1).
+    - `kpis` = `calcularKpis(txDoMes, hojeISO())` — **sempre** com a data real de hoje (não a referência do mês selecionado): `due_date` já ancora no mês, e `derivarStatus` contra o hoje real dá o resultado correto tanto pra mês passado (settled ou vencido de verdade) quanto futuro (nunca vencido).
     - `split` = `calcularSplit(resumo.rendaRecebida, resumo.gastosPorBucket)` com `resumo = agregarMes(txDoMes, categorias)`.
-    - `projecao` = `calcularProjecao({ saldoContas: saldoTotal, transacoes: txDoMes, fimDoMesIso: fimDoMesISO(hoje) })`.
+    - `categorias` = `agregarPorCategoria(txDoMes, categorias)` (rosca 1).
+    - `distribuicao` = `agregarDistribuicao({ entradas: kpis.entradas, saidas: kpis.saidas, investimentos: kpis.investimentos, dividasNaoPagas: somaRemainingDividasAtivas })` (rosca 2).
+    - `projecao` = **só quando `mesVigente`** — `calcularProjecao({ saldoContas: saldoTotal, transacoes: txDoMes, fimDoMesIso: fimDoMesISO(hojeISO()) })`; em mês não vigente, `null` (projetar o fim de um mês fechado ou muito futuro não é o que a projeção resolve — decisão desta revisão, documentada aqui em vez de forçar um número sem sentido).
+    - `alertaNegativo` = `mesVigente && projecao !== null && projecao.projetado < 0`.
+    - `proximasContas` = transações `movement=expense`, `status='pending'` (bruto — a janela de 7 dias à frente nunca alcança `overdue`/`paid`), `due_date` entre a referência e `+7` dias. Referência = `hojeISO()` se `mesVigente`, senão `${mes}-01`. Consulta própria (não reaproveita `txDoMes` — a janela pode cruzar a fronteira do mês).
+    - `ultimosLancamentos` = transações com `payment_date` entre `hojeISO() - 7 dias` e `hojeISO()`, ordenadas por `payment_date desc`, limit 20. **Sempre relativo ao hoje real**, independente do mês selecionado — é um "o que aconteceu recentemente", não uma view do mês.
+    - `noetrix` = registro de `fin_noetrix_metrics` onde `mes = '${mes}-01'`, ou `null` se não houver.
+    - `gatilhos` = `{ clientes: (noetrix?.clientes_pagantes ?? 0) >= 80, churn: noetrix?.churn_pct != null && noetrix.churn_pct < 5, reserva: noetrix?.reserva_meses != null && noetrix.reserva_meses >= 4 }`.
+    - `cartoes` = `contas.filter(c => c.bank === "nubank" || c.bank === "inter")`. `fatura_atual`/`limite_disponivel` são valor manual único (não historizado por mês na Fase 1) — o bloco mostra o mesmo valor em qualquer mês selecionado; a referência de data do mês **não** se aplica aqui (só a "próximas contas" tem janela de data real). Decisão desta revisão, documentada para não virar achado de review.
     - `metaInvestimento` = `split.metas.investimento`; `investidoNoMes` = `resumo.investidoNoMes`.
-    - `alertaNegativo` = `projecao.projetado < 0`.
 
 - [ ] **Step 1: Escrever `lib/cockpit/load.ts`**
 
@@ -2722,14 +2999,43 @@ import { financasDb } from "@/lib/supabase/server";
 import { agregarMes } from "@/lib/cockpit/agrega";
 import { calcularSplit, type SplitResult } from "@/lib/cockpit/split";
 import { calcularProjecao, type ProjecaoResult } from "@/lib/cockpit/projecao";
+import {
+  calcularKpis,
+  agregarPorCategoria,
+  agregarDistribuicao,
+  type KpisCockpit,
+  type LinhaCategoria,
+  type LinhaDistribuicao,
+} from "@/lib/cockpit/roscas";
 import { hojeISO, fimDoMesISO } from "@/lib/datas";
-import type { AccountRow, CategoryRow, TransactionRow } from "@/lib/financas/types";
+import type {
+  AccountRow,
+  CategoryRow,
+  TransactionRow,
+  NoetrixMetricRow,
+} from "@/lib/financas/types";
+
+function maisDias(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
 export type CockpitData = {
+  mes: string;
+  mesVigente: boolean;
   contas: AccountRow[];
   saldoTotal: number;
+  kpis: KpisCockpit;
+  projecao: ProjecaoResult | null;
   split: SplitResult;
-  projecao: ProjecaoResult;
+  categorias: LinhaCategoria[];
+  distribuicao: LinhaDistribuicao[];
+  proximasContas: TransactionRow[];
+  ultimosLancamentos: TransactionRow[];
+  noetrix: NoetrixMetricRow | null;
+  gatilhos: { clientes: boolean; churn: boolean; reserva: boolean };
+  cartoes: AccountRow[];
   investidoNoMes: number;
   metaInvestimento: number;
   alertaNegativo: boolean;
@@ -2737,75 +3043,131 @@ export type CockpitData = {
 
 export async function carregarCockpit(mes: string): Promise<CockpitData> {
   const db = financasDb();
-  const [contasR, catsR, txR] = await Promise.all([
+  const hoje = hojeISO();
+  const mesVigente = mes === hoje.slice(0, 7);
+  const referencia = mesVigente ? hoje : `${mes}-01`;
+
+  const [contasR, catsR, txR, dividasR, noetrixR, proximasR, ultimosR] = await Promise.all([
     db.from("fin_accounts").select("*").eq("ativo", true).order("name"),
     db.from("fin_categories").select("*"),
+    db.from("fin_transactions").select("*").gte("due_date", `${mes}-01`).lte("due_date", `${mes}-31`),
+    db.from("fin_debts").select("remaining_amount").eq("status", "ativa"),
+    db.from("fin_noetrix_metrics").select("*").eq("mes", `${mes}-01`).maybeSingle(),
     db
       .from("fin_transactions")
       .select("*")
-      .gte("due_date", `${mes}-01`)
-      .lte("due_date", `${mes}-31`),
+      .eq("movement", "expense")
+      .eq("status", "pending")
+      .gte("due_date", referencia)
+      .lte("due_date", maisDias(referencia, 7))
+      .order("due_date"),
+    db
+      .from("fin_transactions")
+      .select("*")
+      .not("payment_date", "is", null)
+      .gte("payment_date", maisDias(hoje, -7))
+      .lte("payment_date", hoje)
+      .order("payment_date", { ascending: false })
+      .limit(20),
   ]);
-  for (const r of [contasR, catsR, txR]) {
+  for (const r of [contasR, catsR, txR, dividasR, proximasR, ultimosR]) {
     if (r.error) throw new Error(r.error.message);
   }
+  if (noetrixR.error) throw new Error(noetrixR.error.message);
 
   const contas = (contasR.data ?? []) as AccountRow[];
   const categorias = (catsR.data ?? []) as CategoryRow[];
   const tx = (txR.data ?? []) as TransactionRow[];
+  const noetrix = (noetrixR.data ?? null) as NoetrixMetricRow | null;
 
-  const saldoTotal = Math.round(
-    contas.reduce((s, c) => s + c.balance, 0) * 100,
-  ) / 100;
+  const saldoTotal = Math.round(contas.reduce((s, c) => s + c.balance, 0) * 100) / 100;
+  const kpis = calcularKpis(tx, hoje);
   const resumo = agregarMes(tx, categorias);
   const split = calcularSplit(resumo.rendaRecebida, resumo.gastosPorBucket);
-  const projecao = calcularProjecao({
-    saldoContas: saldoTotal,
-    transacoes: tx,
-    fimDoMesIso: fimDoMesISO(`${mes}-01` <= hojeISO() ? hojeISO() : `${mes}-01`),
-  });
+  const dividasNaoPagas = Math.round(
+    ((dividasR.data ?? []) as { remaining_amount: number }[]).reduce((s, d) => s + d.remaining_amount, 0) * 100,
+  ) / 100;
+
+  const projecao = mesVigente
+    ? calcularProjecao({ saldoContas: saldoTotal, transacoes: tx, fimDoMesIso: fimDoMesISO(hoje) })
+    : null;
 
   return {
+    mes,
+    mesVigente,
     contas,
     saldoTotal,
-    split,
+    kpis,
     projecao,
+    split,
+    categorias: agregarPorCategoria(tx, categorias),
+    distribuicao: agregarDistribuicao({
+      entradas: kpis.entradas,
+      saidas: kpis.saidas,
+      investimentos: kpis.investimentos,
+      dividasNaoPagas,
+    }),
+    proximasContas: (proximasR.data ?? []) as TransactionRow[],
+    ultimosLancamentos: (ultimosR.data ?? []) as TransactionRow[],
+    noetrix,
+    gatilhos: {
+      clientes: (noetrix?.clientes_pagantes ?? 0) >= 80,
+      churn: noetrix?.churn_pct != null && noetrix.churn_pct < 5,
+      reserva: noetrix?.reserva_meses != null && noetrix.reserva_meses >= 4,
+    },
+    cartoes: contas.filter((c) => c.bank === "nubank" || c.bank === "inter"),
     investidoNoMes: resumo.investidoNoMes,
     metaInvestimento: split.metas.investimento,
-    alertaNegativo: projecao.projetado < 0,
+    alertaNegativo: mesVigente && projecao !== null && projecao.projetado < 0,
   };
 }
 ```
-
-> Nota: `fimDoMesIso` usa o fim do mês corrente (`hojeISO`) quando o `mes` pedido é o mês atual ou passado; para meses futuros usa o fim daquele mês. Simplificação aceita para a Fase 1 — o Cockpit é sempre consultado no mês corrente pela navegação.
 
 - [ ] **Step 2: Reescrever `app/cockpit/page.tsx`**
 
 ```tsx
 import { requireUser } from "@/lib/supabase/auth";
 import { carregarCockpit } from "@/lib/cockpit/load";
-import { CardsSaldo } from "@/components/cockpit/CardsSaldo";
+import { SeletorMes } from "@/components/cockpit/SeletorMes";
+import { KpisCockpit } from "@/components/cockpit/KpisCockpit";
+import { RoscaCategoria } from "@/components/cockpit/RoscaCategoria";
+import { RoscaDistribuicao } from "@/components/cockpit/RoscaDistribuicao";
 import { PainelSplit } from "@/components/cockpit/PainelSplit";
+import { ProximasContas } from "@/components/cockpit/ProximasContas";
+import { BlocoNoetrix } from "@/components/cockpit/BlocoNoetrix";
+import { BlocoCartoes } from "@/components/cockpit/BlocoCartoes";
+import { UltimosLancamentos } from "@/components/cockpit/UltimosLancamentos";
+import { CardsSaldo } from "@/components/cockpit/CardsSaldo";
 import { hojeISO } from "@/lib/datas";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cockpit — Finanças" };
 
-export default async function CockpitPage() {
+export default async function CockpitPage({
+  searchParams,
+}: PageProps<"/cockpit">) {
   await requireUser();
-  const mes = hojeISO().slice(0, 7);
+  const sp = await searchParams;
+  const mes = (sp.mes as string) || hojeISO().slice(0, 7);
   const d = await carregarCockpit(mes);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 flex flex-col gap-6">
-      {d.alertaNegativo && (
+      <SeletorMes mes={d.mes} />
+      {d.alertaNegativo && d.projecao && (
         <div role="alert" className="border border-red-600 bg-red-50 px-4 py-3 text-red-800">
           Saldo projetado para o fim do mês: R$ {d.projecao.projetado.toFixed(2)}
         </div>
       )}
-      <h1 className="text-xl font-bold">Cockpit</h1>
-      <CardsSaldo contas={d.contas} saldoTotal={d.saldoTotal} projecao={d.projecao} />
+      <KpisCockpit kpis={d.kpis} />
+      <RoscaCategoria linhas={d.categorias} />
+      <RoscaDistribuicao linhas={d.distribuicao} />
       <PainelSplit split={d.split} />
+      <ProximasContas linhas={d.proximasContas} mesVigente={d.mesVigente} />
+      <BlocoNoetrix noetrix={d.noetrix} gatilhos={d.gatilhos} />
+      <BlocoCartoes cartoes={d.cartoes} />
+      <CardsSaldo contas={d.contas} saldoTotal={d.saldoTotal} projecao={d.projecao} />
+      <UltimosLancamentos linhas={d.ultimosLancamentos} />
       <section className="border px-4 py-3">
         <p className="font-semibold">Pague-se primeiro</p>
         <p className="text-sm">
@@ -2817,30 +3179,42 @@ export default async function CockpitPage() {
 }
 ```
 
-- [ ] **Step 3: Escrever `CardsSaldo.tsx` e `PainelSplit.tsx`** (server components, sem estado)
+- [ ] **Step 3: Escrever os componentes (server components exceto `SeletorMes`, sem estado além do form nativo)**
 
-- `CardsSaldo`: uma linha por conta (`name`, `bank`, `balance`), o `saldoTotal`, e o bloco de projeção (`entradasPrevistas`, `saidasPrevistas`, `projetado`). Sem renda recebida o `PainelSplit` mostra o estado vazio "aguardando a primeira renda do mês" (checar `split.metas.necessidade === 0 && split.real` tudo 0 → na prática: `d.split.metas.investimento === 0`).
-- `PainelSplit`: 3 baldes (Necessidades 50% / Desejos 30% / Investimento 20%). Cada um: meta, real, barra de progresso `real/meta`, marca vermelha quando `split.estouro[b]`. Linha extra "Sem classificação" com `split.real.sem_classificacao` quando `> 0`.
+- `SeletorMes` (`"use client"` só pelo `<input type="month">` autosubmit — `<form method="get">` com `onChange` disparando `requestSubmit()`, ou botão "Ir" sem JS se preferir puro): `<input type="month" name="mes" defaultValue={mes} />`.
+- `KpisCockpit`: hero do `kpis.saldo` (destaque, cor semântica — verde se `>= 0`, vermelho se `< 0`) + ticker compacto com `entradas`, `saidas`, `aVencer`, `vencidas`, `investimentos`.
+- `RoscaCategoria`: rosca de `linhas: LinhaCategoria[]`; array vazio → estado empty explícito ("nenhum gasto lançado neste mês"), nunca gráfico quebrado.
+- `RoscaDistribuicao`: rosca de `linhas: LinhaDistribuicao[]` (os 4 rótulos fixos); todos zero → mesmo estado empty.
+- `PainelSplit`: inalterado do desenho original — 3 baldes (Necessidades 50% / Desejos 30% / Investimento 20%), meta vs real, barra, vermelho em `split.estouro[b]`; "Sem classificação" quando `> 0`. Estado vazio "aguardando a primeira renda do mês" quando `split.metas.investimento === 0`.
+- `ProximasContas`: lista de `linhas` (descrição, valor, `due_date`); vazio → "nada vencendo nos próximos 7 dias"; título ajusta a referência quando `!mesVigente` ("a partir do dia 1").
+- `BlocoNoetrix`: `noetrix?.mrr`, `noetrix?.clientes_pagantes`, semáforo dos 3 `gatilhos` (verde/vermelho por gatilho); `noetrix === null` → estado "sem métrica lançada neste mês" com link pra `/configuracoes`.
+- `BlocoCartoes`: uma linha por conta em `cartoes` (`name`, `fatura_atual`, `limite_disponivel`); ambos `null` → "sem fatura lançada"; `cartoes` vazio (nenhuma conta nubank/inter ativa) → não renderiza o bloco.
+- `UltimosLancamentos`: lista de `linhas` (descrição, valor, `payment_date`, `movement`); vazio → "nada pago nos últimos 7 dias".
+- `CardsSaldo`: uma linha por conta (`name`, `bank`, `balance`), o `saldoTotal`; bloco de projeção (`projecao.entradasPrevistas/saidasPrevistas/projetado`) só quando `projecao !== null`.
 
-> Tratamento visual: `/impeccable shape /cockpit`.
+> Tratamento visual: `/impeccable shape /cockpit` — direção confirmada (hero+ticker pro Saldo/KPIs, cards elevados com glow pro resto, dourado nos blocos Noetrix/premium). Esta task entrega estrutura, dados e estados; layout final na implementação visual.
 
 - [ ] **Step 4: Gate**
 
 Run: `pnpm --filter financas typecheck && pnpm --filter financas lint && pnpm --filter financas build`
 
-- [ ] **Step 5: Verificação manual (browser, schema aplicado + alguns lançamentos)**
+- [ ] **Step 5: Verificação manual (browser, schema + migration da Task 3b aplicados)**
 
-1. Sem lançamentos no mês: `/cockpit` mostra saldos das contas, projeção = saldo, painel 50/30/20 no estado "aguardando renda".
-2. Lançar renda `income`/`paid` de R$ 4.000 → metas viram 2.000 / 1.200 / 800.
-3. Lançar despesa `necessidade` de R$ 2.500 `pending` → balde Necessidades estoura (vermelho); projeção cai R$ 2.500.
-4. Projeção negativa → faixa vermelha no topo com o valor.
-5. Lançar `investment` de R$ 300 → card "pague-se primeiro" mostra 300 de 800.
+1. Sem lançamentos no mês: `/cockpit` mostra os 6 KPIs zerados, roscas em estado empty, painel 50/30/20 "aguardando renda", saldos das contas.
+2. Lançar renda `income`/`paid` de R$ 4.000 → KPI Entradas = 4.000; metas 50/30/20 viram 2.000/1.200/800.
+3. Lançar despesa `necessidade` `paid` de R$ 1.200 → KPI Saídas = 1.200; rosca de categoria mostra a fatia.
+4. Lançar despesa `pending` com vencimento em 3 dias → aparece em "Próximas contas"; com vencimento no passado → some de "próximas" e conta em "Vencidas" (KPI).
+5. Trocar o mês no seletor pra um mês passado com lançamentos pagos → KPIs mostram o fechamento daquele mês; sem faixa de alerta (projeção é `null`).
+6. Sem métrica Noetrix do mês → bloco mostra "sem dado"; lançar uma em Configurações → bloco preenche e semáforo reage aos 3 gatilhos.
+7. Editar `fatura_atual`/`limite_disponivel` da conta Nubank em Configurações → aparece no bloco Cartões do Cockpit.
+8. Marcar um lançamento como pago hoje → aparece em "Últimos lançamentos".
+9. Projeção negativa no mês vigente → faixa vermelha no topo com o valor.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add apps/financas
-git commit -m "feat(financas): cockpit com saldos, projecao, painel 50/30/20 e alerta"
+git commit -m "feat(financas): cockpit completo (kpis, roscas, noetrix, cartoes, proximas contas)"
 ```
 
 ---
@@ -3089,7 +3463,7 @@ Expected: tudo verde; `financas.check: OK`; rotas `/`, `/login`, `/cockpit`, `/l
 
 - [ ] **Step 6: Revisar o diff da branch inteira**
 
-Conferir contra o spec: 6 tabelas + RPC nos drafts; `financasDb()` service-role só no servidor; `requireUser()` em toda página e Server Action; nenhum `.env*` no working tree; `overdue` só materializado pela ação manual; mensagens de erro genéricas.
+Conferir contra o spec: 6 tabelas + RPC nos drafts, mais o draft da Task 3b (`fatura_atual`/`limite_disponivel` + `fin_noetrix_metrics`); `financasDb()` service-role só no servidor; `requireUser()` em toda página e Server Action; nenhum `.env*` no working tree; `overdue` só materializado pela ação manual; mensagens de erro genéricas.
 
 - [ ] **Step 7: Commit**
 
@@ -3111,26 +3485,28 @@ git commit -m "feat(financas): shell, navegacao em drawer e logout"
 | Schema `financas` com 6 tabelas + índices | 3 |
 | RPC `fn_registrar_pagamento_divida` | 3 |
 | Seed (3 contas, 6 grupos de dívida, categorias com bucket) | 3 |
+| `fin_accounts.fatura_atual`/`limite_disponivel` + `fin_noetrix_metrics` (revisão pós-shape) | 3b |
 | Helpers de data com clamp de fim de mês | 4 |
 | Parcelas com rateio exato | 5 |
 | Recorrentes idempotentes ("gerar mês") | 6 |
 | `overdue` derivado na leitura | 7 |
 | Painel 50/30/20 comparativo (agrega + split) | 8 |
+| KPIs do Cockpit (entradas/saídas/a vencer/vencidas/investimentos/saldo) + roscas de categoria/distribuição (revisão pós-shape) | 8b |
 | Saldo projetado sem clamp | 9 |
 | Progresso de dívida por linha / grupo / total | 10 |
 | Parse OFX (SGML + XML) | 11 |
 | Dedupe por hash / FITID | 12 |
-| Tela Configurações (contas, categorias, subcategorias, recorrentes) | 13 |
+| Tela Configurações (contas, categorias, subcategorias, recorrentes, métricas Noetrix) | 13 |
 | Tela Lançamentos (lista, filtros, criar, parcelas, gerar mês, status, recalcular atrasados, editar/excluir) | 14 |
 | Tela Importar OFX (analisar sem gravar, fila de revisão, confirmar) | 15 |
-| Tela Cockpit (saldos, 50/30/20, projeção, alerta, "pague-se primeiro") | 16 |
+| Tela Cockpit completa (seletor de mês, 6 KPIs, 2 roscas, 50/30/20, projeção, alerta, próximas contas, bloco Noetrix, bloco Cartões, últimos lançamentos) | 16 |
 | Tela Dívidas (mapa por grupo, progresso, registrar pagamento) | 17 |
 | Navegação mobile-first + logout | 18 |
 | Erros: `try/catch`, `console.error`, mensagem pt-BR genérica | 13–17 (padrão nas actions) |
-| Testes: `assert` puro via `node --experimental-strip-types` | 4–12 |
+| Testes: `assert` puro via `node --experimental-strip-types` | 4–12, 8b |
 | Verificação manual (Supabase live, 375px) | 13–18 (Steps de verificação) |
 
-Fora do escopo por decisão do spec (sem task, proposital): `fin_budgets`, `fin_month_closures`, Cartões, Calendário, CSV por banco, Open Finance.
+Fora do escopo por decisão do spec (sem task, proposital): `fin_budgets`, `fin_month_closures`, tela completa de Cartões (fatura linha a linha, parcelamento), tela de Metas CLT, Calendário, CSV por banco, Open Finance. (Cartões e Noetrix como **blocos manuais do Cockpit** entraram na Fase 1 na revisão pós-shape — Tasks 3b/8b/13/16 — não são mais fora do escopo.)
 
 **2. Placeholders:** `<UUID_EWERTON>` no SQL é valor de runtime, resolvido no checklist de aplicação (Task 3 Step 5), não um TODO de design. Nenhum "TBD"/"implementar depois" nos passos de código. Os componentes de UF (Tasks 13–18 Step 4) descrevem campos, estados e bindings concretos; o tratamento visual é explicitamente delegado ao `/impeccable shape` de cada rota (constraint global), não omitido por preguiça.
 
