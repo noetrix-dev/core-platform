@@ -66,6 +66,8 @@ export function FilaRevisao({
       setCandidatos(res.candidatos);
       setAtribs(novosAtribs);
       setFase("revisao");
+    } catch {
+      setErro("Falha de conexão. Tente novamente.");
     } finally {
       setEnviando(false);
     }
@@ -100,6 +102,8 @@ export function FilaRevisao({
       }
       setResultado(res);
       setFase("concluido");
+    } catch {
+      setErro("Falha de conexão. Tente novamente.");
     } finally {
       setConfirmando(false);
     }

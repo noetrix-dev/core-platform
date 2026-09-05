@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/supabase/auth";
 import { financasDb } from "@/lib/supabase/server";
 import { hojeISO } from "@/lib/datas";
+import { parseBRL } from "@/lib/dinheiro";
 import type { Grupo } from "@/lib/financas/types";
 
 export type Resultado = { ok: true } | { ok: false; erro: string };
@@ -11,10 +12,7 @@ export type Resultado = { ok: true } | { ok: false; erro: string };
 const GRUPOS: Grupo[] = ["fgts", "consignado", "serasa", "pessoal", "familia", "cartao"];
 
 const str = (fd: FormData, k: string) => (fd.get(k) ?? "").toString().trim();
-const num = (fd: FormData, k: string) => {
-  const n = Number(str(fd, k).replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : NaN;
-};
+const num = (fd: FormData, k: string) => parseBRL(str(fd, k));
 
 export async function registrarPagamentoDivida(fd: FormData): Promise<Resultado> {
   await requireUser();

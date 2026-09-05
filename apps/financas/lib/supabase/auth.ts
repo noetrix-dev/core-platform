@@ -53,7 +53,7 @@ export async function requireUser(): Promise<User> {
 }
 
 /** getUser() sem redirect — a página /login usa pra mandar quem já está
- *  logado direto pro /agenda. */
+ *  logado direto pro /cockpit. */
 export async function getUserOpcional(): Promise<User | null> {
   const supabase = await authServer();
   const {

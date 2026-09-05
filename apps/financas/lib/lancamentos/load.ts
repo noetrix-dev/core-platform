@@ -1,7 +1,7 @@
 import "server-only";
 import { financasDb } from "@/lib/supabase/server";
 import { derivarStatus } from "@/lib/lancamentos/overdue";
-import { hojeISO } from "@/lib/datas";
+import { hojeISO, fimDoMesISO } from "@/lib/datas";
 import type {
   AccountRow,
   CategoryRow,
@@ -32,7 +32,7 @@ export async function carregarLancamentos(
 ): Promise<LancamentosData> {
   const db = financasDb();
   const inicio = `${filtro.mes}-01`;
-  const fim = `${filtro.mes}-31`;
+  const fim = fimDoMesISO(`${filtro.mes}-01`);
 
   let q = db
     .from("fin_transactions")

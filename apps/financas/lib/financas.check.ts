@@ -11,6 +11,7 @@ import { progressoDivida, progressoAgregado } from "./dividas/progresso.ts";
 import type { CategoryRow, TransactionRow, DebtRow } from "./financas/types.ts";
 import { parseOfx } from "./import/ofx.ts";
 import { hashTransacao, classificar } from "./import/dedupe.ts";
+import { parseBRL } from "./dinheiro.ts";
 
 // --- datas ---
 assert.equal(somaMesesISO("2026-01-15", 1), "2026-02-15");
@@ -262,6 +263,15 @@ assert.equal(progressoDivida({ total_amount: 1000, remaining_amount: 1200 }), 0,
   assert.equal(r.geral.pago, 5000);
 }
 
+// --- parseBRL ---
+assert.equal(parseBRL("55"), 55);
+assert.equal(parseBRL("55,50"), 55.5);
+assert.equal(parseBRL("1.234,56"), 1234.56, "milhar com vírgula decimal");
+assert.equal(parseBRL("4597.00"), 4597, "ponto decimal sem milhar (bug do num() antigo)");
+assert.equal(parseBRL("-89.90"), -89.9, "negativo com ponto decimal");
+assert.ok(Number.isNaN(parseBRL("")), "vazio -> NaN");
+assert.ok(Number.isNaN(parseBRL("abc")), "não numérico -> NaN");
+
 // --- parseOfx ---
 {
   const ofx = `
@@ -305,6 +315,13 @@ OFXHEADER:100
 }
 assert.deepEqual(parseOfx("sem transacoes aqui"), []);
 assert.deepEqual(parseOfx(""), []);
+{
+  // Valor com milhar+vírgula (formato BR) não pode virar NaN e sumir da lista.
+  const xml = `<OFX><STMTTRN><DTPOSTED>20260101</DTPOSTED><TRNAMT>-1.234,56</TRNAMT><MEMO>Y</MEMO></STMTTRN></OFX>`;
+  const r = parseOfx(xml);
+  assert.equal(r.length, 1, "não descarta transação com milhar BR");
+  assert.equal(r[0].valor, -1234.56);
+}
 
 // --- hashTransacao / classificar ---
 {

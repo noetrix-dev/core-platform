@@ -3,15 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/supabase/auth";
 import { financasDb } from "@/lib/supabase/server";
+import { parseBRL } from "@/lib/dinheiro";
 
 export type Resultado = { ok: true } | { ok: false; erro: string };
 
 const str = (fd: FormData, k: string) => (fd.get(k) ?? "").toString().trim();
-const num = (fd: FormData, k: string) => {
-  const v = str(fd, k).replace(/\./g, "").replace(",", ".");
-  const n = Number(v);
-  return Number.isFinite(n) ? n : NaN;
-};
+const num = (fd: FormData, k: string) => parseBRL(str(fd, k));
 
 export async function criarConta(fd: FormData): Promise<Resultado> {
   await requireUser();

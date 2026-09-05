@@ -1,5 +1,5 @@
 import type { NoetrixMetricRow } from "@/lib/financas/types";
-import { salvarMetricaNoetrix } from "@/app/configuracoes/actions";
+import { NovaMetricaForm } from "@/components/configuracoes/NovaMetricaForm";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -15,56 +15,7 @@ export function SecaoNoetrix({ metricas }: { metricas: NoetrixMetricRow[] }) {
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold">Métricas Noetrix</h2>
 
-      <form
-        action={async (fd) => {
-          "use server";
-          await salvarMetricaNoetrix(fd);
-        }}
-        className="flex flex-col gap-2 border p-4"
-      >
-        <input
-          type="month"
-          name="mes"
-          defaultValue={mesAtual}
-          aria-label="Mês da métrica"
-          required
-          className="border px-4 py-3"
-        />
-        <input
-          name="mrr"
-          inputMode="decimal"
-          placeholder="MRR"
-          aria-label="MRR do mês"
-          required
-          className="border px-4 py-3"
-        />
-        <input
-          type="number"
-          name="clientes_pagantes"
-          min={0}
-          placeholder="Clientes pagantes"
-          aria-label="Clientes pagantes do mês"
-          required
-          className="border px-4 py-3"
-        />
-        <input
-          name="churn_pct"
-          inputMode="decimal"
-          placeholder="Churn % (opcional)"
-          aria-label="Churn percentual do mês"
-          className="border px-4 py-3"
-        />
-        <input
-          name="reserva_meses"
-          inputMode="decimal"
-          placeholder="Reserva em meses (opcional)"
-          aria-label="Reserva em meses do mês"
-          className="border px-4 py-3"
-        />
-        <button type="submit" className="border px-4 py-3">
-          Salvar métrica
-        </button>
-      </form>
+      <NovaMetricaForm mesAtual={mesAtual} />
 
       {metricas.length === 0 && <p>Nenhuma métrica registrada ainda.</p>}
 

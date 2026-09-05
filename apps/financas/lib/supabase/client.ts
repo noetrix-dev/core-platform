@@ -1,6 +1,6 @@
 // Client Supabase do browser (anon key). A sessão vive em cookie, gerida
 // pelo @supabase/ssr. Só componentes de cliente importam isto — hoje, só o
-// botão de logout. Acesso a dados de barbearia_001 continua em tenantDb().
+// botão de logout. Acesso a dados do schema financas continua em financasDb().
 
 import { createBrowserClient } from "@supabase/ssr";
 

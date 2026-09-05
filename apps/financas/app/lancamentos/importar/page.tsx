@@ -4,7 +4,7 @@ import { ImportTabs } from "@/components/lancamentos/ImportTabs";
 import type { AccountRow, CategoryRow, SubcategoryRow } from "@/lib/financas/types";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Importar OFX — Finanças" };
+export const metadata = { title: "Importar extrato — Finanças" };
 
 export default async function ImportarPage() {
   await requireUser();
@@ -14,6 +14,9 @@ export default async function ImportarPage() {
     db.from("fin_categories").select("*").eq("ativo", true).order("name"),
     db.from("fin_subcategories").select("*").eq("ativo", true).order("name"),
   ]);
+  for (const r of [contas, categorias, subcategorias]) {
+    if (r.error) throw new Error(r.error.message);
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 flex flex-col gap-6">

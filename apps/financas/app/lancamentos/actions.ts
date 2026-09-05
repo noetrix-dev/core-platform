@@ -6,7 +6,8 @@ import { requireUser } from "@/lib/supabase/auth";
 import { financasDb } from "@/lib/supabase/server";
 import { expandirParcelas } from "@/lib/lancamentos/parcelas";
 import { gerarTransacoesDoMes } from "@/lib/lancamentos/recorrentes";
-import { hojeISO } from "@/lib/datas";
+import { hojeISO, fimDoMesISO } from "@/lib/datas";
+import { parseBRL } from "@/lib/dinheiro";
 import type { Movement, TemplateRow, TxType } from "@/lib/financas/types";
 
 export type Resultado =
@@ -14,10 +15,7 @@ export type Resultado =
   | { ok: false; erro: string };
 
 const str = (fd: FormData, k: string) => (fd.get(k) ?? "").toString().trim();
-const num = (fd: FormData, k: string) => {
-  const n = Number(str(fd, k).replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : NaN;
-};
+const num = (fd: FormData, k: string) => parseBRL(str(fd, k));
 
 export async function criarLancamento(fd: FormData): Promise<Resultado> {
   await requireUser();
@@ -92,7 +90,7 @@ export async function gerarMes(fd: FormData): Promise<Resultado> {
         .from("fin_transactions")
         .select("recurring_template_id,due_date")
         .gte("due_date", `${mes}-01`)
-        .lte("due_date", `${mes}-31`)
+        .lte("due_date", fimDoMesISO(`${mes}-01`))
         .not("recurring_template_id", "is", null),
     ]);
     if (tpls.error) throw tpls.error;

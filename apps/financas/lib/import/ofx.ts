@@ -1,3 +1,5 @@
+import { parseBRL } from "../dinheiro.ts";
+
 export type OfxTransacao = {
   dataIso: string;
   valor: number;
@@ -26,7 +28,7 @@ export function parseOfx(conteudo: string): OfxTransacao[] {
     if (digitos.length < 8) continue;
     const dataIso = `${digitos.slice(0, 4)}-${digitos.slice(4, 6)}-${digitos.slice(6, 8)}`;
 
-    const valor = Number(amtRaw.replace(",", "."));
+    const valor = parseBRL(amtRaw);
     if (Number.isNaN(valor)) continue;
 
     const memo = tag(b, "MEMO") ?? tag(b, "NAME") ?? "";
