@@ -11,6 +11,7 @@ import { parsePrecoBRL } from "../dinheiro.ts";
 import { normalizarTelefone } from "../clientes/telefone.ts";
 import { limparEmail } from "../clientes/email.ts";
 import { somaItens, type ItemPagamento } from "./pagamento.ts";
+import { gerarCodigo } from "../agendar/codigo.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
 
@@ -281,6 +282,13 @@ assert.equal(minToHm(1020), "17:00");
   assert.equal(limparEmail("semarroba.com"), "invalido", "sem @");
   assert.equal(limparEmail("a@b"), "invalido", "sem ponto no domínio");
   assert.equal(limparEmail("a b@c.com"), "invalido", "espaço no meio");
+}
+
+// --- gerarCodigo -----------------------------------------------------
+{
+  assert.match(gerarCodigo(), /^\d{6}$/, "default (Math.random) gera 6 dígitos");
+  assert.equal(gerarCodigo(() => 0), "000000", "piso zero-padded");
+  assert.equal(gerarCodigo(() => 0.999999), "999999", "teto não vira 7 dígitos");
 }
 
 console.log("agenda.check: OK");
