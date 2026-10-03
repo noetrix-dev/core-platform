@@ -4,6 +4,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const PUBLIC_PATHS = ["/login", "/agendar"];
+
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -36,9 +38,12 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const publico = PUBLIC_PATHS.some(
+    (p) => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(`${p}/`),
+  );
   const emLogin = request.nextUrl.pathname === "/login";
 
-  if (!user && !emLogin) {
+  if (!user && !publico) {
     const destino = request.nextUrl.clone();
     destino.pathname = "/login";
     destino.search = "";
