@@ -24,11 +24,15 @@ export async function sendEmail(p: {
   subject: string;
   html: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await client().emails.send({
-    from: "StudiOLD <onboarding@resend.dev>",
-    to: [p.to],
-    subject: p.subject,
-    html: p.html,
-  });
-  return error ? { ok: false, error: error.message } : { ok: true };
+  try {
+    const { error } = await client().emails.send({
+      from: "StudiOLD <onboarding@resend.dev>",
+      to: [p.to],
+      subject: p.subject,
+      html: p.html,
+    });
+    return error ? { ok: false, error: error.message } : { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }

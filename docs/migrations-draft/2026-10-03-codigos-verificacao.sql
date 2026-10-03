@@ -17,4 +17,7 @@ create table barbearia_001.codigos_verificacao (
 create index idx_codigos_verificacao_telefone
   on barbearia_001.codigos_verificacao (telefone, usado, expira_em);
 
+GRANT ALL ON ALL TABLES IN SCHEMA barbearia_001 TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA barbearia_001 TO service_role;
+
 NOTIFY pgrst, 'reload schema';

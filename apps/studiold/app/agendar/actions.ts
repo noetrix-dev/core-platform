@@ -20,6 +20,13 @@ const RATE_LIMIT_MAX_PEDIDOS = 3;
 const CODIGO_EXPIRA_MIN = 10;
 const MAX_TENTATIVAS = 5;
 
+// Erro de DB/API nunca vaza texto cru pro cliente anônimo de /agendar (sem
+// sessão, sem auth) — só loga server-side e devolve uma mensagem fixa pt-BR.
+function erroInterno(tag: string, mensagem: string): { ok: false; error: string } {
+  console.error(`[agendar/${tag}]`, mensagem);
+  return { ok: false, error: "Não foi possível completar essa etapa. Tente de novo em alguns segundos." };
+}
+
 // clientes.telefone e codigos_verificacao.telefone guardam SÓ dígitos, sem
 // "+55" (confirmado ao vivo no Supabase, barbearia_001) — diferente do que
 // normalizarTelefone() devolve. Usa normalizarTelefone() pra validar o
@@ -50,7 +57,7 @@ export async function iniciarVerificacao(
     .eq("telefone", telefone)
     .gte("criado_em", desde);
   if (pedidos.error) {
-    return { ok: false, error: `iniciarVerificacao/rateLimit: ${pedidos.error.message}` };
+    return erroInterno("iniciarVerificacao/rateLimit", pedidos.error.message);
   }
   if ((pedidos.count ?? 0) >= RATE_LIMIT_MAX_PEDIDOS) {
     return {
@@ -66,7 +73,7 @@ export async function iniciarVerificacao(
     .eq("ativo", true)
     .maybeSingle();
   if (cliente.error) {
-    return { ok: false, error: `iniciarVerificacao/cliente: ${cliente.error.message}` };
+    return erroInterno("iniciarVerificacao/cliente", cliente.error.message);
   }
 
   let email = (cliente.data as { email: string | null } | null)?.email ?? null;
@@ -79,21 +86,29 @@ export async function iniciarVerificacao(
 
   const codigo = gerarCodigo();
   const expiraEm = new Date(Date.now() + CODIGO_EXPIRA_MIN * 60_000).toISOString();
-  const ins = await db.from("codigos_verificacao").insert({
-    telefone,
-    codigo,
-    canal: "email",
-    email,
-    expira_em: expiraEm,
-  });
-  if (ins.error) return { ok: false, error: `iniciarVerificacao/insert: ${ins.error.message}` };
+  const ins = await db
+    .from("codigos_verificacao")
+    .insert({
+      telefone,
+      codigo,
+      canal: "email",
+      email,
+      expira_em: expiraEm,
+    })
+    .select("id")
+    .single();
+  if (ins.error) return erroInterno("iniciarVerificacao/insert", ins.error.message);
 
   const envio = await sendEmail({
     to: email,
     subject: "Seu código de verificação StudiOLD",
     html: `<p>Seu código de verificação é <strong>${codigo}</strong>. Ele expira em ${CODIGO_EXPIRA_MIN} minutos.</p>`,
   });
-  if (!envio.ok) return { ok: false, error: `Falha ao enviar o e-mail: ${envio.error}` };
+  if (!envio.ok) {
+    // Envio falhou: não deixa a linha contar pro rate-limit de 3/10min.
+    await db.from("codigos_verificacao").delete().eq("id", (ins.data as { id: string }).id);
+    return erroInterno("iniciarVerificacao/sendEmail", envio.error);
+  }
 
   return { ok: true, precisaEmail: false, telefone };
 }
@@ -115,16 +130,16 @@ export async function verificarCodigo(
   const db = tenantDb();
   const linha = await db
     .from("codigos_verificacao")
-    .select("id, codigo, tentativas, expira_em")
+    .select("id, codigo, tentativas, expira_em, email")
     .eq("telefone", telefone)
     .eq("usado", false)
     .order("criado_em", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (linha.error) return { ok: false, error: `verificarCodigo: ${linha.error.message}` };
+  if (linha.error) return erroInterno("verificarCodigo", linha.error.message);
 
   const row = linha.data as
-    | { id: string; codigo: string; tentativas: number; expira_em: string }
+    | { id: string; codigo: string; tentativas: number; expira_em: string; email: string | null }
     | null;
   if (!row) return { ok: false, error: "Código expirado ou não encontrado. Peça um novo código." };
 
@@ -148,16 +163,23 @@ export async function verificarCodigo(
 
   const cliente = await db
     .from("clientes")
-    .select("id, nome")
+    .select("id, nome, email")
     .eq("telefone", telefone)
     .eq("ativo", true)
     .maybeSingle();
-  if (cliente.error) return { ok: false, error: `verificarCodigo/cliente: ${cliente.error.message}` };
+  if (cliente.error) return erroInterno("verificarCodigo/cliente", cliente.error.message);
 
-  const c = cliente.data as { id: string; nome: string } | null;
-  return c
-    ? { ok: true, novo: false, clienteId: c.id, nome: c.nome }
-    : { ok: true, novo: true };
+  const c = cliente.data as { id: string; nome: string; email: string | null } | null;
+  if (c) {
+    // Cliente existente sem e-mail cadastrado forneceu um agora pra receber
+    // o código — persiste, senão fica pedindo de novo a cada verificação.
+    // Nunca sobrescreve um e-mail já cadastrado.
+    if (!c.email && row.email) {
+      await db.from("clientes").update({ email: row.email }).eq("id", c.id);
+    }
+    return { ok: true, novo: false, clienteId: c.id, nome: c.nome };
+  }
+  return { ok: true, novo: true };
 }
 
 export type ConfirmarCadastroResultado =
@@ -181,7 +203,7 @@ export async function confirmarCadastro(
     p_nome: nome,
     p_email: email,
   });
-  if (rpc.error) return { ok: false, error: `confirmarCadastro: ${rpc.error.message}` };
+  if (rpc.error) return erroInterno("confirmarCadastro", rpc.error.message);
 
   const r = rpc.data as {
     sucesso: boolean;
@@ -191,7 +213,10 @@ export async function confirmarCadastro(
   };
 
   if (r.sucesso && r.codigo === "CLIENTE_CRIADO") {
-    return { ok: true, clienteId: r.cliente_id!, nome: r.nome ?? nome };
+    if (!r.cliente_id) {
+      return erroInterno("confirmarCadastro/semClienteId", "RPC retornou CLIENTE_CRIADO sem cliente_id");
+    }
+    return { ok: true, clienteId: r.cliente_id, nome: r.nome ?? nome };
   }
   if (!r.sucesso && r.codigo === "CLIENTE_INATIVO") {
     return {

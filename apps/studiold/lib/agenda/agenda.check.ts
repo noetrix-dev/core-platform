@@ -1,4 +1,5 @@
 // Check de fumaça da lógica pura da agenda. Sem framework.
+// Também cobre os helpers de verificação do fluxo /agendar (gerarCodigo).
 // Rodar:  node --experimental-strip-types lib/agenda/agenda.check.ts
 // (ou `pnpm --filter studiold check`)
 

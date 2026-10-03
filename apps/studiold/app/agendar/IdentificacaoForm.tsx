@@ -117,7 +117,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
               inputMode="tel"
               autoComplete="tel"
               required
-              autoFocus
+              autoFocus={!precisaEmail}
               value={telefoneInput}
               onChange={(e) => setTelefoneInput(e.target.value)}
             />
