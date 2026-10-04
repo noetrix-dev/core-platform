@@ -14,7 +14,9 @@ import { normalizarTelefone } from "@/lib/clientes/telefone";
 import { limparEmail } from "@/lib/clientes/email";
 import { sendEmail } from "@/lib/email/resend";
 import { gerarCodigo } from "@/lib/agendar/codigo";
-import { gravarSessao, apagarSessao } from "@/lib/agendar/sessao";
+import { gravarSessao, apagarSessao, lerSessao } from "@/lib/agendar/sessao";
+import { mascararEmail, partesSaoPaulo, rotuloDia, escaparHtml } from "@/lib/agendar/formato";
+import { fmtPreco } from "@/lib/agenda/time";
 
 const RATE_LIMIT_JANELA_MIN = 10;
 const RATE_LIMIT_MAX_PEDIDOS = 3;
@@ -236,4 +238,228 @@ export async function confirmarCadastro(
 // "É você? Não" — descarta a prova de verificação antes de voltar ao telefone.
 export async function encerrarSessao(): Promise<void> {
   await apagarSessao();
+}
+
+// ===========================================================================
+// Spec B — Passos 2-5. Identidade vem SÓ de lerSessao() (cookie httpOnly
+// assinado gravado acima). Telefone/clienteId vindos da UI nunca são aceitos.
+// Ver docs/superpowers/specs/2026-10-04-agendamento-agendar-design.md
+// ===========================================================================
+
+export type ServicoCatalogo = { id: string; nome: string; preco: number; duracaoMin: number };
+export type OpcaoCatalogo = { id: string; nome: string };
+export type Catalogo = {
+  servicos: ServicoCatalogo[];
+  cortesias: OpcaoCatalogo[];
+  estilos: OpcaoCatalogo[];
+  cortesiaFavoritaId: string | null;
+  estiloFavoritoId: string | null;
+};
+export type Horario = { data: string; hora: string; inicio: string };
+export type FalhaAgendar = {
+  ok: false;
+  error: string;
+  sessaoExpirada?: true;
+  motivo?: "horario" | "cortesia" | "estilo";
+};
+export type ResumoAgendamento = {
+  servicos: string[];
+  data: string;
+  hora: string;
+  duracaoMin: number;
+  valorTotal: number;
+  emailMascarado: string | null;
+};
+
+const SEM_SESSAO: FalhaAgendar = {
+  ok: false,
+  sessaoExpirada: true,
+  error: "Sua sessão expirou, confirme o telefone de novo.",
+};
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function servicoIdsValidos(ids: unknown): ids is string[] {
+  return (
+    Array.isArray(ids) &&
+    ids.length > 0 &&
+    ids.length <= 10 &&
+    ids.every((x) => typeof x === "string" && UUID.test(x)) &&
+    new Set(ids).size === ids.length
+  );
+}
+
+function idOpcionalValido(id: unknown): id is string | null {
+  return id === null || (typeof id === "string" && UUID.test(id));
+}
+
+export async function carregarCatalogo(): Promise<{ ok: true; catalogo: Catalogo } | FalhaAgendar> {
+  const sessao = await lerSessao();
+  if (!sessao) return SEM_SESSAO;
+  const db = tenantDb();
+
+  const [cat, cortesias, estilos, cliente] = await Promise.all([
+    db.rpc("fn_catalogo_servicos_v2"),
+    db.from("cortesias").select("id, nome").eq("ativo", true).gt("quantidade_estoque", 0).order("nome"),
+    db.from("estilos_musica").select("id, nome").eq("ativo", true).order("nome"),
+    db
+      .from("clientes")
+      .select("cortesia_favorita_id, estilo_musica_id")
+      .eq("id", sessao.clienteId)
+      .eq("ativo", true)
+      .maybeSingle(),
+  ]);
+  if (cat.error) return erroInterno("carregarCatalogo/rpc", cat.error.message);
+  if (cortesias.error) return erroInterno("carregarCatalogo/cortesias", cortesias.error.message);
+  if (estilos.error) return erroInterno("carregarCatalogo/estilos", estilos.error.message);
+  if (cliente.error) return erroInterno("carregarCatalogo/cliente", cliente.error.message);
+  if (!cliente.data) return SEM_SESSAO; // cliente desativado depois da verificação
+
+  const r = cat.data as {
+    servicos: { id: string; nome: string; preco: number | string; duracao_minutos: number }[];
+  };
+  const fav = cliente.data as { cortesia_favorita_id: string | null; estilo_musica_id: string | null };
+  const listaCortesias = (cortesias.data ?? []) as OpcaoCatalogo[];
+  const listaEstilos = (estilos.data ?? []) as OpcaoCatalogo[];
+
+  return {
+    ok: true,
+    catalogo: {
+      servicos: r.servicos.map((s) => ({
+        id: s.id,
+        nome: s.nome,
+        preco: Number(s.preco),
+        duracaoMin: s.duracao_minutos,
+      })),
+      cortesias: listaCortesias,
+      estilos: listaEstilos,
+      // favorito só vale se ainda está na lista (ativo / com estoque)
+      cortesiaFavoritaId: listaCortesias.some((c) => c.id === fav.cortesia_favorita_id)
+        ? fav.cortesia_favorita_id
+        : null,
+      estiloFavoritoId: listaEstilos.some((e) => e.id === fav.estilo_musica_id) ? fav.estilo_musica_id : null,
+    },
+  };
+}
+
+export async function buscarHorarios(
+  servicoIds: string[],
+  dataInicio?: string,
+): Promise<{ ok: true; horarios: Horario[] } | FalhaAgendar> {
+  const sessao = await lerSessao();
+  if (!sessao) return SEM_SESSAO;
+  if (!servicoIdsValidos(servicoIds)) return { ok: false, error: "Escolha ao menos um serviço." };
+  if (dataInicio !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(dataInicio)) {
+    return { ok: false, error: "Data inválida." };
+  }
+
+  const rpc = await tenantDb().rpc("fn_buscar_disponibilidade", {
+    p_servicos: servicoIds,
+    p_data_inicio: dataInicio ?? null,
+    p_qtd_dias: 7,
+  });
+  if (rpc.error) return erroInterno("buscarHorarios", rpc.error.message);
+
+  const linhas = (rpc.data ?? []) as { data: string; data_hora: string; hora: string }[];
+  return {
+    ok: true,
+    horarios: linhas.map((l) => ({ data: l.data, hora: l.hora.slice(0, 5), inicio: l.data_hora })),
+  };
+}
+
+export async function confirmarAgendamento(p: {
+  servicoIds: string[];
+  inicio: string;
+  cortesiaId: string | null;
+  estiloId: string | null;
+}): Promise<{ ok: true; resumo: ResumoAgendamento } | FalhaAgendar> {
+  const sessao = await lerSessao();
+  if (!sessao) return SEM_SESSAO;
+  if (!servicoIdsValidos(p.servicoIds)) return { ok: false, error: "Escolha ao menos um serviço." };
+  if (typeof p.inicio !== "string" || Number.isNaN(Date.parse(p.inicio))) {
+    return { ok: false, motivo: "horario", error: "Escolha um horário." };
+  }
+  if (!idOpcionalValido(p.cortesiaId) || !idOpcionalValido(p.estiloId)) {
+    return { ok: false, error: "Opção inválida." };
+  }
+
+  const db = tenantDb();
+
+  // Mesmas checagens de fn_confirmar_booking_whatsapp_v2, antes da RPC, pra
+  // dar mensagem específica em vez da exceção genérica.
+  if (p.cortesiaId) {
+    const c = await db
+      .from("cortesias")
+      .select("id")
+      .eq("id", p.cortesiaId)
+      .eq("ativo", true)
+      .gt("quantidade_estoque", 0)
+      .maybeSingle();
+    if (c.error) return erroInterno("confirmarAgendamento/cortesia", c.error.message);
+    if (!c.data) {
+      return { ok: false, motivo: "cortesia", error: "Essa cortesia acabou de esgotar. Escolha outra ou nenhuma." };
+    }
+  }
+  if (p.estiloId) {
+    const e = await db.from("estilos_musica").select("id").eq("id", p.estiloId).eq("ativo", true).maybeSingle();
+    if (e.error) return erroInterno("confirmarAgendamento/estilo", e.error.message);
+    if (!e.data) {
+      return { ok: false, motivo: "estilo", error: "Esse estilo de música não está mais disponível." };
+    }
+  }
+
+  const rpc = await db.rpc("fn_criar_agendamento_v2", {
+    p_cliente_id: sessao.clienteId,
+    p_servicos: p.servicoIds,
+    p_inicio: p.inicio,
+    p_cortesia_id: p.cortesiaId,
+    p_estilo_musica_id: p.estiloId,
+    p_origem: "site",
+  });
+  if (rpc.error) {
+    const msg = rpc.error.message;
+    console.error("[agendar/confirmarAgendamento]", msg);
+    if (msg.includes("Horário indisponível")) {
+      return { ok: false, motivo: "horario", error: "Esse horário acabou de ser ocupado, escolha outro." };
+    }
+    if (msg.includes("Cortesia")) {
+      return { ok: false, motivo: "cortesia", error: "Essa cortesia acabou de esgotar. Escolha outra ou nenhuma." };
+    }
+    if (msg.includes("Estilo musical")) {
+      return { ok: false, motivo: "estilo", error: "Esse estilo de música não está mais disponível." };
+    }
+    if (msg.includes("Cliente inexistente")) return SEM_SESSAO;
+    return { ok: false, error: "Não foi possível completar essa etapa. Tente de novo em alguns segundos." };
+  }
+
+  const r = rpc.data as { inicio: string; duracao_total: number; valor_total: number | string };
+  // Agendamento criado: a partir daqui nada desfaz ele. Sessão é de uso único.
+  await apagarSessao();
+
+  const [servicos, cliente] = await Promise.all([
+    db.from("servicos").select("id, nome").in("id", p.servicoIds),
+    db.from("clientes").select("nome, email").eq("id", sessao.clienteId).maybeSingle(),
+  ]);
+  const nomesPorId = new Map(((servicos.data ?? []) as { id: string; nome: string }[]).map((s) => [s.id, s.nome]));
+  const nomes = p.servicoIds.map((id) => nomesPorId.get(id) ?? "Serviço");
+  const { data, hora } = partesSaoPaulo(r.inicio);
+  const valorTotal = Number(r.valor_total);
+  const resumoBase = { servicos: nomes, data, hora, duracaoMin: r.duracao_total, valorTotal };
+
+  const c = cliente.data as { nome: string; email: string | null } | null;
+  let emailMascarado: string | null = null;
+  if (c?.email) {
+    const envio = await sendEmail({
+      to: c.email,
+      subject: `Agendado: ${rotuloDia(data)} às ${hora} — StudiOLD`,
+      html:
+        `<p>Olá, ${escaparHtml(c.nome)}! Seu horário na StudiOLD está marcado.</p>` +
+        `<p><strong>${escaparHtml(rotuloDia(data))} às ${hora}</strong></p>` +
+        `<ul>${nomes.map((n) => `<li>${escaparHtml(n)}</li>`).join("")}</ul>` +
+        `<p>Total: ${escaparHtml(fmtPreco(valorTotal))} · ${r.duracao_total} min</p>`,
+    });
+    if (envio.ok) emailMascarado = mascararEmail(c.email);
+    else console.error("[agendar/confirmarAgendamento/email]", envio.error);
+  }
+
+  return { ok: true, resumo: { ...resumoBase, emailMascarado } };
 }
