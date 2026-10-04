@@ -191,6 +191,15 @@ export function AgendarWizard() {
                 {aviso}
               </p>
             )}
+            {aviso && !catalogo && !pendente && (
+              <button
+                type="button"
+                className={`${styles.btn} ${css.cta} mb-4 w-full`}
+                onClick={() => abrirServicos(null)}
+              >
+                Tentar de novo
+              </button>
+            )}
             <EtapaServicos
               nome={nome}
               catalogo={catalogo}
