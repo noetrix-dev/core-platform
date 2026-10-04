@@ -93,7 +93,7 @@ export async function listarNotificacoes(): Promise<{ ok: true; itens: ItemNotif
   const r = await tenantDb()
     .from("notificacoes")
     .select(SELECT)
-    .or(`lida.eq.false,criado_em.gte.${desde}`)
+    .or(`lida.eq.false,criado_em.gte."${desde}"`)
     .order("criado_em", { ascending: false })
     .limit(LIMITE);
   if (r.error) {
@@ -110,6 +110,6 @@ export async function marcarLidas(ids: string[]): Promise<void> {
     ? ids.filter((id) => typeof id === "string" && UUID.test(id)).slice(0, MAX_IDS)
     : [];
   if (validos.length === 0) return;
-  const r = await tenantDb().from("notificacoes").update({ lida: true }).in("id", validos);
+  const r = await tenantDb().from("notificacoes").update({ lida: true }).in("id", validos).eq("lida", false);
   if (r.error) console.error("[notificacoes/marcar]", r.error.message);
 }

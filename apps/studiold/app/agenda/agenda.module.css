@@ -1458,6 +1458,7 @@
     left: 1rem;
     right: 1rem;
     width: auto;
+    /* 4.25rem ≈ altura da linha do Topbar (py-3 + botão de 44px); ajustar junto se a faixa mudar */
     top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
   }
 }

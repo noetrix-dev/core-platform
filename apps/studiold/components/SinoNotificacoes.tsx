@@ -36,6 +36,10 @@ export function SinoNotificacoes() {
   const sinoRef = useRef<HTMLButtonElement>(null);
   const painelRef = useRef<HTMLDivElement>(null);
   const pedido = useRef(0);
+  const abertoRef = useRef(false);
+  useEffect(() => {
+    abertoRef.current = aberto;
+  }, [aberto]);
 
   // Polling do contador: no mount, a cada 30 s com a aba visível e ao voltar
   // pra aba. Falha mantém o último número (erro já logado no servidor).
@@ -94,7 +98,7 @@ export function SinoNotificacoes() {
       setItens(r.itens);
       setEstado("ok");
       const ids = r.itens.filter((i) => !i.lida).map((i) => i.id);
-      if (ids.length > 0) {
+      if (ids.length > 0 && abertoRef.current) {
         await marcarLidas(ids).catch(() => undefined);
         if (meu !== pedido.current) return;
         const n = await contarNaoLidas().catch(() => null);

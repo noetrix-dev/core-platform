@@ -61,7 +61,7 @@ export function Topbar({
           <img
             src="/studiold-logo.svg"
             alt="StudiOLD"
-            className="h-8 w-auto"
+            className="h-6 w-auto sm:h-8"
             style={{ filter: "brightness(0) invert(1)" }}
           />
           {titulo && (
