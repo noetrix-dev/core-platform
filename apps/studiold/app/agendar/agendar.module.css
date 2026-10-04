@@ -25,7 +25,6 @@
   border-radius: var(--r);
 }
 .faixaVoltar:hover { background: rgba(222, 217, 207, 0.08); }
-.faixaVoltar:focus-visible { outline: 2px solid var(--oxblood-on-dark); outline-offset: 2px; }
 .logo {
   justify-self: center;
   height: 28px;
@@ -108,6 +107,18 @@
   font-variant-numeric: tabular-nums;
   font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
   line-height: 1.2;
+}
+
+/* CTA do wizard: .btn tem padding próprio fora de @layer, que vence o py-3 do Tailwind — o alvo de 44px vem daqui. */
+.cta {
+  min-height: 2.75rem;
+  padding-inline: 1.1rem;
+  justify-content: center;
+}
+/* foco em superfície escura: oxblood some no preto-fosco */
+.rodape button:focus-visible,
+.faixa .faixaVoltar:focus-visible {
+  outline-color: var(--oxblood-on-dark);
 }
 
 .dias {

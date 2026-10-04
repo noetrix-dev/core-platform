@@ -81,7 +81,7 @@ export function EtapaServicos({ nome, catalogo, selecionados, onAlternar, onCont
           </p>
           <button
             type="button"
-            className={`${styles.btn} ${styles["btn--primary"]} py-3`}
+            className={`${styles.btn} ${styles["btn--primary"]} ${css.cta}`}
             disabled={escolhidos.length === 0 || pendente}
             onClick={onContinuar}
           >
