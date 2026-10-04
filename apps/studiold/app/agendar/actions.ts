@@ -530,9 +530,9 @@ export async function confirmarAgendamento(p: {
   if (c?.email) {
     const envio = await sendEmail({
       to: c.email,
-      subject: `${remarcar ? "Remarcado" : "Agendado"}: ${rotuloDia(data)} às ${hora} — StudiOLD`,
+      subject: `${remarcar && !antigoNaoCancelado ? "Remarcado" : "Agendado"}: ${rotuloDia(data)} às ${hora} — StudiOLD`,
       html:
-        `<p>Olá, ${escaparHtml(c.nome)}! Seu horário na StudiOLD ${remarcar ? "foi remarcado" : "está marcado"}.</p>` +
+        `<p>Olá, ${escaparHtml(c.nome)}! Seu horário na StudiOLD ${remarcar && !antigoNaoCancelado ? "foi remarcado" : "está marcado"}.</p>` +
         `<p><strong>${escaparHtml(rotuloDia(data))} às ${hora}</strong></p>` +
         `<ul>${nomes.map((n) => `<li>${escaparHtml(n)}</li>`).join("")}</ul>` +
         `<p>Total: ${escaparHtml(fmtPreco(valorTotal))} · ${r.duracao_total} min</p>`,

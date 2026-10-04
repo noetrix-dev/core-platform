@@ -259,6 +259,7 @@
 
 /* ---- remarcar no wizard --------------------------------------------------- */
 .faixaRemarcando {
+  color: var(--ink);
   background: var(--enamel-lo);
   border-left: 3px solid var(--ochre);
   border-radius: var(--r);

@@ -46,6 +46,7 @@ export function CartaoAgendamento({ agendamento: a }: { agendamento: ItemAgendam
       }
       setConfirmando(false);
       setErro(r.error);
+      if (r.error.startsWith("Esse agendamento já não pode ser cancelado")) router.refresh();
     });
   }
 
