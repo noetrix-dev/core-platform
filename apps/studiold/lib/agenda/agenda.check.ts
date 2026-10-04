@@ -13,6 +13,7 @@ import { normalizarTelefone } from "../clientes/telefone.ts";
 import { limparEmail } from "../clientes/email.ts";
 import { somaItens, type ItemPagamento } from "./pagamento.ts";
 import { gerarCodigo } from "../agendar/codigo.ts";
+import { assinarSessao, lerSessaoAssinada } from "../agendar/sessao-token.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
 
@@ -290,6 +291,26 @@ assert.equal(minToHm(1020), "17:00");
   assert.match(gerarCodigo(), /^\d{6}$/, "default (Math.random) gera 6 dígitos");
   assert.equal(gerarCodigo(() => 0), "000000", "piso zero-padded");
   assert.equal(gerarCodigo(() => 0.999999), "999999", "teto não vira 7 dígitos");
+}
+
+// --- token de sessão de /agendar ---------------------------------------
+{
+  const S = "segredo-de-teste-com-mais-de-32-caracteres!!";
+  const dados = { clienteId: "c1", telefone: "11987654321", exp: 2_000 };
+  const tok = assinarSessao(dados, S);
+  assert.deepEqual(lerSessaoAssinada(tok, S, 1_000), dados, "ida e volta");
+  assert.equal(lerSessaoAssinada(tok, S, 2_000), null, "exp == agora → expirado");
+  assert.equal(lerSessaoAssinada(tok, "outro-segredo-de-teste-tambem-longo!!", 1_000), null, "segredo errado");
+  const [corpo, sig] = tok.split(".");
+  const corpoFalso = Buffer.from(JSON.stringify({ ...dados, clienteId: "c2" })).toString("base64url");
+  assert.equal(lerSessaoAssinada(`${corpoFalso}.${sig}`, S, 1_000), null, "payload adulterado");
+  assert.equal(lerSessaoAssinada(`${corpo}.${sig}x`, S, 1_000), null, "assinatura adulterada");
+  assert.equal(lerSessaoAssinada("", S, 1_000), null, "vazio");
+  assert.equal(lerSessaoAssinada("a.b.c", S, 1_000), null, "partes demais");
+  assert.equal(lerSessaoAssinada("semponto", S, 1_000), null, "sem assinatura");
+  const lixo = Buffer.from("não é json").toString("base64url");
+  const sigLixo = assinarSessao(dados, S).split(".")[1];
+  assert.equal(lerSessaoAssinada(`${lixo}.${sigLixo}`, S, 1_000), null, "corpo não-JSON");
 }
 
 console.log("agenda.check: OK");
