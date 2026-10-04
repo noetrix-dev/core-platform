@@ -500,6 +500,7 @@ export async function confirmarAgendamento(p: {
   // Remarcar: só agora, com o novo garantido, libera o antigo. Se falhar, o
   // novo vale e o cliente é avisado para cancelar o antigo em Meus agendamentos.
   let antigoNaoCancelado = false;
+  // ponytail: duas abas remarcando o mesmo agendamento criam dois novos (checagem e teto fora da advisory lock); duplo clique na mesma aba é barrado pelo botão desabilitado. Trava real: contar/cancelar dentro de fn_criar_agendamento_v2 (migration).
   if (remarcar) {
     const canc = await db.rpc("fn_cancelar_agendamento_v2", {
       p_agendamento_id: remarcar.id,
@@ -508,8 +509,9 @@ export async function confirmarAgendamento(p: {
       p_origem: "site",
     });
     if (canc.error) {
-      antigoNaoCancelado = true;
       console.error("[agendar/confirmarAgendamento/remarcar]", canc.error.message);
+      // "não pode ser cancelado" = já liberado por outro pedido/equipe: não há o que o cliente cancelar.
+      antigoNaoCancelado = !canc.error.message.includes("não pode ser cancelado");
     }
   }
 
