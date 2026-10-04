@@ -50,6 +50,11 @@
   padding: 1.5rem 1rem 7rem;
 }
 
+/* h1 recebe foco programático na troca de passo; não é interativo. */
+.corpo h1:focus {
+  outline: none;
+}
+
 .grupoTitulo {
   font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
   font-size: 0.72rem;

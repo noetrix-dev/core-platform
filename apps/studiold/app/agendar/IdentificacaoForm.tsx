@@ -13,6 +13,7 @@ import {
   encerrarSessao,
 } from "./actions";
 import styles from "@/app/agenda/agenda.module.css";
+import css from "./agendar.module.css";
 
 type Props = {
   onIdentificado?: (dados: { clienteId: string; nome: string; telefone: string }) => void;
@@ -140,7 +141,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           )}
           <button
             type="submit"
-            className={`${styles.btn} ${styles["btn--primary"]} w-full justify-center py-3`}
+            className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
             disabled={pendente}
           >
             {pendente ? "Enviando…" : precisaEmail ? "Enviar código" : "Continuar"}
@@ -172,20 +173,20 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           </div>
           <button
             type="submit"
-            className={`${styles.btn} ${styles["btn--primary"]} w-full justify-center py-3`}
+            className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
             disabled={pendente}
           >
             {pendente ? "Verificando…" : "Confirmar código"}
           </button>
           <button
             type="button"
-            className={`${styles.btn} justify-center`}
+            className={`${styles.btn} ${css.cta}`}
             disabled={pendente}
             onClick={() => reenviarCodigo(etapa)}
           >
             Reenviar código
           </button>
-          <button type="button" className={styles.msgQuiet} onClick={recomecar}>
+          <button type="button" className={`${styles.msgQuiet} min-h-11`} onClick={recomecar}>
             Trocar telefone
           </button>
         </form>
@@ -197,7 +198,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           <p className={styles.msgQuiet}>É você?</p>
           <button
             type="button"
-            className={`${styles.btn} ${styles["btn--primary"]} w-full justify-center py-3`}
+            className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
             onClick={() =>
               concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone })
             }
@@ -206,7 +207,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           </button>
           <button
             type="button"
-            className={`${styles.btn} justify-center`}
+            className={`${styles.btn} ${css.cta}`}
             disabled={pendente}
             onClick={() =>
               iniciar(async () => {
@@ -242,7 +243,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           </div>
           <button
             type="submit"
-            className={`${styles.btn} ${styles["btn--primary"]} w-full justify-center py-3`}
+            className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
             disabled={pendente}
           >
             {pendente ? "Salvando…" : "Concluir cadastro"}

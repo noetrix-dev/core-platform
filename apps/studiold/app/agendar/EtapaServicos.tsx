@@ -50,7 +50,7 @@ export function EtapaServicos({ nome, catalogo, selecionados, onAlternar, onCont
 
   return (
     <>
-      <h1 className={styles.pageTitle}>Olá, {nome}!</h1>
+      <h1 tabIndex={-1} className={styles.pageTitle}>Olá, {nome}!</h1>
       <p className={styles.msgQuiet}>O que vamos fazer hoje? Pode escolher mais de um.</p>
 
       {catalogo ? (

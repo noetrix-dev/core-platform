@@ -65,7 +65,7 @@ export function EtapaConfirmacao(p: Props) {
 
   return (
     <>
-      <h1 className={`${styles.pageTitle} mb-4`}>Confere?</h1>
+      <h1 tabIndex={-1} className={`${styles.pageTitle} mb-4`}>Confere?</h1>
       <div className={css.comanda}>
         <p className={css.comandaDestaque}>
           {rotuloDia(p.horario.data)} às {p.horario.hora}

@@ -47,7 +47,7 @@ export function EtapaHorario({ horarios, carregando, temMais, aviso, onEscolher,
 
   return (
     <>
-      <h1 className={styles.pageTitle}>Quando?</h1>
+      <h1 tabIndex={-1} className={styles.pageTitle}>Quando?</h1>
       {aviso && (
         <p role="alert" className={`${styles.msgQuiet} mt-1`} data-tom="erro">
           {aviso}

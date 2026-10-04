@@ -5,7 +5,7 @@
 // identificação (o cookie sozinho não pula a verificação, por desenho).
 // Transições são disparadas por evento (sem useEffect de carga).
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { proximoDia } from "@/lib/agendar/formato";
 import { IdentificacaoForm } from "./IdentificacaoForm";
 import { AgendarCabecalho } from "./AgendarCabecalho";
@@ -51,6 +51,18 @@ export function AgendarWizard() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
+  const mainRef = useRef<HTMLElement>(null);
+  const primeiro = useRef(true);
+
+  // Troca de passo move o foco pro h1 (leitor de tela anuncia a etapa nova);
+  // nunca no carregamento inicial.
+  useEffect(() => {
+    if (primeiro.current) {
+      primeiro.current = false;
+      return;
+    }
+    mainRef.current?.querySelector("h1")?.focus();
+  }, [passo]);
 
   function recomecar(mensagem: string | null) {
     setPasso("identificacao");
@@ -110,6 +122,12 @@ export function AgendarWizard() {
     iniciar(async () => {
       const r = await buscarHorarios(selecionados).catch(() => FALHA_CONEXAO);
       if (!r.ok) {
+        // Falha de transporte: volta pra Serviços mantendo a seleção.
+        if (r === FALHA_CONEXAO) {
+          setPasso("servicos");
+          setAviso(r.error);
+          return;
+        }
         if (!tratarSessao(r)) abrirServicos(r.error);
         return;
       }
@@ -135,6 +153,7 @@ export function AgendarWizard() {
   function escolherHorario(h: Horario) {
     setHorario(h);
     setErro(null);
+    setAviso(null);
     setPasso("confirmacao");
   }
 
@@ -163,18 +182,24 @@ export function AgendarWizard() {
 
   const voltar =
     passo === "horario"
-      ? () => setPasso("servicos")
+      ? () => {
+          setAviso(null);
+          setPasso("servicos");
+        }
       : passo === "confirmacao"
-        ? () => setPasso("horario")
+        ? () => {
+            setAviso(null);
+            setPasso("horario");
+          }
         : undefined;
 
   return (
     <>
       <AgendarCabecalho etapa={ROTULO[passo]} onVoltar={pendente ? undefined : voltar} />
-      <main className={css.corpo}>
+      <main ref={mainRef} className={css.corpo}>
         {passo === "identificacao" && (
           <>
-            <h1 className={`${styles.pageTitle} mb-1`}>Agendar horário</h1>
+            <h1 tabIndex={-1} className={`${styles.pageTitle} mb-1`}>Agendar horário</h1>
             <p className={`${styles.msgQuiet} mb-6`}>Confirme seu telefone pra começar.</p>
             {aviso && (
               <p role="alert" className={`${styles.msgQuiet} mb-4`} data-tom="erro">

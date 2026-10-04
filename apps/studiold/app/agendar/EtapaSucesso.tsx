@@ -9,7 +9,7 @@ import css from "./agendar.module.css";
 export function EtapaSucesso({ resumo, onNovo }: { resumo: ResumoAgendamento; onNovo: () => void }) {
   return (
     <>
-      <h1 className={`${styles.pageTitle} mb-4`}>Agendado!</h1>
+      <h1 tabIndex={-1} className={`${styles.pageTitle} mb-4`}>Agendado!</h1>
       <div className={css.comanda}>
         <p className={css.comandaDestaque}>
           {rotuloDia(resumo.data)} às {resumo.hora}
