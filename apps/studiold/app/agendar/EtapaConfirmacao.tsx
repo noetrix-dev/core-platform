@@ -18,6 +18,7 @@ type Props = {
   onConfirmar: () => void;
   pendente: boolean;
   erro: string | null;
+  antes: { data: string; hora: string } | null;
 };
 
 function Escolha({
@@ -68,8 +69,17 @@ export function EtapaConfirmacao(p: Props) {
       <h1 tabIndex={-1} className={`${styles.pageTitle} mb-4`}>Confere?</h1>
       <div className={css.comanda}>
         <p className={css.comandaDestaque}>
+          {p.antes ? "Novo horário: " : ""}
           {rotuloDia(p.horario.data)} às {p.horario.hora}
         </p>
+        {p.antes && (
+          <p className={css.antes}>
+            Antes:{" "}
+            <s>
+              {rotuloDia(p.antes.data)} às {p.antes.hora}
+            </s>
+          </p>
+        )}
         {servicos.map((s) => (
           <div key={s.id} className={css.comandaLinha}>
             <span>{s.nome}</span>
@@ -96,7 +106,7 @@ export function EtapaConfirmacao(p: Props) {
         disabled={p.pendente}
         onClick={p.onConfirmar}
       >
-        {p.pendente ? "Confirmando…" : "Confirmar agendamento"}
+        {p.pendente ? "Confirmando…" : p.antes ? "Confirmar novo horário" : "Confirmar agendamento"}
       </button>
     </>
   );

@@ -1,12 +1,13 @@
 "use client";
 
 // Wizard de /agendar: identificação (Spec A) → serviços → data e hora →
-// confirmação → sucesso. Estado só em memória: reload recomeça na
-// identificação (o cookie sozinho não pula a verificação, por desenho).
-// Transições são disparadas por evento (sem useEffect de carga).
+// confirmação → sucesso. Com sessão válida (lida no servidor por page.tsx) o
+// wizard começa em Serviços; `inicial.remarcar` liga o modo remarcar (Spec C):
+// o antigo só é cancelado no servidor depois de o novo ser criado.
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { proximoDia } from "@/lib/agendar/formato";
+import { useRouter } from "next/navigation";
+import { proximoDia, rotuloDia } from "@/lib/agendar/formato";
 import { IdentificacaoForm } from "./IdentificacaoForm";
 import { AgendarCabecalho } from "./AgendarCabecalho";
 import { EtapaServicos } from "./EtapaServicos";
@@ -37,18 +38,33 @@ const ROTULO: Record<Passo, string> = {
 
 const FALHA_CONEXAO: FalhaAgendar = { ok: false, error: "Falha de conexão. Tente de novo." };
 
-export function AgendarWizard() {
-  const [passo, setPasso] = useState<Passo>("identificacao");
-  const [nome, setNome] = useState("");
+export type InicialWizard = {
+  nome: string;
+  servicoIds: string[];
+  remarcar: { id: string; data: string; hora: string } | null;
+  aviso: string | null;
+};
+
+export function AgendarWizard({
+  inicial,
+  destino,
+}: {
+  inicial: InicialWizard | null;
+  destino: "meus-agendamentos" | null;
+}) {
+  const router = useRouter();
+  const [passo, setPasso] = useState<Passo>(inicial ? "servicos" : "identificacao");
+  const [nome, setNome] = useState(inicial?.nome ?? "");
   const [catalogo, setCatalogo] = useState<Catalogo | null>(null);
-  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [selecionados, setSelecionados] = useState<string[]>(inicial?.servicoIds ?? []);
+  const [remarcar, setRemarcar] = useState<InicialWizard["remarcar"]>(inicial?.remarcar ?? null);
   const [horarios, setHorarios] = useState<Horario[] | null>(null);
   const [temMais, setTemMais] = useState(true);
   const [horario, setHorario] = useState<Horario | null>(null);
   const [cortesiaId, setCortesiaId] = useState<string | null>(null);
   const [estiloId, setEstiloId] = useState<string | null>(null);
   const [resumo, setResumo] = useState<ResumoAgendamento | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(inicial?.aviso ?? null);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
   const mainRef = useRef<HTMLElement>(null);
@@ -75,6 +91,7 @@ export function AgendarWizard() {
     setCortesiaId(null);
     setEstiloId(null);
     setResumo(null);
+    setRemarcar(null);
     setErro(null);
     setAviso(mensagem);
   }
@@ -86,13 +103,9 @@ export function AgendarWizard() {
     return true;
   }
 
-  // Vai pra Serviços e (re)carrega o catálogo. Também é o caminho de volta
-  // quando a busca de horários falha (serviço desativado no meio do fluxo).
-  function abrirServicos(mensagem: string | null) {
-    setAviso(mensagem);
-    setCatalogo(null);
-    setSelecionados([]);
-    setPasso("servicos");
+  // Carrega o catálogo (sem mexer na seleção). Usado ao entrar com sessão e
+  // por abrirServicos.
+  function carregarServicos() {
     iniciar(async () => {
       const r = await carregarCatalogo().catch(() => FALHA_CONEXAO);
       if (!r.ok) {
@@ -105,7 +118,31 @@ export function AgendarWizard() {
     });
   }
 
+  // Vai pra Serviços e (re)carrega o catálogo. Também é o caminho de volta
+  // quando a busca de horários falha (serviço desativado no meio do fluxo).
+  function abrirServicos(mensagem: string | null) {
+    setAviso(mensagem);
+    setCatalogo(null);
+    setSelecionados([]);
+    setPasso("servicos");
+    carregarServicos();
+  }
+
+  // Entrou com sessão (page.tsx): carrega o catálogo uma vez, mantendo a
+  // pré-seleção do remarcar. setState só dentro da transição assíncrona.
+  const carregouInicial = useRef(false);
+  useEffect(() => {
+    if (!inicial || carregouInicial.current) return;
+    carregouInicial.current = true;
+    carregarServicos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda só na montagem
+  }, []);
+
   function identificado(dados: { nome: string }) {
+    if (destino === "meus-agendamentos") {
+      router.push("/agendar/meus-agendamentos");
+      return;
+    }
     setNome(dados.nome);
     abrirServicos(null);
   }
@@ -166,6 +203,7 @@ export function AgendarWizard() {
         inicio: horario.inicio,
         cortesiaId,
         estiloId,
+        remarcarId: remarcar?.id ?? null,
       }).catch(() => FALHA_CONEXAO);
       if (r.ok) {
         setResumo(r.resumo);
@@ -173,11 +211,19 @@ export function AgendarWizard() {
         return;
       }
       if (tratarSessao(r)) return;
+      if (r.motivo === "remarcar") setRemarcar(null); // vira agendamento novo; cliente confirma de novo
       if (r.motivo === "horario") return carregarHorarios(r.error);
       if (r.motivo === "cortesia") setCortesiaId(null);
       if (r.motivo === "estilo") setEstiloId(null);
       setErro(r.error);
     });
+  }
+
+  function novoAgendamento() {
+    setRemarcar(null);
+    setResumo(null);
+    setHorario(null);
+    abrirServicos(null);
   }
 
   const voltar =
@@ -195,12 +241,22 @@ export function AgendarWizard() {
 
   return (
     <>
-      <AgendarCabecalho etapa={ROTULO[passo]} onVoltar={pendente ? undefined : voltar} />
+      <AgendarCabecalho etapa={passo === "sucesso" && resumo?.remarcado ? "Remarcado" : ROTULO[passo]} onVoltar={pendente ? undefined : voltar} />
       <main ref={mainRef} className={css.corpo}>
+        {remarcar && (passo === "servicos" || passo === "horario" || passo === "confirmacao") && (
+          <p className={`${css.faixaRemarcando} ${styles.msgQuiet}`}>
+            Remarcando {rotuloDia(remarcar.data)} às {remarcar.hora}. Seu horário atual só é liberado quando você
+            confirmar o novo.
+          </p>
+        )}
         {passo === "identificacao" && (
           <>
-            <h1 tabIndex={-1} className={`${styles.pageTitle} mb-1`}>Agendar horário</h1>
-            <p className={`${styles.msgQuiet} mb-6`}>Confirme seu telefone pra começar.</p>
+            <h1 tabIndex={-1} className={`${styles.pageTitle} mb-1`}>
+              {destino ? "Meus agendamentos" : "Agendar horário"}
+            </h1>
+            <p className={`${styles.msgQuiet} mb-6`}>
+              {destino ? "Confirme seu telefone para ver seus agendamentos." : "Confirme seu telefone pra começar."}
+            </p>
             {aviso && (
               <p role="alert" className={`${styles.msgQuiet} mb-4`} data-tom="erro">
                 {aviso}
@@ -257,9 +313,10 @@ export function AgendarWizard() {
             onConfirmar={confirmar}
             pendente={pendente}
             erro={erro}
+            antes={remarcar ? { data: remarcar.data, hora: remarcar.hora } : null}
           />
         )}
-        {passo === "sucesso" && resumo && <EtapaSucesso resumo={resumo} onNovo={() => recomecar(null)} />}
+        {passo === "sucesso" && resumo && <EtapaSucesso resumo={resumo} onNovo={novoAgendamento} />}
       </main>
     </>
   );

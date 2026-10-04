@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ehCombo } from "@/lib/agendar/formato";
 import { fmtPreco } from "@/lib/agenda/time";
 import type { Catalogo, ServicoCatalogo } from "./actions";
@@ -50,7 +51,12 @@ export function EtapaServicos({ nome, catalogo, selecionados, onAlternar, onCont
 
   return (
     <>
-      <h1 tabIndex={-1} className={styles.pageTitle}>Olá, {nome}!</h1>
+      <div className={css.servicosTopo}>
+        <h1 tabIndex={-1} className={styles.pageTitle}>Olá, {nome}!</h1>
+        <Link href="/agendar/meus-agendamentos" className={`${styles.msgQuiet} ${css.linkDiscreto}`}>
+          Meus agendamentos
+        </Link>
+      </div>
       <p className={styles.msgQuiet}>O que vamos fazer hoje? Pode escolher mais de um.</p>
 
       {catalogo ? (
