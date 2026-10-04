@@ -180,6 +180,9 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
               onChange={(e) => setCodigoInput(e.target.value.replace(/\D/g, ""))}
             />
           </div>
+          <p className={styles.msgQuiet}>
+            Não recebeu? Verifique a caixa de spam ou lixo eletrônico. O código expira em 10 minutos.
+          </p>
           <button
             type="submit"
             className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
@@ -195,7 +198,11 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           >
             Reenviar código
           </button>
-          <button type="button" className={`${styles.msgQuiet} min-h-11`} onClick={recomecar}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles["btn--ghost"]} ${css.cta} w-full`}
+            onClick={recomecar}
+          >
             Trocar telefone
           </button>
         </form>

@@ -271,17 +271,3 @@
   font-size: 0.85rem;
   margin: -0.4rem 0 0.6rem;
 }
-.servicosTopo {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-}
-.linkDiscreto {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.75rem;
-  white-space: nowrap;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}

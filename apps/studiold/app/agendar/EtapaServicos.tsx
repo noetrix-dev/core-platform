@@ -52,16 +52,14 @@ export function EtapaServicos({ nome, catalogo, selecionados, onAlternar, onCont
 
   return (
     <>
-      <div className={css.servicosTopo}>
-        <h1 tabIndex={-1} className={styles.pageTitle}>Olá, {nome}!</h1>
-        <div className="flex flex-col items-end">
-          <Link href="/agendar/meus-agendamentos" className={`${styles.msgQuiet} ${css.linkDiscreto}`}>
-            Meus agendamentos
-          </Link>
-          <button type="button" className={`${styles.msgQuiet} ${css.linkDiscreto}`} onClick={onSair}>
-            Não é você? Sair
-          </button>
-        </div>
+      <h1 tabIndex={-1} className={styles.pageTitle}>Olá, {nome}!</h1>
+      <div className={`${css.acoes} mb-4`}>
+        <Link href="/agendar/meus-agendamentos" className={`${styles.btn} ${css.cta}`}>
+          Meus agendamentos
+        </Link>
+        <button type="button" className={`${styles.btn} ${styles["btn--ghost"]} ${css.cta}`} onClick={onSair}>
+          Sair
+        </button>
       </div>
       <p className={styles.msgQuiet}>O que vamos fazer hoje? Pode escolher mais de um.</p>
 

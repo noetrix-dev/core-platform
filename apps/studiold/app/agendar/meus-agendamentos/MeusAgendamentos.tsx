@@ -33,8 +33,13 @@ export function MeusAgendamentos({ nome, lista }: Props) {
       <AgendarCabecalho etapa="Meus agendamentos" onVoltar={() => router.push("/agendar")} />
       <main className={css.corpo}>
         <h1 className={styles.pageTitle}>Olá, {nome}!</h1>
-        <button type="button" className={`${styles.msgQuiet} ${css.linkDiscreto}`} disabled={saindo} onClick={sair}>
-          Não é você? Sair
+        <button
+          type="button"
+          className={`${styles.btn} ${styles["btn--ghost"]} ${css.cta} mt-3 w-full`}
+          disabled={saindo}
+          onClick={sair}
+        >
+          Sair
         </button>
         <Link
           href="/agendar"
