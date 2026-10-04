@@ -1402,3 +1402,170 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ---- sino de notificações (Topbar) -----------------------------------------
+   Aviso, não caixa de entrada: badge oxblood sobre o .navbtn; bandeja no
+   padrão .tray (cabeçalho preto-fosco + corpo esmalte). Spec:
+   docs/superpowers/specs/2026-10-04-notificacoes-painel-design.md */
+.sino {
+  position: relative;
+}
+.sinoBtn {
+  position: relative;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sinoBadge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--oxblood);
+  color: #fff;
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.68rem;
+  line-height: 1.125rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--matte);
+}
+.sinoPainel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.6rem);
+  z-index: 60;
+  width: 22rem;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--enamel);
+  color: var(--ink);
+  border-radius: var(--r);
+  box-shadow: inset 0 0 0 1px var(--chrome), 0 18px 40px -12px rgba(0, 0, 0, 0.45);
+  animation: sinoEntra 0.12s var(--ease) both;
+}
+@media (max-width: 40rem) {
+  .sinoPainel {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
+  }
+}
+@keyframes sinoEntra {
+  from {
+    opacity: 0;
+  }
+}
+.sinoCorpo {
+  overflow-y: auto;
+}
+.sinoCorpo li + li {
+  border-top: 1px solid var(--chrome);
+}
+.sinoItem {
+  display: flex;
+  gap: 0.7rem;
+  min-height: 3.5rem;
+  padding: 0.65rem 0.8rem;
+  color: inherit;
+  text-decoration: none;
+  background: var(--enamel-hi);
+  box-shadow: inset 3px 0 0 var(--oxblood);
+}
+.sinoItem[data-lida="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+a.sinoItem:hover {
+  background: #fff;
+}
+.sinoIcone {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r);
+  box-shadow: inset 0 0 0 1px var(--chrome);
+  color: var(--sage);
+}
+.sinoIcone[data-tipo="agendamento_cancelado"] {
+  color: var(--oxblood);
+}
+.sinoIcone[data-tipo="agendamento_remarcado"] {
+  color: var(--steel);
+}
+.sinoTexto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.sinoLinha1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.sinoLinha1 strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sinoTempo {
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-size: 0.72rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sinoMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.sinoVazio {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 1rem 0.8rem;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.sinoEsqueleto {
+  height: 3.5rem;
+  background: linear-gradient(90deg, var(--enamel-lo), var(--enamel-hi), var(--enamel-lo));
+  background-size: 200% 100%;
+  animation: sinoBrilho 1.2s linear infinite;
+}
+.sinoEsqueleto + .sinoEsqueleto {
+  border-top: 1px solid var(--chrome);
+}
+@keyframes sinoBrilho {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sinoPainel,
+  .sinoEsqueleto {
+    animation: none;
+  }
+}

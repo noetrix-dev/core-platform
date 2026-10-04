@@ -2,13 +2,15 @@
 
 // Topbar compartilhada (agenda e configurações): logo + botão hambúrguer que
 // abre um drawer de navegação pela esquerda. Controles específicos de cada
-// página entram como children, à direita.
+// página entram como children, à direita. O sino de notificações
+// (SinoNotificacoes) fica sempre no grupo à direita, antes dos controles da página.
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "./agenda/Icon";
 import { LogoutButton } from "@/components/LogoutButton";
+import { SinoNotificacoes } from "@/components/SinoNotificacoes";
 import styles from "@/app/agenda/agenda.module.css";
 
 type ItemNav = {
@@ -67,9 +69,10 @@ export function Topbar({
               {titulo}
             </span>
           )}
-          {children && (
-            <div className="ml-auto flex items-center gap-1.5">{children}</div>
-          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            <SinoNotificacoes />
+            {children}
+          </div>
         </div>
         {sub && (
           <div className="mx-auto max-w-6xl px-4 pb-3 sm:px-6">{sub}</div>
