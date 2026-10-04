@@ -30,7 +30,7 @@ import css from "./agendar.module.css";
 type Passo = "identificacao" | "servicos" | "horario" | "confirmacao" | "sucesso";
 
 const ROTULO: Record<Passo, string> = {
-  identificacao: "Identificação",
+  identificacao: "Início",
   servicos: "Serviços · 1 de 3",
   horario: "Data e hora · 2 de 3",
   confirmacao: "Confirmação · 3 de 3",
@@ -270,18 +270,18 @@ export function AgendarWizard({
         )}
         {passo === "identificacao" && (
           <>
-            <h1 tabIndex={-1} className={`${styles.pageTitle} mb-1`}>
+            <h1 tabIndex={-1} className={`${styles.pageTitle} mb-4`}>
               {destino ? "Meus agendamentos" : "Agendar horário"}
             </h1>
-            <p className={`${styles.msgQuiet} mb-6`}>
-              {destino ? "Confirme seu telefone para ver seus agendamentos." : "Confirme seu telefone pra começar."}
-            </p>
             {aviso && (
               <p role="alert" className={`${styles.msgQuiet} mb-4`} data-tom="erro">
                 {aviso}
               </p>
             )}
-            <IdentificacaoForm onIdentificado={identificado} />
+            <IdentificacaoForm
+              onIdentificado={identificado}
+              intro={destino ? "Confirme seu telefone para ver seus agendamentos." : "Confirme seu telefone pra começar."}
+            />
           </>
         )}
         {passo === "servicos" && (

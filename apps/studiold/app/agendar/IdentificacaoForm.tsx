@@ -22,6 +22,8 @@ type Props = {
     dados: { clienteId: string; nome: string; telefone: string },
     ir: "servicos" | "meus",
   ) => void;
+  // Subtítulo exibido só na tela inicial (telefone/e-mail).
+  intro?: string;
 };
 
 type Etapa =
@@ -34,7 +36,7 @@ type Etapa =
 
 const FALHA_CONEXAO = { ok: false as const, error: "Falha de conexão. Tente de novo." };
 
-export function IdentificacaoForm({ onIdentificado }: Props) {
+export function IdentificacaoForm({ onIdentificado, intro }: Props) {
   const [etapa, setEtapa] = useState<Etapa>({ tipo: "telefone" });
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
@@ -120,6 +122,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
             enviarTelefone();
           }}
         >
+          {intro && <p className={styles.msgQuiet}>{intro}</p>}
           <div className={`${styles.field} flex flex-col gap-1.5`}>
             <label htmlFor="telefone">Telefone (WhatsApp)</label>
             <input
@@ -262,7 +265,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
             className={`${styles.btn} ${styles["btn--ghost"]} ${css.cta} w-full`}
             onClick={() => setEtapa({ ...etapa, tipo: "confirmacao" })}
           >
-            Voltar
+            Sair
           </button>
         </div>
       )}
