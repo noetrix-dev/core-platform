@@ -158,8 +158,8 @@ export function AgendarWizard({
   function sair() {
     iniciar(async () => {
       await encerrarSessao().catch(() => undefined);
-      router.replace("/agendar");
-      router.refresh();
+      recomecar(null); // volta pra identificação limpando nome/catálogo/seleção
+      router.replace("/agendar"); // derruba ?remarcar velho
     });
   }
 
