@@ -16,7 +16,11 @@ import styles from "@/app/agenda/agenda.module.css";
 import css from "./agendar.module.css";
 
 type Props = {
-  onIdentificado?: (dados: { clienteId: string; nome: string; telefone: string }) => void;
+  // ir: escolha do cliente existente na tela "É você?"; cadastro novo sempre "servicos".
+  onIdentificado?: (
+    dados: { clienteId: string; nome: string; telefone: string },
+    ir: "servicos" | "meus",
+  ) => void;
 };
 
 type Etapa =
@@ -39,8 +43,11 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
   const [codigoInput, setCodigoInput] = useState("");
   const [nomeInput, setNomeInput] = useState("");
 
-  function concluir(dados: { clienteId: string; nome: string; telefone: string }) {
-    if (onIdentificado) return onIdentificado(dados);
+  function concluir(
+    dados: { clienteId: string; nome: string; telefone: string },
+    ir: "servicos" | "meus" = "servicos",
+  ) {
+    if (onIdentificado) return onIdentificado(dados, ir);
     setEtapa({ tipo: "pronto", ...dados });
   }
 
@@ -199,11 +206,22 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           <button
             type="button"
             className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
+            disabled={pendente}
             onClick={() =>
-              concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone })
+              concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone }, "servicos")
             }
           >
-            Sim, sou eu
+            Novo agendamento
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${css.cta} w-full`}
+            disabled={pendente}
+            onClick={() =>
+              concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone }, "meus")
+            }
+          >
+            Ver meus agendamentos
           </button>
           <button
             type="button"

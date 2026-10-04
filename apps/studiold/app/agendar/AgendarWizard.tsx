@@ -139,8 +139,10 @@ export function AgendarWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda só na montagem
   }, []);
 
-  function identificado(dados: { nome: string }) {
-    if (destino === "meus-agendamentos") {
+  // `ir` vem da escolha do cliente existente ("Novo agendamento" / "Ver meus
+  // agendamentos"); cliente novo sempre segue pra Serviços.
+  function identificado(dados: { nome: string }, ir: "servicos" | "meus") {
+    if (ir === "meus") {
       router.push("/agendar/meus-agendamentos");
       return;
     }
