@@ -3,9 +3,8 @@
 // código) — falha alto e claro se a chave não existir, mesmo padrão de
 // lib/supabase/server.ts.
 //
-// Domínio de teste (onboarding@resend.dev): só entrega pro e-mail cadastrado
-// na própria conta Resend enquanto nenhum domínio próprio for verificado.
-// Troca de domínio depois é só variável de ambiente.
+// Remetente no domínio próprio mail.noetrix.com.br — precisa estar verificado
+// no Resend (DNS), senão a API recusa o envio.
 
 import { Resend } from "resend";
 
@@ -26,7 +25,7 @@ export async function sendEmail(p: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const { error } = await client().emails.send({
-      from: "StudiOLD <onboarding@resend.dev>",
+      from: "StudiOLD <noreply@mail.noetrix.com.br>",
       to: [p.to],
       subject: p.subject,
       html: p.html,
