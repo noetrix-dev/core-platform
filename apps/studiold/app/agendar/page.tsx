@@ -10,7 +10,23 @@ import { AgendarWizard, type InicialWizard } from "./AgendarWizard";
 import styles from "@/app/agenda/agenda.module.css";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Agendar — StudiOLD" };
+const TITULO = "Agendar — StudiOLD";
+const DESCRICAO = "Agende seu horário na barbearia do Victório em Campo Grande/RJ";
+
+// og:image vem de ./opengraph-image.tsx (PNG 1200×630 gerado pelo Next).
+export const metadata = {
+  metadataBase: new URL("https://studiold.noetrix.com.br"),
+  title: TITULO,
+  description: DESCRICAO,
+  openGraph: {
+    title: TITULO,
+    description: DESCRICAO,
+    url: "https://studiold.noetrix.com.br/agendar",
+    siteName: "StudiOLD",
+    locale: "pt_BR",
+    type: "website",
+  },
+};
 
 // Fora do componente: o lint de pureza (react-hooks/purity) não aceita Date.now() no render.
 const agora = () => Date.now();
