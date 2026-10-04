@@ -14,6 +14,15 @@ import { limparEmail } from "../clientes/email.ts";
 import { somaItens, type ItemPagamento } from "./pagamento.ts";
 import { gerarCodigo } from "../agendar/codigo.ts";
 import { assinarSessao, lerSessaoAssinada } from "../agendar/sessao-token.ts";
+import {
+  mascararEmail,
+  ehCombo,
+  turno,
+  rotuloDia,
+  proximoDia,
+  partesSaoPaulo,
+  escaparHtml,
+} from "../agendar/formato.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
 
@@ -311,6 +320,28 @@ assert.equal(minToHm(1020), "17:00");
   const lixo = Buffer.from("não é json").toString("base64url");
   const sigLixo = assinarSessao(dados, S).split(".")[1];
   assert.equal(lerSessaoAssinada(`${lixo}.${sigLixo}`, S, 1_000), null, "corpo não-JSON");
+}
+
+// --- formato de /agendar -------------------------------------------------
+{
+  assert.equal(mascararEmail("joao@gmail.com"), "j***@g***.com");
+  assert.equal(mascararEmail("a@b.com.br"), "a***@b***.br", "só o último TLD fica visível");
+  assert.equal(mascararEmail("x@localhost"), "x***@l***", "domínio sem ponto");
+  assert.equal(mascararEmail("lixo"), "seu e-mail", "sem @ não vaza nada");
+  assert.equal(ehCombo("Combo Corte + Barba"), true);
+  assert.equal(ehCombo("combo   x"), true, "minúsculo também");
+  assert.equal(ehCombo("Corte"), false);
+  assert.equal(ehCombo("Combodo"), false, "precisa do espaço depois de combo");
+  assert.equal(turno("09:00"), "manha");
+  assert.equal(turno("11:59"), "manha");
+  assert.equal(turno("12:00"), "tarde");
+  assert.equal(rotuloDia("2026-10-06"), "Ter 06/10");
+  assert.equal(rotuloDia("2026-10-10"), "Sáb 10/10");
+  assert.equal(proximoDia("2026-10-31"), "2026-11-01", "vira o mês");
+  assert.equal(proximoDia("2026-12-31"), "2027-01-01", "vira o ano");
+  assert.deepEqual(partesSaoPaulo("2026-10-10T12:30:00Z"), { data: "2026-10-10", hora: "09:30" }, "UTC-3");
+  assert.deepEqual(partesSaoPaulo("2026-10-10T02:00:00Z"), { data: "2026-10-09", hora: "23:00" }, "volta um dia");
+  assert.equal(escaparHtml(`<b>"Zé" & 'cia'</b>`), "&lt;b&gt;&quot;Zé&quot; &amp; &#39;cia&#39;&lt;/b&gt;");
 }
 
 console.log("agenda.check: OK");
