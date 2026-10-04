@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { rotuloDia } from "@/lib/agendar/formato";
 import { fmtPreco } from "@/lib/agenda/time";
 import type { Catalogo, Horario, OpcaoCatalogo } from "./actions";
@@ -30,14 +31,15 @@ function Escolha({
   valor: string | null;
   onEscolher: (id: string | null) => void;
 }) {
+  const tituloId = useId();
   if (opcoes.length === 0) return null;
   const todas: { id: string | null; nome: string }[] = [...opcoes, { id: null, nome: "Nenhuma" }];
   return (
     <section>
-      <h2 className={css.grupoTitulo} id={`escolha-${titulo}`}>
+      <h2 className={css.grupoTitulo} id={tituloId}>
         {titulo}
       </h2>
-      <div className={styles.chips} role="radiogroup" aria-labelledby={`escolha-${titulo}`}>
+      <div className={styles.chips} role="radiogroup" aria-labelledby={tituloId}>
         {todas.map((o) => (
           <button
             key={o.id ?? "nenhuma"}
