@@ -1549,6 +1549,9 @@ a.sinoItem:hover {
   font-size: 0.85rem;
   color: var(--ink-2);
 }
+.sinoVazio .btn {
+  min-height: 2.75rem;
+}
 .sinoEsqueleto {
   height: 3.5rem;
   background: linear-gradient(90deg, var(--enamel-lo), var(--enamel-hi), var(--enamel-lo));
