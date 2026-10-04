@@ -64,6 +64,15 @@ export function IdentificacaoForm({ onIdentificado, intro }: Props) {
     setNomeInput("");
     setEtapa({ tipo: "telefone" });
   }
+  // Encerra a sessão no servidor e volta pra tela inicial de telefone.
+  // Mesmo efeito do "Sair" de Serviços e de Meus agendamentos.
+  function sair() {
+    iniciar(async () => {
+      await encerrarSessao().catch(() => undefined);
+      recomecar();
+    });
+  }
+
 
   function enviarTelefone() {
     setErro(null);
@@ -227,12 +236,7 @@ export function IdentificacaoForm({ onIdentificado, intro }: Props) {
             type="button"
             className={`${styles.btn} ${css.cta}`}
             disabled={pendente}
-            onClick={() =>
-              iniciar(async () => {
-                await encerrarSessao().catch(() => undefined);
-                recomecar();
-              })
-            }
+            onClick={sair}
           >
             Não, não sou eu
           </button>
@@ -263,7 +267,8 @@ export function IdentificacaoForm({ onIdentificado, intro }: Props) {
           <button
             type="button"
             className={`${styles.btn} ${styles["btn--ghost"]} ${css.cta} w-full`}
-            onClick={() => setEtapa({ ...etapa, tipo: "confirmacao" })}
+            disabled={pendente}
+            onClick={sair}
           >
             Sair
           </button>
