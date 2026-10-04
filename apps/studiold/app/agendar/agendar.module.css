@@ -1,0 +1,176 @@
+/* Wizard público de /agendar. Vive dentro do .shell de
+   app/agenda/agenda.module.css e usa os tokens dele (--matte, --matte-ink,
+   --oxblood, --chrome, --ink-2...). Faixa e rodapé preto-fosco são o momento
+   de marca; o resto é ferramenta, oxblood só em ação/seleção. */
+
+.faixa {
+  background: var(--matte);
+  color: var(--matte-ink);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.faixaInner {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 0.85rem 1rem 0.7rem;
+  display: grid;
+  grid-template-columns: 2.75rem 1fr 2.75rem;
+  align-items: center;
+}
+.faixaVoltar {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: grid;
+  place-items: center;
+  color: var(--matte-ink);
+  border-radius: var(--r);
+}
+.faixaVoltar:hover { background: rgba(222, 217, 207, 0.08); }
+.faixaVoltar:focus-visible { outline: 2px solid var(--oxblood-on-dark); outline-offset: 2px; }
+.logo {
+  justify-self: center;
+  height: 28px;
+  aspect-ratio: 830 / 159;
+  background: var(--matte-ink);
+  -webkit-mask: url("/studiold-logo.svg") no-repeat center / contain;
+  mask: url("/studiold-logo.svg") no-repeat center / contain;
+}
+.faixaEtapa {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-top: 0.4rem;
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--matte-ink);
+}
+
+.corpo {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 7rem;
+}
+
+.grupoTitulo {
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 1.25rem 0 0.4rem;
+}
+.lista {
+  background: var(--enamel-hi);
+  box-shadow: inset 0 0 0 1px var(--chrome);
+  border-radius: var(--r);
+}
+.linha {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+}
+.linha + .linha { border-top: 1px solid var(--chrome); }
+.linha:has(input:checked) { background: rgba(123, 45, 38, 0.06); }
+.linhaCheck {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--oxblood);
+}
+.linhaNome { color: var(--ink); line-height: 1.25; }
+.linhaMeta { display: block; font-size: 0.8rem; color: var(--ink-2); }
+.linhaPreco {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.rodape {
+  position: fixed;
+  inset: auto 0 0 0;
+  background: var(--matte);
+  color: var(--matte-ink);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.rodapeInner {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.rodapeTotal {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  line-height: 1.2;
+}
+
+.dias {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+  scroll-snap-type: x proximity;
+}
+.dia {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 2.75rem;
+  scroll-snap-align: start;
+}
+.grade {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.slot {
+  min-height: 2.75rem;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+
+.comanda {
+  background: var(--enamel-hi);
+  box-shadow: inset 0 0 0 1px var(--chrome);
+  border-radius: var(--r);
+  padding: 1rem;
+}
+.comandaDestaque {
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  margin-bottom: 0.75rem;
+}
+.comandaLinha {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+}
+.comandaTotal {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px dashed var(--chrome-dark);
+  margin-top: 0.5rem;
+  padding-top: 0.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.esqueleto {
+  height: 3.25rem;
+  background: linear-gradient(90deg, var(--enamel-lo), var(--enamel-hi), var(--enamel-lo));
+  background-size: 200% 100%;
+  animation: brilho 1.2s linear infinite;
+}
+.esqueleto + .esqueleto { border-top: 1px solid var(--chrome); }
+@keyframes brilho { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .esqueleto { animation: none; }
+}
