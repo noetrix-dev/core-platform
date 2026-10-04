@@ -23,6 +23,10 @@ import {
   proximoDia,
   partesSaoPaulo,
   escaparHtml,
+  ehUuid,
+  ehRemarcavel,
+  separarAgendamentos,
+  rotuloStatus,
 } from "../agendar/formato.ts";
 
 const DIA = "2026-08-26"; // quarta-feira, StudiOLD aberta 09–17
@@ -350,6 +354,43 @@ assert.equal(minToHm(1020), "17:00");
   assert.deepEqual(partesSaoPaulo("2026-10-10T12:30:00Z"), { data: "2026-10-10", hora: "09:30" }, "UTC-3");
   assert.deepEqual(partesSaoPaulo("2026-10-10T02:00:00Z"), { data: "2026-10-09", hora: "23:00" }, "volta um dia");
   assert.equal(escaparHtml(`<b>"Zé" & 'cia'</b>`), "&lt;b&gt;&quot;Zé&quot; &amp; &#39;cia&#39;&lt;/b&gt;");
+}
+
+// --- meus agendamentos -----------------------------------------------------
+{
+  const agora = Date.parse("2026-10-04T12:00:00Z");
+  const mk = (id: string, inicio: string, status: string) => ({ id, inicio, status });
+  const itens = [
+    mk("f2", "2026-10-10T12:00:00Z", "agendado"),
+    mk("f1", "2026-10-05T12:00:00Z", "confirmado"),
+    mk("agendado-passado", "2026-10-01T12:00:00Z", "agendado"),
+    mk("cancelado-futuro", "2026-10-20T12:00:00Z", "cancelado"),
+    ...Array.from({ length: 12 }, (_, i) =>
+      mk(`c${i}`, `2026-09-${String(10 + i).padStart(2, "0")}T12:00:00Z`, "concluido"),
+    ),
+  ];
+  const { futuros, passados } = separarAgendamentos(itens, agora);
+  assert.deepEqual(futuros.map((f) => f.id), ["f1", "f2"], "futuros: só agendado/confirmado no futuro, crescente");
+  assert.equal(passados.length, 10, "passados limitados a 10");
+  assert.equal(passados[0].id, "cancelado-futuro", "cancelado com horário futuro vai pra passados, mais recente primeiro");
+  assert.equal(passados[1].id, "agendado-passado", "agendado que já passou vai pra passados");
+  assert.equal(passados[2].id, "c11", "passados em ordem decrescente");
+
+  assert.equal(ehRemarcavel(mk("x", "2026-10-05T12:00:00Z", "agendado"), agora), true);
+  assert.equal(ehRemarcavel(mk("x", "2026-10-05T12:00:00Z", "confirmado"), agora), true);
+  assert.equal(ehRemarcavel(mk("x", "2026-10-05T12:00:00Z", "cancelado"), agora), false, "status final");
+  assert.equal(ehRemarcavel(mk("x", "2026-10-03T12:00:00Z", "confirmado"), agora), false, "já passou");
+
+  assert.equal(rotuloStatus("agendado"), "Agendado");
+  assert.equal(rotuloStatus("confirmado"), "Confirmado");
+  assert.equal(rotuloStatus("concluido"), "Concluído");
+  assert.equal(rotuloStatus("cancelado"), "Cancelado");
+  assert.equal(rotuloStatus("nao_compareceu"), "Não realizado");
+
+  assert.equal(ehUuid("8f14e45f-ceea-4e7a-8d6b-0b5f0a3c9a11"), true);
+  assert.equal(ehUuid("8F14E45F-CEEA-4E7A-8D6B-0B5F0A3C9A11"), true, "maiúsculas");
+  assert.equal(ehUuid("nao-e-uuid"), false);
+  assert.equal(ehUuid(42), false);
 }
 
 console.log("agenda.check: OK");

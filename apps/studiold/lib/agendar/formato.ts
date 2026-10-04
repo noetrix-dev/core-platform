@@ -65,3 +65,54 @@ export function escaparHtml(s: string): string {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+// --- Meus agendamentos (Spec C) ----------------------------------------------
+
+export type ItemAgendamento = {
+  id: string;
+  inicio: string; // ISO (slots.data_hora)
+  data: string; // YYYY-MM-DD em São Paulo
+  hora: string; // HH:MM em São Paulo
+  servicos: string[];
+  valorTotal: number;
+  status: string;
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function ehUuid(s: unknown): s is string {
+  return typeof s === "string" && UUID.test(s);
+}
+
+// Pode cancelar/remarcar: ainda ativo e ainda não começou.
+export function ehRemarcavel(a: { status: string; inicio: string }, agora: number): boolean {
+  return (a.status === "agendado" || a.status === "confirmado") && Date.parse(a.inicio) > agora;
+}
+
+// Separa pelo horário, não só pelo status: um "agendado" que já passou é
+// passado. Futuros em ordem crescente; passados decrescentes, no máximo 10.
+export function separarAgendamentos<T extends { status: string; inicio: string }>(
+  itens: T[],
+  agora: number,
+): { futuros: T[]; passados: T[] } {
+  const futuros = itens
+    .filter((i) => ehRemarcavel(i, agora))
+    .sort((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio));
+  const passados = itens
+    .filter((i) => !ehRemarcavel(i, agora))
+    .sort((a, b) => Date.parse(b.inicio) - Date.parse(a.inicio))
+    .slice(0, 10);
+  return { futuros, passados };
+}
+
+const ROTULO_STATUS: Record<string, string> = {
+  agendado: "Agendado",
+  confirmado: "Confirmado",
+  concluido: "Concluído",
+  cancelado: "Cancelado",
+  nao_compareceu: "Não realizado",
+};
+
+export function rotuloStatus(status: string): string {
+  return ROTULO_STATUS[status] ?? status;
+}
