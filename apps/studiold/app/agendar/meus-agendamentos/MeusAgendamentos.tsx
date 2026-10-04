@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { rotuloDia, rotuloStatus, type ItemAgendamento } from "@/lib/agendar/formato";
 import { fmtPreco } from "@/lib/agenda/time";
 import { AgendarCabecalho } from "../AgendarCabecalho";
+import { encerrarSessao } from "../actions";
 import { CartaoAgendamento } from "./CartaoAgendamento";
 import styles from "@/app/agenda/agenda.module.css";
 import css from "../agendar.module.css";
@@ -16,12 +18,24 @@ type Props = {
 
 export function MeusAgendamentos({ nome, lista }: Props) {
   const router = useRouter();
+  const [saindo, iniciar] = useTransition();
+
+  function sair() {
+    iniciar(async () => {
+      await encerrarSessao().catch(() => undefined);
+      router.replace("/agendar");
+      router.refresh();
+    });
+  }
 
   return (
     <>
       <AgendarCabecalho etapa="Meus agendamentos" onVoltar={() => router.push("/agendar")} />
       <main className={css.corpo}>
         <h1 className={styles.pageTitle}>Olá, {nome}!</h1>
+        <button type="button" className={`${styles.msgQuiet} ${css.linkDiscreto}`} disabled={saindo} onClick={sair}>
+          Não é você? Sair
+        </button>
         <Link
           href="/agendar"
           className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} mt-4 w-full`}

@@ -18,6 +18,7 @@ import {
   carregarCatalogo,
   buscarHorarios,
   confirmarAgendamento,
+  encerrarSessao,
   type Catalogo,
   type FalhaAgendar,
   type Horario,
@@ -138,13 +139,20 @@ export function AgendarWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda só na montagem
   }, []);
 
-  function identificado(dados: { nome: string }) {
+  function identificado(_dados: { nome: string }) {
     if (destino === "meus-agendamentos") {
       router.push("/agendar/meus-agendamentos");
       return;
     }
-    setNome(dados.nome);
-    abrirServicos(null);
+    router.refresh(); // page.tsx relê o cookie novo; o key remonta o wizard em Serviços
+  }
+
+  function sair() {
+    iniciar(async () => {
+      await encerrarSessao().catch(() => undefined);
+      router.replace("/agendar");
+      router.refresh();
+    });
   }
 
   function alternar(id: string) {
@@ -220,6 +228,7 @@ export function AgendarWizard({
   }
 
   function novoAgendamento() {
+    router.replace("/agendar");
     setRemarcar(null);
     setResumo(null);
     setHorario(null);
@@ -244,7 +253,7 @@ export function AgendarWizard({
       <AgendarCabecalho etapa={passo === "sucesso" && resumo?.remarcado ? "Remarcado" : ROTULO[passo]} onVoltar={pendente ? undefined : voltar} />
       <main ref={mainRef} className={css.corpo}>
         {remarcar && (passo === "servicos" || passo === "horario" || passo === "confirmacao") && (
-          <p className={`${css.faixaRemarcando} ${styles.msgQuiet}`}>
+          <p role="status" className={`${css.faixaRemarcando} text-sm`}>
             Remarcando {rotuloDia(remarcar.data)} às {remarcar.hora}. Seu horário atual só é liberado quando você
             confirmar o novo.
           </p>
@@ -290,6 +299,7 @@ export function AgendarWizard({
               selecionados={selecionados}
               onAlternar={alternar}
               onContinuar={() => carregarHorarios(null)}
+              onSair={sair}
               pendente={pendente}
             />
           </>

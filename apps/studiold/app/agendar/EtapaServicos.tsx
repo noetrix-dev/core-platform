@@ -14,9 +14,10 @@ type Props = {
   onAlternar: (id: string) => void;
   onContinuar: () => void;
   pendente: boolean;
+  onSair: () => void;
 };
 
-export function EtapaServicos({ nome, catalogo, selecionados, onAlternar, onContinuar, pendente }: Props) {
+export function EtapaServicos({ nome, catalogo, selecionados, onAlternar, onContinuar, pendente, onSair }: Props) {
   const escolhidos = catalogo?.servicos.filter((s) => selecionados.includes(s.id)) ?? [];
   const total = escolhidos.reduce((t, s) => t + s.preco, 0);
   const minutos = escolhidos.reduce((t, s) => t + s.duracaoMin, 0);
@@ -53,9 +54,14 @@ export function EtapaServicos({ nome, catalogo, selecionados, onAlternar, onCont
     <>
       <div className={css.servicosTopo}>
         <h1 tabIndex={-1} className={styles.pageTitle}>Olá, {nome}!</h1>
-        <Link href="/agendar/meus-agendamentos" className={`${styles.msgQuiet} ${css.linkDiscreto}`}>
-          Meus agendamentos
-        </Link>
+        <div className="flex flex-col items-end">
+          <Link href="/agendar/meus-agendamentos" className={`${styles.msgQuiet} ${css.linkDiscreto}`}>
+            Meus agendamentos
+          </Link>
+          <button type="button" className={`${styles.msgQuiet} ${css.linkDiscreto}`} onClick={onSair}>
+            Não é você? Sair
+          </button>
+        </div>
       </div>
       <p className={styles.msgQuiet}>O que vamos fazer hoje? Pode escolher mais de um.</p>
 
