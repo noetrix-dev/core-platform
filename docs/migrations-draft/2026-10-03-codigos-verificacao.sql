@@ -17,6 +17,14 @@ create table barbearia_001.codigos_verificacao (
 create index idx_codigos_verificacao_telefone
   on barbearia_001.codigos_verificacao (telefone, usado, expira_em);
 
+-- Spec B (/agendar): agendamento self-service grava origem 'site'.
+alter table barbearia_001.agendamentos
+  drop constraint agendamentos_origem_check;
+alter table barbearia_001.agendamentos
+  add constraint agendamentos_origem_check check (origem = any (array[
+    'dashboard', 'whatsapp_bot', 'fila_espera', 'encaixe', 'manual', 'migracao', 'site'
+  ]));
+
 GRANT ALL ON ALL TABLES IN SCHEMA barbearia_001 TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA barbearia_001 TO service_role;
 
