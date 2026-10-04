@@ -14,6 +14,7 @@ import { limparEmail } from "../clientes/email.ts";
 import { somaItens, type ItemPagamento } from "./pagamento.ts";
 import { gerarCodigo } from "../agendar/codigo.ts";
 import { assinarSessao, lerSessaoAssinada } from "../agendar/sessao-token.ts";
+import { tempoRelativo, rotuloTipo, rotuloCanal } from "../notificacoes/formato.ts";
 import {
   mascararEmail,
   ehCombo,
@@ -391,6 +392,29 @@ assert.equal(minToHm(1020), "17:00");
   assert.equal(ehUuid("8F14E45F-CEEA-4E7A-8D6B-0B5F0A3C9A11"), true, "maiúsculas");
   assert.equal(ehUuid("nao-e-uuid"), false);
   assert.equal(ehUuid(42), false);
+}
+
+// --- notificações do painel ------------------------------------------------
+{
+  const T0 = Date.parse("2026-10-04T12:00:00Z");
+  const antes = (ms: number) => new Date(T0 - ms).toISOString();
+  const MIN = 60_000;
+  const H = 60 * MIN;
+  assert.equal(tempoRelativo(antes(30_000), T0), "agora");
+  assert.equal(tempoRelativo(antes(-5_000), T0), "agora", "relógio adiantado não vira negativo");
+  assert.equal(tempoRelativo("lixo", T0), "agora", "data inválida não vira NaN");
+  assert.equal(tempoRelativo(antes(MIN), T0), "há 1 min");
+  assert.equal(tempoRelativo(antes(59 * MIN), T0), "há 59 min");
+  assert.equal(tempoRelativo(antes(H), T0), "há 1 h");
+  assert.equal(tempoRelativo(antes(23 * H + 59 * MIN), T0), "há 23 h");
+  assert.equal(tempoRelativo(antes(24 * H), T0), "ontem");
+  assert.equal(tempoRelativo(antes(47 * H), T0), "ontem");
+  assert.equal(tempoRelativo(antes(48 * H), T0), "há 2 dias");
+  assert.equal(rotuloTipo("agendamento_criado"), "Novo agendamento");
+  assert.equal(rotuloTipo("agendamento_cancelado"), "Cancelamento");
+  assert.equal(rotuloTipo("agendamento_remarcado"), "Remarcação");
+  assert.equal(rotuloCanal("site"), "Site");
+  assert.equal(rotuloCanal("whatsapp_bot"), "WhatsApp");
 }
 
 console.log("agenda.check: OK");
