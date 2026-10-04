@@ -1,8 +1,9 @@
 "use client";
 
-// 3 telas do Passo 1 do agendamento: telefone (+ e-mail quando preciso) →
-// código → nome (só pra cadastro novo). "É você?" é uma resolução inline
-// depois do código certo, não uma tela própria. Chama as Server Actions
+// Telas do Passo 1 do agendamento: telefone (+ e-mail quando preciso) →
+// código → cliente existente: "É você?" (confirmacao) → "O que você quer
+// fazer?" (acao: novo agendamento ou ver agendamentos); cliente novo: nome →
+// Serviços direto. Chama as Server Actions
 // direto (sem useActionState) — mesmo padrão de app/configuracoes/HorariosForm.tsx.
 
 import { useState, useTransition } from "react";
@@ -26,7 +27,8 @@ type Props = {
 type Etapa =
   | { tipo: "telefone" }
   | { tipo: "codigo"; telefone: string; email: string }
-  | { tipo: "identidade"; telefone: string; nome: string; clienteId: string }
+  | { tipo: "confirmacao"; telefone: string; nome: string; clienteId: string }
+  | { tipo: "acao"; telefone: string; nome: string; clienteId: string }
   | { tipo: "nome"; telefone: string; email: string }
   | { tipo: "pronto"; telefone: string; nome: string; clienteId: string };
 
@@ -80,7 +82,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
       if (r.novo) {
         setEtapa({ tipo: "nome", telefone: dados.telefone, email: dados.email });
       } else {
-        setEtapa({ tipo: "identidade", telefone: dados.telefone, nome: r.nome, clienteId: r.clienteId });
+        setEtapa({ tipo: "confirmacao", telefone: dados.telefone, nome: r.nome, clienteId: r.clienteId });
       }
     });
   }
@@ -199,7 +201,7 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
         </form>
       )}
 
-      {etapa.tipo === "identidade" && (
+      {etapa.tipo === "confirmacao" && (
         <div className="flex flex-col gap-4">
           <p className={styles.pageTitle}>Olá, {etapa.nome}!</p>
           <p className={styles.msgQuiet}>É você?</p>
@@ -207,21 +209,9 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
             type="button"
             className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
             disabled={pendente}
-            onClick={() =>
-              concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone }, "servicos")
-            }
+            onClick={() => setEtapa({ ...etapa, tipo: "acao" })}
           >
-            Novo agendamento
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${css.cta} w-full`}
-            disabled={pendente}
-            onClick={() =>
-              concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone }, "meus")
-            }
-          >
-            Ver meus agendamentos
+            Sim, sou eu
           </button>
           <button
             type="button"
@@ -235,6 +225,30 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
             }
           >
             Não, não sou eu
+          </button>
+        </div>
+      )}
+
+      {etapa.tipo === "acao" && (
+        <div className="flex flex-col gap-4">
+          <p className={styles.pageTitle}>O que você quer fazer?</p>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles["btn--primary"]} ${css.cta} w-full`}
+            onClick={() =>
+              concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone }, "servicos")
+            }
+          >
+            Novo agendamento
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${css.cta} w-full`}
+            onClick={() =>
+              concluir({ clienteId: etapa.clienteId, nome: etapa.nome, telefone: etapa.telefone }, "meus")
+            }
+          >
+            Ver meus agendamentos
           </button>
         </div>
       )}
