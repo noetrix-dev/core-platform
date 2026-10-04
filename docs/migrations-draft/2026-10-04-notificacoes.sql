@@ -4,6 +4,9 @@
 -- sem ela o painel só mostra "Não foi possível carregar as notificações").
 -- Spec: docs/superpowers/specs/2026-10-04-notificacoes-painel-design.md
 
+-- não segurar o bot: desiste se não pegar o lock em 5 s (rodar de novo)
+set lock_timeout = '5s';
+
 create table barbearia_001.notificacoes (
   id uuid primary key default gen_random_uuid(),
   tipo text not null
@@ -28,8 +31,9 @@ create index idx_notificacoes_lida_criado
 --
 -- Remarcação pelo site (Spec C) = dois eventos em transações separadas:
 -- agendamento_criado (novo) e, segundos depois, agendamento_cancelado com
--- dados.motivo = 'remarcado' (antigo). O cancelamento funde na notificação
--- "criado" não lida do mesmo cliente dos últimos 2 min, virando "remarcado".
+-- dados.motivo = 'remarcado' (antigo). O cancelamento funde no último "criado"
+-- do site do mesmo cliente nos últimos 2 min (lido ou não), vira "remarcado"
+-- e volta a não lida.
 -- Remarcação pelo bot = um evento agendamento_remarcado (move o mesmo agendamento).
 --
 -- Roda dentro da transação das RPCs de agendar/cancelar (também usadas pelo
@@ -37,6 +41,7 @@ create index idx_notificacoes_lida_criado
 create or replace function barbearia_001.fn_notificar_evento()
 returns trigger
 language plpgsql
+set search_path = ''
 as $function$
 declare
   v_id uuid;
@@ -58,13 +63,13 @@ begin
 
     elsif new.tipo = 'agendamento_cancelado' then
       if new.origem = 'site' and new.dados ->> 'motivo' = 'remarcado' then
+        -- ponytail: casa só por cliente + canal + 2 min; duas remarcações simultâneas do mesmo cliente (duas abas) podem fundir na linha errada.
         select n.id
           into v_id
           from barbearia_001.notificacoes n
          where n.tipo = 'agendamento_criado'
            and n.canal = 'site'
            and n.cliente_id = new.cliente_id
-           and not n.lida
            and n.criado_em > now() - interval '2 minutes'
          order by n.criado_em desc
          limit 1
@@ -73,7 +78,8 @@ begin
         if v_id is not null then
           update barbearia_001.notificacoes
              set tipo = 'agendamento_remarcado',
-                 inicio_anterior = (new.dados ->> 'inicio_liberado')::timestamptz
+                 inicio_anterior = (new.dados ->> 'inicio_liberado')::timestamptz,
+                 lida = false
            where id = v_id;
         else
           insert into barbearia_001.notificacoes
@@ -108,6 +114,10 @@ create trigger trg_notificar_evento
   execute function barbearia_001.fn_notificar_evento();
 
 GRANT ALL ON barbearia_001.notificacoes TO service_role;
-GRANT EXECUTE ON FUNCTION barbearia_001.fn_notificar_evento() TO service_role;
 
 NOTIFY pgrst, 'reload schema';
+
+-- Desfazer:
+-- drop trigger trg_notificar_evento on barbearia_001.agendamento_eventos;
+-- drop function barbearia_001.fn_notificar_evento();
+-- drop table barbearia_001.notificacoes;

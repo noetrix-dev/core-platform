@@ -11,7 +11,7 @@ Um sino no topo de todas as rotas autenticadas do painel do StudiOLD (`/agenda`,
   - a remarcação do bot (`fn_remarcar_agendamento_v2`) move o agendamento sem INSERT nem cancelamento;
   - a remarcação do site viraria duas notificações.
 - **Tabela `notificacoes` alimentada por trigger** `AFTER INSERT ON agendamento_eventos`. Mantém o schema do brief, com o campo `lida` por notificação.
-- **A remarcação do site vira uma notificação só.** O cancelamento com `dados.motivo = 'remarcado'` funde na notificação "criado" não lida do mesmo cliente, canal site, dos últimos 2 min.
+- **A remarcação do site vira uma notificação só.** O cancelamento com `dados.motivo = 'remarcado'` funde na notificação "criado" do mesmo cliente, canal site, dos últimos 2 min.
 - **Lista: não lidas de qualquer data, mais as lidas das últimas 24h, até 30 itens.** O contador e a lista sempre batem.
 - **`lida` única por notificação, não por usuário.** Hoje só o Victório usa o painel (YAGNI).
 - **Polling por Server Action dentro do `Topbar`** compartilhado (abordagem 1). Sem Route Handler e sem Realtime/WebSocket.
@@ -44,8 +44,8 @@ Dispara só quando `origem IN ('site','whatsapp_bot')` e `tipo IN ('agendamento_
 - `agendamento_criado` → notificação `agendamento_criado`.
 - `agendamento_remarcado` (o bot move o mesmo agendamento) → `agendamento_remarcado`, com `inicio_anterior = dados->>'inicio_anterior'`.
 - `agendamento_cancelado` com origem `site` e `dados->>'motivo' = 'remarcado'`:
-  - procura uma notificação `agendamento_criado` com canal `site`, mesmo `cliente_id`, `lida = false` e `criado_em > now() - 2 min`;
-  - se achar, faz UPDATE para `agendamento_remarcado` com `inicio_anterior = dados->>'inicio_liberado'`;
+  - procura uma notificação `agendamento_criado` com canal `site`, mesmo `cliente_id` e `criado_em > now() - 2 min`;
+  - se achar, faz UPDATE para `agendamento_remarcado` com `inicio_anterior = dados->>'inicio_liberado'` e `lida = false`;
   - senão, insere `agendamento_remarcado` com esse `inicio_anterior`.
 - Outro `agendamento_cancelado` → `agendamento_cancelado`.
 - Todo INSERT usa `on conflict (evento_id) do nothing`.
@@ -131,7 +131,7 @@ Dispara só quando `origem IN ('site','whatsapp_bot')` e `tipo IN ('agendamento_
 |---|---|
 | Trigger falha | WARNING; o agendamento segue e a notificação se perde |
 | Evento reprocessado | `evento_id unique` + `on conflict do nothing` |
-| Remarcação do site com o "criado" já lido | não funde; insere `remarcado` à parte (duas notificações, raro) |
+| Remarcação do site com o "criado" já lido | funde mesmo assim e a notificação volta a não lida como "Remarcação" |
 | Cliente ou agendamento apagado | FK `set null`; "Cliente" / "Horário removido" |
 | Sessão expirada durante o polling | erro ignorado; a próxima navegação vai a `/login` |
 | Mais de 30 não lidas | mostra as 30 mais novas; só essas viram lidas; o badge cai para o resto |
