@@ -42,7 +42,7 @@ export default async function AgendarPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className={styles.shell}>
-      <AgendarWizard key={sessao?.clienteId ?? "anon"} inicial={inicial} destino={destino} />
+      <AgendarWizard inicial={inicial} destino={destino} />
     </div>
   );
 }

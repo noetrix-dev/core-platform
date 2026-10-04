@@ -139,12 +139,20 @@ export function AgendarWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda só na montagem
   }, []);
 
-  function identificado(_dados: { nome: string }) {
+  function identificado(dados: { nome: string }) {
     if (destino === "meus-agendamentos") {
       router.push("/agendar/meus-agendamentos");
       return;
     }
-    router.refresh(); // page.tsx relê o cookie novo; o key remonta o wizard em Serviços
+    // Remarcar com sessão expirada: recarrega a página inteira para o servidor
+    // reconstruir `inicial` (dono/status conferidos em page.tsx) a partir do
+    // ?remarcar que continua na URL.
+    if (new URLSearchParams(window.location.search).has("remarcar")) {
+      window.location.reload();
+      return;
+    }
+    setNome(dados.nome);
+    abrirServicos(null);
   }
 
   function sair() {
