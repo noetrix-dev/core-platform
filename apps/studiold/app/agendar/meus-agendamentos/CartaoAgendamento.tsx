@@ -19,10 +19,17 @@ export function CartaoAgendamento({ agendamento: a }: { agendamento: ItemAgendam
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
   const manterRef = useRef<HTMLButtonElement>(null);
+  const cancelarRef = useRef<HTMLButtonElement>(null);
+  const abriu = useRef(false);
 
-  // Foco na escolha segura ao abrir a confirmação.
+  // Foco na escolha segura ao abrir; ao fechar (Manter, Esc, erro), volta pro "Cancelar".
   useEffect(() => {
-    if (confirmando) manterRef.current?.focus();
+    if (confirmando) {
+      abriu.current = true;
+      manterRef.current?.focus();
+    } else if (abriu.current) {
+      cancelarRef.current?.focus();
+    }
   }, [confirmando]);
 
   function cancelar() {
@@ -102,6 +109,7 @@ export function CartaoAgendamento({ agendamento: a }: { agendamento: ItemAgendam
             Remarcar
           </Link>
           <button
+            ref={cancelarRef}
             type="button"
             className={`${styles.btn} ${styles["btn--danger"]} ${css.cta}`}
             onClick={() => setConfirmando(true)}
