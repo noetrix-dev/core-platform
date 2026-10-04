@@ -86,6 +86,23 @@ Funções puras em `lib/agendar/formato.ts` (com testes):
   - "Fazer outro agendamento" volta para Serviços, não para a identificação.
 - **Etapa Serviços:** link discreto "Meus agendamentos" ao lado do "Olá, [nome]".
 
+### Brief visual (aprovado no `/impeccable shape meus-agendamentos`)
+
+- **Modo e direção:** Operate. Estende o mundo "A Estação do Barbeiro" sem identidade nova. O foco visual é o primeiro cartão de Próximos (data e hora em `comandaDestaque`). Anti-metas: calendário, abas, filtros, modal, `confirm()` do navegador.
+- **Selo de status** no canto do destaque, em Condensed caixa-alta pequena: "Confirmado" em `--sage`, "Agendado" em `--steel`. O contraste AA sobre `--enamel-hi` é medido na implementação.
+- **Ações do cartão:**
+  - "Remarcar" e "Cancelar" ficam numa linha de 2 colunas iguais (`css.cta`). Remarcar usa `.btn` neutro; Cancelar usa `.btn--danger`.
+  - A confirmação substitui a linha de botões dentro do próprio cartão: "Sim, cancelar" em `.btn--primary` e "Manter" em `.btn`. O foco vai para "Manter" e Esc mantém.
+- **Anteriores:** linhas densas de 2 linhas dentro de `.lista`.
+  - Linha 1: "Sáb 10/10 · 09:00", com o status à direita.
+  - Linha 2: serviços separados por vírgula e o total, em `--ink-2`.
+  - "Concluído" em `--ink`; "Cancelado" e "Não realizado" em `--ink-2`.
+- **Faixa "Remarcando":** fundo `--enamel-lo`, borda esquerda de 3px `--ochre`, texto `.msgQuiet`. É informação, não alerta.
+- **Confirmação ao remarcar:** "Novo horário: Ter 13/10 às 10:30" e, abaixo, "Antes: ~~Sáb 10/10 às 09:00~~" em `--ink-2`.
+- **Link "Meus agendamentos" em Serviços:** à direita do h1, em `.msgQuiet` sublinhado, com alvo de 44px ou mais.
+- **Sem animação de saída** do cartão cancelado; o `router.refresh()` só reordena.
+- Componentes novos: `app/agendar/meus-agendamentos/page.tsx`, `MeusAgendamentos.tsx`, `CartaoAgendamento.tsx`. Classes novas em `app/agendar/agendar.module.css`.
+
 ## Erros / bordas
 
 | Situação | Comportamento |
