@@ -18,6 +18,12 @@ export function ehCombo(nome: string): boolean {
   return nome.toLowerCase().startsWith("combo ");
 }
 
+// Agenda online só oferece horários cheios e meias: :00 e :30.
+export function minutoPermitido(hora: string): boolean {
+  const m = hora.slice(3, 5);
+  return m === "00" || m === "30";
+}
+
 export function turno(hora: string): "manha" | "tarde" {
   return hora < "12:00" ? "manha" : "tarde";
 }

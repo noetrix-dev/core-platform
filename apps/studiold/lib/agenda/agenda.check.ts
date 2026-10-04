@@ -18,6 +18,7 @@ import {
   mascararEmail,
   ehCombo,
   turno,
+  minutoPermitido,
   rotuloDia,
   proximoDia,
   partesSaoPaulo,
@@ -337,6 +338,11 @@ assert.equal(minToHm(1020), "17:00");
   assert.equal(turno("09:00"), "manha");
   assert.equal(turno("11:59"), "manha");
   assert.equal(turno("12:00"), "tarde");
+  assert.equal(minutoPermitido("09:00"), true);
+  assert.equal(minutoPermitido("14:30:00"), true, "aceita HH:MM:SS do banco");
+  assert.equal(minutoPermitido("09:05"), false);
+  assert.equal(minutoPermitido("14:15"), false);
+  assert.equal(minutoPermitido("10:45:00"), false);
   assert.equal(rotuloDia("2026-10-06"), "Ter 06/10");
   assert.equal(rotuloDia("2026-10-10"), "Sáb 10/10");
   assert.equal(proximoDia("2026-10-31"), "2026-11-01", "vira o mês");

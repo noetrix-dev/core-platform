@@ -28,7 +28,7 @@ import {
   apagarVerificacao,
   segredoConfigurado,
 } from "@/lib/agendar/sessao";
-import { mascararEmail, partesSaoPaulo, rotuloDia, escaparHtml } from "@/lib/agendar/formato";
+import { mascararEmail, partesSaoPaulo, rotuloDia, escaparHtml, minutoPermitido } from "@/lib/agendar/formato";
 import { fmtPreco } from "@/lib/agenda/time";
 
 const RATE_LIMIT_JANELA_MIN = 10;
@@ -383,7 +383,9 @@ export async function buscarHorarios(
   const linhas = (rpc.data ?? []) as { data: string; data_hora: string; hora: string }[];
   return {
     ok: true,
-    horarios: linhas.map((l) => ({ data: l.data, hora: l.hora.slice(0, 5), inicio: l.data_hora })),
+    horarios: linhas
+      .filter((l) => minutoPermitido(l.hora))
+      .map((l) => ({ data: l.data, hora: l.hora.slice(0, 5), inicio: l.data_hora })),
   };
 }
 
@@ -396,7 +398,11 @@ export async function confirmarAgendamento(p: {
   const sessao = await lerSessao();
   if (!sessao) return SEM_SESSAO;
   if (!servicoIdsValidos(p.servicoIds)) return { ok: false, error: "Escolha ao menos um serviço." };
-  if (typeof p.inicio !== "string" || Number.isNaN(Date.parse(p.inicio))) {
+  if (
+    typeof p.inicio !== "string" ||
+    Number.isNaN(Date.parse(p.inicio)) ||
+    !minutoPermitido(partesSaoPaulo(p.inicio).hora)
+  ) {
     return { ok: false, motivo: "horario", error: "Escolha um horário." };
   }
   if (!idOpcionalValido(p.cortesiaId) || !idOpcionalValido(p.estiloId)) {
