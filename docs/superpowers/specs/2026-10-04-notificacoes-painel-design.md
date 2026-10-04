@@ -95,9 +95,35 @@ Dispara só quando `origem IN ('site','whatsapp_bot')` e `tipo IN ('agendamento_
   - **Carregando:** esqueleto de 3 linhas.
   - **Vazio:** "Nenhuma notificação nas últimas 24h."
   - **Erro:** "Não foi possível carregar as notificações."
+- **Tocar numa notificação** leva ao dia do horário na agenda: a linha é um `<Link href="/agenda?d=YYYY-MM-DD">`, com o `data` do item, e fecha o painel. A `/agenda` já aceita `?d=`. Na remarcação o link vai ao dia **novo**. Se o horário foi removido (`data` nulo), a linha não é link.
 - **Ao abrir:** `listarNotificacoes()`; havendo itens não lidos, chama `marcarTodasLidas(itens[0].criadoEm)` e zera o badge.
 - **Polling:** `contarNaoLidas()` no mount, a cada 30 s com `document.visibilityState === "visible"`, e ao voltar para a aba (`visibilitychange`). Erros são silenciosos na tela.
 - **Visual:** mundo "A Estação do Barbeiro", mobile-first a 375px, pt-BR, sem CSS global novo (classes em `app/agenda/agenda.module.css`, onde o `Topbar` já vive). O desenho fino é fechado no `/impeccable shape` antes de codar.
+
+### Brief visual (aprovado no `/impeccable shape notificacoes`)
+
+- **Modo e direção:** Operate. Estende o mundo do painel sem identidade nova. É um aviso para olhar e seguir, não uma caixa de entrada. Anti-metas: sino animado, toast, som, vermelho vivo, cartões arredondados, avatar.
+- **Sino:** `.navbtn` igual ao botão do menu (44px).
+- **Badge:** círculo oxblood de 18px, com número branco em condensada tabular, sobreposto ao canto superior direito.
+- **Painel = bandeja no padrão `.tray`:**
+  - cabeçalho preto-fosco, em condensada caixa-alta: "Notificações", com "N novas" à direita em `#e7b7b1`;
+  - corpo esmalte, com linhas separadas por fio `--chrome`;
+  - uma sombra forte, a mesma elevação do drawer.
+- **Tamanho:**
+  - **375px:** largura total menos 16px de cada lado, logo abaixo da faixa;
+  - **desktop:** 22rem, ancorado à direita do sino;
+  - nos dois casos, altura máxima de 70vh com rolagem interna.
+- **Linha (56px ou mais):**
+  - quadrado de 28px com o ícone do tipo:
+    - `plus` em `--sage` para novo;
+    - `x` em `--oxblood` para cancelamento;
+    - `clock` em `--steel` para remarcação;
+  - nome em Barlow 600 e o tempo relativo à direita, em condensada `--ink-2`;
+  - linha 2 com o tipo e o canal, e o ícone `chat` antes de "WhatsApp";
+  - linha 3 em `--ink-2` tabular com os serviços e o horário. Na remarcação: "~~antes~~ → depois".
+- **Não lida:** filete oxblood de 3px à esquerda e fundo `--enamel-hi`.
+- **Movimento:** fade de 120ms ao abrir, que some com `prefers-reduced-motion`. Sem mola.
+- **Contraste:** o badge (branco sobre oxblood) dá cerca de 9:1; `--ink-2` sobre `--enamel-hi` dá 5,3:1. Os dois passam AA.
 
 ## Erros e casos de borda
 
