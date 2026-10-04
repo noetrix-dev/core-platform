@@ -10,6 +10,7 @@ import {
   iniciarVerificacao,
   verificarCodigo,
   confirmarCadastro,
+  encerrarSessao,
 } from "./actions";
 import styles from "@/app/agenda/agenda.module.css";
 
@@ -203,7 +204,17 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           >
             Sim, sou eu
           </button>
-          <button type="button" className={`${styles.btn} justify-center`} onClick={recomecar}>
+          <button
+            type="button"
+            className={`${styles.btn} justify-center`}
+            disabled={pendente}
+            onClick={() =>
+              iniciar(async () => {
+                await encerrarSessao().catch(() => undefined);
+                recomecar();
+              })
+            }
+          >
             Não, não sou eu
           </button>
         </div>

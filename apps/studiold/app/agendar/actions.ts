@@ -14,6 +14,7 @@ import { normalizarTelefone } from "@/lib/clientes/telefone";
 import { limparEmail } from "@/lib/clientes/email";
 import { sendEmail } from "@/lib/email/resend";
 import { gerarCodigo } from "@/lib/agendar/codigo";
+import { gravarSessao, apagarSessao } from "@/lib/agendar/sessao";
 
 const RATE_LIMIT_JANELA_MIN = 10;
 const RATE_LIMIT_MAX_PEDIDOS = 3;
@@ -177,6 +178,7 @@ export async function verificarCodigo(
     if (!c.email && row.email) {
       await db.from("clientes").update({ email: row.email }).eq("id", c.id);
     }
+    await gravarSessao({ clienteId: c.id, telefone });
     return { ok: true, novo: false, clienteId: c.id, nome: c.nome };
   }
   return { ok: true, novo: true };
@@ -216,6 +218,7 @@ export async function confirmarCadastro(
     if (!r.cliente_id) {
       return erroInterno("confirmarCadastro/semClienteId", "RPC retornou CLIENTE_CRIADO sem cliente_id");
     }
+    await gravarSessao({ clienteId: r.cliente_id, telefone });
     return { ok: true, clienteId: r.cliente_id, nome: r.nome ?? nome };
   }
   if (!r.sucesso && r.codigo === "CLIENTE_INATIVO") {
@@ -228,4 +231,9 @@ export async function confirmarCadastro(
   // chamado quando verificarCodigo já disse "novo") — defensivo, RPC é
   // compartilhada com o bot do WhatsApp.
   return { ok: false, error: "Não foi possível concluir o cadastro. Tente de novo." };
+}
+
+// "É você? Não" — descarta a prova de verificação antes de voltar ao telefone.
+export async function encerrarSessao(): Promise<void> {
+  await apagarSessao();
 }
