@@ -8,13 +8,26 @@
 // A barreira de confiança é revalidar tudo no servidor (telefone, formato de
 // código, janelas de rate limit), nunca confiar no estado que o cliente
 // mandou. Ver docs/superpowers/specs/2026-10-03-verificacao-identidade-agendar-design.md
+//
+// O cookie de sessão (agendar_sessao) só é emitido depois de prova no
+// servidor: cliente existente → verificarCodigo grava direto; cliente novo →
+// verificarCodigo grava agendar_verificado (cookie assinado, 10 min) e só
+// confirmarCadastro, lendo essa prova, cria o cliente e grava a sessão.
 
 import { tenantDb } from "@/lib/supabase/server";
 import { normalizarTelefone } from "@/lib/clientes/telefone";
 import { limparEmail } from "@/lib/clientes/email";
 import { sendEmail } from "@/lib/email/resend";
 import { gerarCodigo } from "@/lib/agendar/codigo";
-import { gravarSessao, apagarSessao, lerSessao } from "@/lib/agendar/sessao";
+import {
+  gravarSessao,
+  apagarSessao,
+  lerSessao,
+  gravarVerificacao,
+  lerVerificacao,
+  apagarVerificacao,
+  segredoConfigurado,
+} from "@/lib/agendar/sessao";
 import { mascararEmail, partesSaoPaulo, rotuloDia, escaparHtml } from "@/lib/agendar/formato";
 import { fmtPreco } from "@/lib/agenda/time";
 
@@ -48,6 +61,7 @@ export async function iniciarVerificacao(
   telefoneRaw: string,
   emailRaw?: string,
 ): Promise<IniciarVerificacaoResultado> {
+  if (!segredoConfigurado()) return erroInterno("config", "AGENDAR_COOKIE_SECRET ausente ou curto");
   const telefone = telefoneDigitos(telefoneRaw);
   if (!telefone) return { ok: false, error: "Telefone inválido. Use DDD + número." };
 
@@ -125,6 +139,7 @@ export async function verificarCodigo(
   telefoneRaw: string,
   codigoRaw: string,
 ): Promise<VerificarCodigoResultado> {
+  if (!segredoConfigurado()) return erroInterno("config", "AGENDAR_COOKIE_SECRET ausente ou curto");
   const telefone = telefoneDigitos(telefoneRaw);
   if (!telefone) return { ok: false, error: "Telefone inválido." };
   const codigo = codigoRaw.trim();
@@ -183,6 +198,7 @@ export async function verificarCodigo(
     await gravarSessao({ clienteId: c.id, telefone });
     return { ok: true, novo: false, clienteId: c.id, nome: c.nome };
   }
+  await gravarVerificacao(telefone);
   return { ok: true, novo: true };
 }
 
@@ -190,13 +206,15 @@ export type ConfirmarCadastroResultado =
   | { ok: true; clienteId: string; nome: string }
   | { ok: false; error: string };
 
+// _telefoneRaw é ignorado de propósito (mantido pela assinatura): o telefone
+// vem SÓ da prova assinada gravada por verificarCodigo.
 export async function confirmarCadastro(
-  telefoneRaw: string,
+  _telefoneRaw: string,
   nomeRaw: string,
   emailRaw: string,
 ): Promise<ConfirmarCadastroResultado> {
-  const telefone = telefoneDigitos(telefoneRaw);
-  if (!telefone) return { ok: false, error: "Telefone inválido." };
+  const telefone = await lerVerificacao();
+  if (!telefone) return { ok: false, error: "Confirme o código de novo para continuar." };
   const nome = nomeRaw.trim().slice(0, 120);
   if (!nome) return { ok: false, error: "Informe seu nome." };
   const email = limparEmail(emailRaw);
@@ -220,6 +238,7 @@ export async function confirmarCadastro(
     if (!r.cliente_id) {
       return erroInterno("confirmarCadastro/semClienteId", "RPC retornou CLIENTE_CRIADO sem cliente_id");
     }
+    await apagarVerificacao();
     await gravarSessao({ clienteId: r.cliente_id, telefone });
     return { ok: true, clienteId: r.cliente_id, nome: r.nome ?? nome };
   }

@@ -320,6 +320,8 @@ assert.equal(minToHm(1020), "17:00");
   const lixo = Buffer.from("não é json").toString("base64url");
   const sigLixo = assinarSessao(dados, S).split(".")[1];
   assert.equal(lerSessaoAssinada(`${lixo}.${sigLixo}`, S, 1_000), null, "corpo não-JSON");
+  const tokVerif = assinarSessao({ clienteId: "", telefone: "11987654321", exp: 2_000 }, S + ":verificado");
+  assert.equal(lerSessaoAssinada(tokVerif, S, 1_000), null, "token de verificação não vale como sessão");
 }
 
 // --- formato de /agendar -------------------------------------------------
