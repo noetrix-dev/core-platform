@@ -276,6 +276,8 @@ const SEM_SESSAO: FalhaAgendar = {
   sessaoExpirada: true,
   error: "Sua sessão expirou, confirme o telefone de novo.",
 };
+// ponytail: teto contado fora da advisory lock da RPC — replays concorrentes podem passar 1-2 do limite; trava real exigiria contar dentro de fn_criar_agendamento_v2 (migration).
+const MAX_AGENDAMENTOS_SITE_FUTUROS = 2;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function servicoIdsValidos(ids: unknown): ids is string[] {
@@ -384,6 +386,18 @@ export async function confirmarAgendamento(p: {
 
   const db = tenantDb();
 
+  const futuros = await db
+    .from("agendamentos")
+    .select("id, slots!inner(data_hora)", { count: "exact", head: true })
+    .eq("cliente_id", sessao.clienteId)
+    .eq("origem", "site")
+    .in("status", ["agendado", "confirmado"])
+    .gt("slots.data_hora", new Date().toISOString());
+  if (futuros.error) return erroInterno("confirmarAgendamento/limite", futuros.error.message);
+  if ((futuros.count ?? 0) >= MAX_AGENDAMENTOS_SITE_FUTUROS) {
+    return { ok: false, error: "Você já tem horários marcados pelo site. Pra marcar mais, fale direto com a barbearia." };
+  }
+
   // Mesmas checagens de fn_confirmar_booking_whatsapp_v2, antes da RPC, pra
   // dar mensagem específica em vez da exceção genérica.
   if (p.cortesiaId) {
@@ -432,7 +446,7 @@ export async function confirmarAgendamento(p: {
   }
 
   const r = rpc.data as { inicio: string; duracao_total: number; valor_total: number | string };
-  // Agendamento criado: a partir daqui nada desfaz ele. Sessão é de uso único.
+  // Agendamento criado: a partir daqui nada desfaz ele. Apaga o cookie no browser (o token é stateless e vale até exp; o teto MAX_AGENDAMENTOS_SITE_FUTUROS limita replay).
   await apagarSessao();
 
   const [servicos, cliente] = await Promise.all([
