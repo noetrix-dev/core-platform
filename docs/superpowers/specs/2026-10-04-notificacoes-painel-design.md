@@ -61,7 +61,7 @@ Dispara só quando `origem IN ('site','whatsapp_bot')` e `tipo IN ('agendamento_
   - filtro `lida = false OR criado_em >= now - 24h`, em `criado_em desc`, `limit 30`;
   - embed: `clientes(nome)` e `agendamentos(slots(data_hora), agendamento_servicos(ordem, servicos(nome)))`;
   - data e hora em São Paulo via `partesSaoPaulo`.
-- **`marcarTodasLidas(ate: string): Promise<void>`:** `update lida = true` onde `lida = false and criado_em <= ate`. O `ate` é o `criadoEm` do item mais novo mostrado. Uma notificação que chegue entre a leitura e a marcação continua não lida.
+- **`marcarLidas(ids: string[]): Promise<void>`:** `update lida = true` onde `id in ids` (só UUIDs válidos, no máximo 30). Marca exatamente as notificações mostradas: uma que chegue entre a leitura e a marcação, ou que não tenha cabido nas 30, continua não lida.
 
 `ItemNotificacao = { id; tipo; canal; cliente: string | null; servicos: string[]; data: string | null; hora: string | null; anterior: { data; hora } | null; criadoEm: string; lida: boolean }`
 
@@ -96,7 +96,7 @@ Dispara só quando `origem IN ('site','whatsapp_bot')` e `tipo IN ('agendamento_
   - **Vazio:** "Nenhuma notificação nas últimas 24h."
   - **Erro:** "Não foi possível carregar as notificações."
 - **Tocar numa notificação** leva ao dia do horário na agenda: a linha é um `<Link href="/agenda?d=YYYY-MM-DD">`, com o `data` do item, e fecha o painel. A `/agenda` já aceita `?d=`. Na remarcação o link vai ao dia **novo**. Se o horário foi removido (`data` nulo), a linha não é link.
-- **Ao abrir:** `listarNotificacoes()`; havendo itens não lidos, chama `marcarTodasLidas(itens[0].criadoEm)` e zera o badge.
+- **Ao abrir:** `listarNotificacoes()`; havendo itens não lidos, chama `marcarLidas(ids das não lidas mostradas)` e atualiza o badge com `contarNaoLidas()`.
 - **Polling:** `contarNaoLidas()` no mount, a cada 30 s com `document.visibilityState === "visible"`, e ao voltar para a aba (`visibilitychange`). Erros são silenciosos na tela.
 - **Visual:** mundo "A Estação do Barbeiro", mobile-first a 375px, pt-BR, sem CSS global novo (classes em `app/agenda/agenda.module.css`, onde o `Topbar` já vive). O desenho fino é fechado no `/impeccable shape` antes de codar.
 
