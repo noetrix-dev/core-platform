@@ -190,3 +190,97 @@
 @media (prefers-reduced-motion: reduce) {
   .esqueleto { animation: none; }
 }
+
+/* ---- Meus agendamentos (Spec C) ------------------------------------------ */
+.secao {
+  margin-top: 1.75rem;
+}
+.cartoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.cartaoTopo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+/* selo de status: aço = agendado, sálvia = confirmado (contraste AA sobre --enamel-hi) */
+.selo {
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding-top: 0.35rem;
+  color: var(--steel);
+}
+.selo[data-status="confirmado"] {
+  color: var(--sage);
+}
+.acoes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.confirmaCancelar {
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--chrome-dark);
+}
+.confirmaCancelar .acoes {
+  margin-top: 0.6rem;
+}
+.anterior {
+  padding: 0.65rem 0.85rem;
+}
+.anterior + .anterior {
+  border-top: 1px solid var(--chrome);
+}
+.anteriorTopo {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.statusTexto {
+  font-family: var(--font-barlow-cond), var(--font-barlow), system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.statusTexto[data-status="concluido"] {
+  color: var(--ink);
+}
+
+/* ---- remarcar no wizard --------------------------------------------------- */
+.faixaRemarcando {
+  background: var(--enamel-lo);
+  border-left: 3px solid var(--ochre);
+  border-radius: var(--r);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+}
+.antes {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+  margin: -0.4rem 0 0.6rem;
+}
+.servicosTopo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.linkDiscreto {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
