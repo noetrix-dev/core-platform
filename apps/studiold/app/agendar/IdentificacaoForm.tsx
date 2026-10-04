@@ -250,6 +250,13 @@ export function IdentificacaoForm({ onIdentificado }: Props) {
           >
             Ver meus agendamentos
           </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles["btn--ghost"]} ${css.cta} w-full`}
+            onClick={() => setEtapa({ ...etapa, tipo: "confirmacao" })}
+          >
+            Voltar
+          </button>
         </div>
       )}
 
