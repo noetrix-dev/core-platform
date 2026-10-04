@@ -276,7 +276,10 @@ export function AgendarWizard({
               <button
                 type="button"
                 className={`${styles.btn} ${css.cta} mb-4 w-full`}
-                onClick={() => abrirServicos(null)}
+                onClick={() => {
+                  setAviso(null);
+                  carregarServicos(); // mantém a seleção (pré-marcação do remarcar)
+                }}
               >
                 Tentar de novo
               </button>
