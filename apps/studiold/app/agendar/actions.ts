@@ -28,7 +28,8 @@ import {
   apagarVerificacao,
   segredoConfigurado,
 } from "@/lib/agendar/sessao";
-import { mascararEmail, partesSaoPaulo, rotuloDia, escaparHtml, minutoPermitido } from "@/lib/agendar/formato";
+import { mascararEmail, partesSaoPaulo, rotuloDia, escaparHtml, minutoPermitido, ehUuid, ehRemarcavel } from "@/lib/agendar/formato";
+import { lerAgendamentoDoCliente, type AgendamentoDoCliente } from "@/lib/agendar/meus";
 import { fmtPreco } from "@/lib/agenda/time";
 
 const RATE_LIMIT_JANELA_MIN = 10;
@@ -279,7 +280,7 @@ export type FalhaAgendar = {
   ok: false;
   error: string;
   sessaoExpirada?: true;
-  motivo?: "horario" | "cortesia" | "estilo";
+  motivo?: "horario" | "cortesia" | "estilo" | "remarcar";
 };
 export type ResumoAgendamento = {
   servicos: string[];
@@ -288,6 +289,8 @@ export type ResumoAgendamento = {
   duracaoMin: number;
   valorTotal: number;
   emailMascarado: string | null;
+  remarcado: boolean;
+  antigoNaoCancelado: boolean; // novo criado, mas o antigo não foi liberado
 };
 
 const SEM_SESSAO: FalhaAgendar = {
@@ -295,22 +298,24 @@ const SEM_SESSAO: FalhaAgendar = {
   sessaoExpirada: true,
   error: "Sua sessão expirou, confirme o telefone de novo.",
 };
+// Mesma resposta para id de outro cliente, inexistente ou malformado — não
+// revela quais ids existem.
+const NAO_ENCONTRADO: FalhaAgendar = { ok: false, error: "Agendamento não encontrado." };
 // ponytail: teto contado fora da advisory lock da RPC — replays concorrentes podem passar 1-2 do limite; trava real exigiria contar dentro de fn_criar_agendamento_v2 (migration).
 const MAX_AGENDAMENTOS_SITE_FUTUROS = 2;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function servicoIdsValidos(ids: unknown): ids is string[] {
   return (
     Array.isArray(ids) &&
     ids.length > 0 &&
     ids.length <= 10 &&
-    ids.every((x) => typeof x === "string" && UUID.test(x)) &&
+    ids.every((x) => ehUuid(x)) &&
     new Set(ids).size === ids.length
   );
 }
 
 function idOpcionalValido(id: unknown): id is string | null {
-  return id === null || (typeof id === "string" && UUID.test(id));
+  return id === null || ehUuid(id);
 }
 
 export async function carregarCatalogo(): Promise<{ ok: true; catalogo: Catalogo } | FalhaAgendar> {
@@ -394,6 +399,7 @@ export async function confirmarAgendamento(p: {
   inicio: string;
   cortesiaId: string | null;
   estiloId: string | null;
+  remarcarId?: string | null;
 }): Promise<{ ok: true; resumo: ResumoAgendamento } | FalhaAgendar> {
   const sessao = await lerSessao();
   if (!sessao) return SEM_SESSAO;
@@ -411,13 +417,29 @@ export async function confirmarAgendamento(p: {
 
   const db = tenantDb();
 
-  const futuros = await db
+  // Remarcar: confere dono e status ANTES de criar qualquer coisa
+  // (fn_cancelar_agendamento_v2 não confere o dono).
+  let remarcar: AgendamentoDoCliente | null = null;
+  if (p.remarcarId) {
+    remarcar = await lerAgendamentoDoCliente(sessao.clienteId, p.remarcarId);
+    if (!remarcar || !ehRemarcavel(remarcar, Date.now())) {
+      return {
+        ok: false,
+        motivo: "remarcar",
+        error: "Esse agendamento não pode mais ser remarcado. Confirme de novo pra criar um novo horário.",
+      };
+    }
+  }
+
+  let consultaTeto = db
     .from("agendamentos")
     .select("id, slots!inner(data_hora)", { count: "exact", head: true })
     .eq("cliente_id", sessao.clienteId)
     .eq("origem", "site")
     .in("status", ["agendado", "confirmado"])
     .gt("slots.data_hora", new Date().toISOString());
+  if (remarcar) consultaTeto = consultaTeto.neq("id", remarcar.id);
+  const futuros = await consultaTeto;
   if (futuros.error) return erroInterno("confirmarAgendamento/limite", futuros.error.message);
   if ((futuros.count ?? 0) >= MAX_AGENDAMENTOS_SITE_FUTUROS) {
     return { ok: false, error: "Você já tem horários marcados pelo site. Pra marcar mais, fale direto com a barbearia." };
@@ -471,8 +493,25 @@ export async function confirmarAgendamento(p: {
   }
 
   const r = rpc.data as { inicio: string; duracao_total: number; valor_total: number | string };
-  // Agendamento criado: a partir daqui nada desfaz ele. Apaga o cookie no browser (o token é stateless e vale até exp; o teto MAX_AGENDAMENTOS_SITE_FUTUROS limita replay).
-  await apagarSessao();
+  // Agendamento criado: a partir daqui nada desfaz ele. A sessão continua
+  // valendo até exp (Spec C: "Ver meus agendamentos" e remarcar sem novo
+  // código); o teto MAX_AGENDAMENTOS_SITE_FUTUROS limita replay.
+
+  // Remarcar: só agora, com o novo garantido, libera o antigo. Se falhar, o
+  // novo vale e o cliente é avisado para cancelar o antigo em Meus agendamentos.
+  let antigoNaoCancelado = false;
+  if (remarcar) {
+    const canc = await db.rpc("fn_cancelar_agendamento_v2", {
+      p_agendamento_id: remarcar.id,
+      p_motivo: "remarcado",
+      p_descricao: null,
+      p_origem: "site",
+    });
+    if (canc.error) {
+      antigoNaoCancelado = true;
+      console.error("[agendar/confirmarAgendamento/remarcar]", canc.error.message);
+    }
+  }
 
   const [servicos, cliente] = await Promise.all([
     db.from("servicos").select("id, nome").in("id", p.servicoIds),
@@ -489,9 +528,9 @@ export async function confirmarAgendamento(p: {
   if (c?.email) {
     const envio = await sendEmail({
       to: c.email,
-      subject: `Agendado: ${rotuloDia(data)} às ${hora} — StudiOLD`,
+      subject: `${remarcar ? "Remarcado" : "Agendado"}: ${rotuloDia(data)} às ${hora} — StudiOLD`,
       html:
-        `<p>Olá, ${escaparHtml(c.nome)}! Seu horário na StudiOLD está marcado.</p>` +
+        `<p>Olá, ${escaparHtml(c.nome)}! Seu horário na StudiOLD ${remarcar ? "foi remarcado" : "está marcado"}.</p>` +
         `<p><strong>${escaparHtml(rotuloDia(data))} às ${hora}</strong></p>` +
         `<ul>${nomes.map((n) => `<li>${escaparHtml(n)}</li>`).join("")}</ul>` +
         `<p>Total: ${escaparHtml(fmtPreco(valorTotal))} · ${r.duracao_total} min</p>`,
@@ -500,5 +539,33 @@ export async function confirmarAgendamento(p: {
     else console.error("[agendar/confirmarAgendamento/email]", envio.error);
   }
 
-  return { ok: true, resumo: { ...resumoBase, emailMascarado } };
+  return { ok: true, resumo: { ...resumoBase, emailMascarado, remarcado: !!remarcar, antigoNaoCancelado } };
+}
+
+export async function cancelarAgendamento(id: string): Promise<{ ok: true } | FalhaAgendar> {
+  const sessao = await lerSessao();
+  if (!sessao) return SEM_SESSAO;
+
+  // fn_cancelar_agendamento_v2 cancela qualquer id: o dono é conferido aqui.
+  const ag = await lerAgendamentoDoCliente(sessao.clienteId, id);
+  if (!ag) return NAO_ENCONTRADO;
+  if (!ehRemarcavel(ag, Date.now())) {
+    return { ok: false, error: "Esse agendamento já não pode ser cancelado." };
+  }
+
+  const rpc = await tenantDb().rpc("fn_cancelar_agendamento_v2", {
+    p_agendamento_id: ag.id,
+    p_motivo: "cliente",
+    p_descricao: null,
+    p_origem: "site",
+  });
+  if (rpc.error) {
+    // Corrida entre abas: outro pedido já cancelou/concluiu.
+    if (rpc.error.message.includes("não pode ser cancelado")) {
+      console.error("[agendar/cancelarAgendamento]", rpc.error.message);
+      return { ok: false, error: "Esse agendamento já não pode ser cancelado." };
+    }
+    return erroInterno("cancelarAgendamento", rpc.error.message);
+  }
+  return { ok: true };
 }
