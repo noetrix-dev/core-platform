@@ -186,9 +186,17 @@ Estado da revisão comercial: `rascunho → preco_pendente → precificada → e
 - PDF e envio de proposta só existem a partir de `precificada`.
 
 Processo:
-- `processo.cancelar`: exige motivo.
-- `processo.fechar`: exige conciliação de saldo comercial, quantidade aceita, devoluções, NF e critérios do cliente. Nunca é automático na primeira remessa.
-- `processo.reabrir`: exige motivo e gera evento de auditoria.
+- **Cancelar** sempre exige motivo e gera evento de auditoria.
+  - Com `processo.cancelar`, só antes de existir pedido formal, compra ou ordem de produção ligada ao processo.
+  - Depois disso, só o Admin cancela.
+  - O backend confere essa condição; não basta a permissão.
+- **Fechar** com `processo.fechar` só é permitido quando o sistema confirma a conciliação:
+  - saldo de entrega zerado em todos os itens de pedido;
+  - aceites registrados;
+  - NF registrada para o que foi aceito;
+  - nenhuma devolução pendente.
+- Sem conciliação, só o Admin fecha, com justificativa obrigatória e evento de auditoria. Fechar nunca é automático na primeira remessa.
+- **Reabrir** exige motivo e gera evento de auditoria.
 
 ## 6. Regras e invariantes
 
@@ -302,6 +310,7 @@ Processo:
 | auditoria.ver | ✓ | | | | | Sim |
 
 Notas da matriz:
+- `processo.cancelar` e `processo.fechar` concedidas ao Comercial têm as condições do §5. Fora delas, só o Admin age.
 - `retrabalho.abrir` e `processo.reabrir` não vieram com perfil definido. Padrão adotado: retrabalho para Compras/Produção e Técnico (quem vê a não conformidade); reabrir travado no Admin. Revisar se discordar.
 - A reserva firme não tem permissão de criação: nasce sozinha na liberação da qualidade.
 - `dados.exportar` fica travada no Admin enquanto as exportações não passam pela matriz de campos (§7.3). Quando passarem, pode virar atribuível.
@@ -356,30 +365,41 @@ O modelo acima cobre o sistema inteiro. A implementação vai por PRs:
 
 | PR | Conteúdo |
 |---|---|
-| **0. Fundação** (este ciclo) | Layout, navegação, componentes base, contratos TS de todo o domínio, Docker + Drizzle com schema de núcleo e processo, seed fictício, RBAC puro + `requirePermissao()` + seletor de perfil de dev, funções puras e testes dos 4 cenários V2.3 |
-| 1. Comercial | Clientes, processos, revisão comercial com preço pendente, itens, parceiros, cotações de fornecedor, desenhos por caminho, proposta PDF |
-| 2. Execução e financeiro | Pedido formal e vínculo de demanda, OP e etapas, compras e recebimentos, qualidade, NF registrada, AP/AR, margem Admin; Better Auth |
-| 3. Entregas | Programação versionada, remessas, aceite, devoluções, reprogramação |
-| 4. Estoque | Lotes, movimentos, reservas firme e estratégica, excedente, ocorrências e ajustes |
+| **chore** | Rule `usinagem-database.md`, exceção do `frontend.md` para o usinagem, hook protegendo `apps/usinagem/drizzle/**`, script `typecheck` no app. Mudanças em guardrails (`.claude/**`, `.gitignore`) são entregues como patch e aplicadas pelo responsável humano. |
+| **docs** | Esta especificação, o plano e o `apps/usinagem/CLAUDE.md` atualizado |
+| **1A. Dados** | Docker Compose com Postgres 16 local, Drizzle, schema de núcleo e processo, seed fictício, workflow de CI do GitHub Actions para o usinagem (typecheck, lint, Vitest com Postgres de serviço) |
+| **1B. Domínio** | Contratos TS de todo o domínio, RBAC puro + `requirePermissao()` + seletor de perfil de dev, funções puras e testes dos 4 cenários V2.3 |
+| **1C. Shell de UI** | Layout, navegação e componentes base definidos no `/impeccable shape` |
+| **2. Comercial (fatia 1)** | Clientes, processos, revisão comercial com preço pendente, itens, parceiros, cotações de fornecedor, desenhos por caminho, proposta PDF |
+| 3. Execução e financeiro | Pedido formal e vínculo de demanda, OP e etapas, compras e recebimentos, qualidade, NF registrada, AP/AR, margem Admin; Better Auth |
+| 4. Entregas | Programação versionada, remessas, aceite, devoluções, reprogramação |
+| 5. Estoque | Lotes, movimentos, reservas firme e estratégica, excedente, ocorrências e ajustes |
 
-O schema de estoque só se estabiliza depois que os testes puros dos 4 cenários passam.
+O schema de estoque só se estabiliza depois que os testes puros dos 4 cenários (1B) passam. Nenhum push sem confirmação explícita do responsável humano.
 
-### 9.1 Escopo exato do PR 0 (fundação)
-1. Ajustes de tooling: script `typecheck` e `test` no app, rule de banco do usinagem, `apps/usinagem/drizzle/**` protegido no hook, fontes no `.gitignore`.
-2. Shell visual (resultado do `/impeccable shape`): sidebar grafite, topo, grid blueprint, tokens, fontes, pt-BR. Rotas: painel e lista de processos (só leitura do seed) e placeholders das outras áreas.
-3. `lib/dominio`:
+### 9.1 Escopo exato da fundação (1A, 1B, 1C)
+1. **1A**:
+   - Docker Compose com Postgres 16 local.
+   - Schema Drizzle de núcleo e processo: `usuarios`, `perfis`, `permissoes`, `perfil_permissoes`, `eventos_auditoria`, `configuracoes`, `clientes`, `processos`, `revisoes_comerciais`, `itens_revisao`.
+   - Seed fictício idempotente (5 usuários, clientes e processos marcados como fictícios).
+   - Workflow de CI.
+2. **1B**, em `lib/dominio`:
    - tipos de todas as entidades da §4;
    - funções puras de demanda, saldo de entrega e estoque/reservas;
+   - regras de cancelar e fechar processo (§5);
    - catálogo de permissões e matriz padrão;
    - `pode(perfil, permissao)`;
-   - serializadores com sigilo por campo.
-4. Docker Compose com Postgres 16 local. Schema Drizzle de núcleo e processo: `usuarios`, `perfis`, `permissoes`, `perfil_permissoes`, `eventos_auditoria`, `configuracoes`, `clientes`, `processos`, `revisoes_comerciais`, `itens_revisao`.
-5. Seed fictício idempotente (5 usuários, clientes e processos marcados como fictícios).
-6. Vitest cobrindo as regras abaixo.
+   - serializadores com sigilo por campo;
+   - Vitest cobrindo a §10.
+3. **1C**, resultado do `/impeccable shape`:
+   - sidebar grafite, topo, grid blueprint, tokens, fontes, pt-BR;
+   - rotas: painel e lista de processos (só leitura do seed) e placeholders das outras áreas.
+
+Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o Playwright (aceitação visual em 375 px e 1280 px).
 
 ## 10. Testes de aceite
 
-Cenários V2.3 (PR 0, funções puras):
+Cenários V2.3 (1B, funções puras):
 1. Pedido de 20 com remessas 5+5+10: formalizado 20; o saldo só muda com aceite; entregue após 20 aceitas; remessa expedida sem aceite não muda o saldo.
 2. Pedido de 20 com entrega única de 20: 20 aceitas, saldo 0.
 3. Demanda de 20 com pedido formal de 5: 5 contratadas, 15 não formalizadas, nenhuma NF ou AR. Novos pedidos de 5 e de 10 sobre a mesma demanda: contratado 20, não formalizado 0, sem dupla contagem.
@@ -387,7 +407,7 @@ Cenários V2.3 (PR 0, funções puras):
    Combinado: demanda 20, pedido 5, produção 40, entrega 5 → físico 35, estratégica 15, livre 20, contratado 5.
    Variações: reservar as 35 dá livre 0; nenhuma reserva dá livre 35.
 
-Regras também testadas no PR 0:
+Regras também testadas na 1B:
 - reserva acima do livre é recusada;
 - duas reservas que juntas passam do livre: a segunda é recusada;
 - converter estratégica em firme não cria peça;
@@ -396,7 +416,14 @@ Regras também testadas no PR 0:
 - a mesma remessa aplicada duas vezes (mesma chave) não muda o saldo;
 - 20 peças em processo no parceiro dão estoque de acabados 0.
 
-Permissões (PR 0):
+Processo (1B):
+- o Comercial cancela processo sem pedido, compra ou OP;
+- o Comercial não cancela depois que existe pedido formal, compra ou OP (o Admin cancela);
+- o Comercial fecha processo conciliado;
+- o Comercial não fecha processo com saldo de entrega, aceite faltando, NF faltando ou devolução pendente;
+- o Admin fecha processo não conciliado só com justificativa.
+
+Permissões (1B):
 - o Financeiro recebe "negado" em `margem.ver`, `custo_lote.ver` e `estoque.valorizacao.ver`;
 - o serializador do Financeiro não emite custo em AR, preço em AP, nem vínculo de processo;
 - permissão travada não pode ser concedida a outro perfil;
