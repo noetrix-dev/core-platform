@@ -20,8 +20,11 @@ O repositório é público. Nunca versionar `docs/express-usinagem/fontes/`, dad
 - Schema: `lib/servidor/db/schema.ts`. Conexão: `db()` em `lib/servidor/db/index.ts` (`server-only`, só aceita host local).
 - Migrations em `drizzle/`: geradas e aplicadas pelo responsável humano (`pnpm db:generate`, `pnpm db:migrate`). Agente nunca cria, edita nem aplica migration.
 - Só Postgres local ou o serviço do CI. Nenhuma conexão com banco real, VPS ou Supabase.
-- `.env.local` é editado à mão (`POSTGRES_PASSWORD`, `DATABASE_URL`). Nunca ler, imprimir ou commitar.
-- Dinheiro em centavos inteiros (`bigint`), nunca float. Identificador interno UUID separado do número exibido (ex.: `357-A`).
+- Duas roles: migração (`DATABASE_URL_MIGRACAO`, só `drizzle-kit`) e aplicação (`DATABASE_URL`, app e seed, sem UPDATE/DELETE em tabelas de log).
+- Tabela editável tem `versao` (concorrência otimista). Datas em `timestamptz`, exibidas em `America/Sao_Paulo`.
+- `.env.local` é editado à mão. Nunca ler, imprimir ou commitar.
+- Dinheiro em centavos inteiros (`bigint`), nunca float. Peça vendável em quantidade inteira; MP e compras em `NUMERIC(14,3)`.
+- Identificador interno UUID separado do número exibido (ex.: `357-A`). Numeração por incremento atômico, início configurável.
 
 ## Domínio em uma linha cada
 
@@ -34,7 +37,7 @@ O repositório é público. Nunca versionar `docs/express-usinagem/fontes/`, dad
 
 ## Perfis e permissões
 
-Cinco perfis: Admin, Comercial, Compras/Produção, Financeiro, Desenhista/Técnico. RBAC por ação (`lib/dominio/permissoes/catalogo.ts`), checado no servidor com `requirePermissao()`. Permissões travadas são só do Admin.
+Cinco perfis: Admin, Comercial, Compras/Produção, Financeiro, Desenhista/Técnico. RBAC por ação (`lib/dominio/permissoes/catalogo.ts`, 54 permissões, 16 travadas no Admin), checado no servidor. Toda Server Action e Route Handler passa por `acao`/`acaoPublica`/`rota` (`lib/servidor/acao.ts`, deny by default); um teste falha se alguma ficar de fora.
 
 Sigilo por campo, aplicado na serialização do servidor (`lib/dominio/sigilo/`):
 - Compras vê custo, nunca preço.
@@ -42,7 +45,7 @@ Sigilo por campo, aplicado na serialização do servidor (`lib/dominio/sigilo/`)
 - Financeiro opera título a título, sem cruzar AP e AR.
 - Margem, custo de lote e valorização de estoque: só Admin.
 
-Até a etapa de identidade (Better Auth), o login é um seletor dos 5 usuários fictícios, ativo só com `NODE_ENV=development`.
+Identidade: Better Auth 1.7.12 fixo (PR 1D), sem cadastro público, login auditado. Seletor de perfil de dev só com `NODE_ENV=development` **e** `ENABLE_DEV_SWITCHER=1`, em arquivos `*.dev.ts(x)`; no build de produção responde 404 (`scripts/verificar-build-producao.sh`).
 
 ## Identidade visual
 
@@ -54,6 +57,8 @@ Até a etapa de identidade (Better Auth), o login é um seletor dos 5 usuários 
 O layout sai do `/impeccable shape`.
 
 ## Fluxo obrigatório
+
+Ordem das entregas: chore, 1A, 1B, 1D, 1C, PR 2.
 
 1. `/brainstorm` → spec em `docs/superpowers/specs/`.
 2. `/superpowers:writing-plans` → plano em `docs/superpowers/plans/`.

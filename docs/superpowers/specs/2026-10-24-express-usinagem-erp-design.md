@@ -84,6 +84,10 @@ Fora do escopo do primeiro ciclo: multiempresa, assinatura, portal de cliente, i
 
 **Título**: conta a pagar (AP) ou a receber (AR), com parcelas e baixas.
 
+**RFQ**: pedido de cotação enviado a um parceiro para um item do processo, com prazo de resposta.
+
+**Status macro**: estado único do processo para o painel, derivado dos três eixos e dos documentos (§5.2). Não é gravado; é calculado.
+
 ## 3. Precedência e histórico das fontes
 
 Ordem de precedência (a de cima vence): decisões do brainstorm de 2026-10-24 → adendo V2.3 → adendo V2.2 → dossiê v2.0 → registro v1.0 → `apps/usinagem/CLAUDE.md` antigo.
@@ -106,17 +110,22 @@ Divergências resolvidas pelo brainstorm:
 Convenções valem para todas as tabelas:
 - PK `id uuid`, nunca reutilizada.
 - `criado_em`, `criado_por`, `atualizado_em`.
+- Datas e horas em `timestamptz`, gravadas em UTC e exibidas em `America/Sao_Paulo`.
+- Tabela de registro editável tem `versao integer` para concorrência otimista. A atualização exige a versão lida; se outra pessoa salvou antes, a operação falha com conflito e nada é sobrescrito.
 - Dinheiro em centavos inteiros (`bigint`), nunca float. Percentual em pontos-base inteiros.
-- Quantidade em inteiro na unidade do item. Unidade fracionária (kg, m) fica para quando aparecer.
+- Quantidade de peça vendável (item de revisão, pedido, OP, lote, reserva, remessa): inteira.
+- Quantidade de matéria-prima e de compras (itens de compra, recebimentos de MP): `NUMERIC(14,3)`, trafegada como string decimal no TypeScript, nunca como float.
 - Nada é apagado fisicamente em registro de negócio: cancelar, estornar e substituir mantêm o histórico.
 
 ### 4.1 Núcleo
-- `usuarios` (nome, e-mail, ativo, perfil_id)
+- `usuarios` (nome, e-mail, e-mail verificado, ativo, perfil_id, fictício, versão). Tabela de usuário do Better Auth, mapeada por `fields` (PR 1D).
+- `sessoes`, `contas`, `verificacoes` (tabelas do Better Auth com nomes mapeados; senha com hash só em `contas`) (PR 1D)
 - `perfis` (5 fixos)
 - `permissoes` (catálogo fixo em código; flag `travada_admin`)
 - `perfil_permissoes` (perfil × permissão; editável pelo Admin, exceto as travadas)
 - `eventos_auditoria` (autor, operação, entidade, entidade_id, antes, depois, justificativa, data/hora). Só recebe insert.
-- `configuracoes` (numeração e letra, etapas padrão, modelos de proposta)
+- `configuracoes` (letra, etapas padrão, modelos de proposta)
+- `sequencias_numeracao` (nome, próximo número). Número inicial configurável pelo Admin para continuar a sequência já usada pela empresa.
 - `chaves_idempotencia` (chave única, operação, resultado)
 
 ### 4.2 Comercial e processos
@@ -129,53 +138,56 @@ Convenções valem para todas as tabelas:
 
 ### 4.3 Engenharia
 - `desenhos` (código, descrição, processo de origem)
-- `revisoes_tecnicas` (desenho, rótulo, caminho de rede, metadados do arquivo, aprovado_por, liberado_para_parceiro_em). O ERP guarda caminho e metadados, nunca o arquivo.
+- `revisoes_tecnicas` (desenho, rótulo, caminho de rede, metadados do arquivo, aprovada_por, aprovada_em, liberada_parceiro_por, liberada_parceiro_em). O ERP guarda caminho e metadados, nunca o arquivo. Aprovar (`revisao_tecnica.aprovar`) e liberar para parceiro (`revisao_tecnica.liberar_parceiro`) são atos separados e auditados; só revisão aprovada pode ser liberada.
 - `compatibilidades_revisao` (revisão A, revisão B, declarado_por, motivo)
 - `produtos` (nasce na aprovação; revisão técnica vigente)
 
 ### 4.4 Parceiros e compras
 - `parceiros` (papéis: fornecedor MP e/ou fabricante; contatos)
-- `cotacoes_fornecedor` (processo/item, parceiro, preço, prazo, validade, escolhida)
-- `compras`, `itens_compra`, `recebimentos_mp` (fatia 2)
+- `rfqs` (processo, item, parceiro, enviada_em, prazo_resposta, respondida_em, status `rascunho | enviada | respondida | sem_resposta | cancelada`). Enviar exige `rfq.enviar`. Vencido o prazo sem resposta, a RFQ aparece como atrasada.
+- `cotacoes_fornecedor` (RFQ de origem, processo/item, parceiro, preço, prazo, validade, escolhida)
+- `compras`, `itens_compra` (quantidade `NUMERIC(14,3)`), `recebimentos_mp` (quantidade `NUMERIC(14,3)`, `chave_idempotencia`) (PR 3)
 
-### 4.5 Pedido formal e demanda (fatia 2)
+### 4.5 Pedido formal e demanda (PR 3)
 - `pedidos_cliente` (processo, número externo do cliente, data, situação)
 - `pedido_itens` (pedido, produto + revisão técnica, quantidade contratada, preço, prazo)
 - `vinculos_demanda_pedido` (item da revisão comercial ↔ item de pedido, quantidade). Impede contar a mesma demanda duas vezes.
 - `aditivos_pedido` (mudança de quantidade ou cancelamento autorizado, com motivo)
 
-### 4.6 Produção (fatia 2 e 4)
-- `ordens_producao`, `ordem_etapas` (parceiro, prazo, responsável, status, custo previsto/real)
+### 4.6 Produção (PR 3 e PR 5)
+- `ordens_producao`, `ordem_etapas` (parceiro, responsável, status, prazo prometido pelo parceiro, data real de conclusão, avaliação do parceiro de 1 a 5 com comentário, custo previsto/real). O atraso do parceiro é derivado de prazo prometido contra conclusão real e alimenta o histórico do parceiro.
 - `alocacoes_producao` (OP → pedido_item ou estoque)
 - `autorizacoes_excedente` (OP, quantidade acima do pedido, motivo, custo estimado, Admin)
 - `lotes` (produto, revisão técnica, OP, quantidade, situação de qualidade)
 - `inspecoes`, `nao_conformidades`, `retrabalhos`
 - `custos_lote` (custo por lote/unidade, `metodo_custeio` como ponto de extensão; nada apropriado ao custo da venda até o Admin definir a regra)
 
-### 4.7 Estoque (fatia 4)
+### 4.7 Estoque (PR 5)
 - `movimentos_estoque` (lote, tipo, quantidade com sinal, documento, autor, `chave_idempotencia` única)
-- `reservas` (lote, produto + revisão, cliente, tipo `firme | estrategica`, pedido_item obrigatório se firme, quantidade, data de revisão opcional, motivo, autor, status)
+- `reservas` (lote, produto + revisão, cliente, tipo `firme | estrategica`, pedido_item obrigatório se firme, quantidade, data de revisão opcional, motivo, autor, status `ativa | comprometida_bloqueio | consumida | liberada`)
 - `reserva_movimentos` (criar, consumir, converter, liberar, transferir; atômico e auditado)
 - `ocorrencias_estoque` (divergência física; o ajuste é movimento separado, feito pelo Admin)
 
-### 4.8 Entregas (fatia 3)
+### 4.8 Entregas (PR 4)
 - `programacoes_entrega` (pedido, versão, autor, situação). Reprogramar cria versão nova e preserva a anterior.
 - `programacao_itens` (pedido_item, data, quantidade, prioridade, destino)
 - `remessas`, `remessa_itens` (expedido, recebido, aceito, recusado; `chave_idempotencia`)
 - `comprovantes`, `ocorrencias_entrega` (atraso, recusa, devolução, divergência)
 
-### 4.9 Fiscal e financeiro (fatia 2)
+### 4.9 Fiscal e financeiro (PR 3)
 - `documentos_fiscais` (número, série, data, valor, chave de acesso; única por chave/número+série, para não duplicar no reprocessamento)
 - `documento_fiscal_itens` (NF ↔ remessa_item / pedido_item, quantidade)
 - `titulos_pagar`, `titulos_receber`, `parcelas`, `baixas` (baixa parcial e estorno sem apagar histórico)
 
 ## 5. Estados
 
+### 5.1 Eixos
+
 Três eixos independentes, sem estado único de entrega:
 
 | Eixo | Valores |
 |---|---|
-| Comercial (processo) | `cotacao_aberta → cotacao_enviada → aprovado → parcialmente_contratado / contratado`; `perdido`, `cancelado`, `suspenso` |
+| Comercial (processo) | `cotacao_aberta → cotacao_enviada → aprovado → parcialmente_contratado / contratado → fechado`; `fechado → reaberto` (volta ao ciclo); `perdido`, `cancelado`, `suspenso` |
 | Produção (por item/OP) | `nao_iniciada → em_execucao → liberada`; `com_bloqueio` |
 | Entrega (por item de pedido) | `nao_programada → programada → parcialmente_entregue → entregue`; `entrega_atrasada` (derivado de data vencida com saldo) |
 
@@ -196,7 +208,21 @@ Processo:
   - NF registrada para o que foi aceito;
   - nenhuma devolução pendente.
 - Sem conciliação, só o Admin fecha, com justificativa obrigatória e evento de auditoria. Fechar nunca é automático na primeira remessa.
-- **Reabrir** exige motivo e gera evento de auditoria.
+- **Reabrir** (só Admin) leva `fechado` para `reaberto`, exige motivo e gera evento de auditoria. Um processo reaberto volta a ter o status macro calculado pelos documentos, como antes do fechamento.
+
+### 5.2 Status macro (painel por status)
+
+Calculado, nunca gravado, a partir dos três eixos e dos documentos. A primeira regra que casar vence:
+
+| Ordem | Status macro | Condição |
+|---|---|---|
+| 1 | Cancelado / Perdido / Suspenso | situação comercial correspondente (fora das colunas do painel) |
+| 2 | Fechado | situação comercial `fechado` |
+| 3 | NF emitida | há pedido formal, saldo de entrega zero em todos os itens e toda quantidade aceita tem NF registrada |
+| 4 | Pronto para entrega | há pedido formal com saldo e a reserva firme ativa cobre o saldo de todos os itens com saldo |
+| 5 | Em fabricação | há pedido formal ativo |
+| 6 | Cotação enviada | a revisão comercial vigente está `enviada` |
+| 7 | Cotação aberta | qualquer outro caso (inclui rascunho e preço pendente) |
 
 ## 6. Regras e invariantes
 
@@ -227,6 +253,11 @@ Processo:
 - Reserva estratégica: só Admin cria; data de revisão opcional que gera alerta; nunca expira sozinha; só Admin libera. Não gera pedido, receita, despesa nem NF.
 - Converter estratégica em firme (pedido novo do mesmo cliente): reduz a estratégica e aumenta a firme, sem criar peça.
 - Liberar reserva firme (`reserva_firme.liberar`, travada no Admin) e transferir reserva entre clientes exigem motivo e auditoria.
+- **Bloqueio de lote com reserva ativa**: quando a qualidade bloqueia (quarentena ou rejeição) um lote que tem reservas ativas, essas reservas passam a `comprometida_bloqueio`.
+  - A quantidade delas aparece como **déficit** na posição de estoque e num alerta para o Admin.
+  - Nada é liberado nem realocado em silêncio. A reserva não volta para o livre e não é transferida para outro lote sem ato do Admin.
+  - Se o lote voltar a ser liberado, as reservas comprometidas voltam a `ativa`.
+  - Se o lote for rejeitado, o Admin decide: realocar para outro lote (sujeito ao livre) ou liberar a reserva.
 
 ### 6.5 Produção excedente e custo
 - Fabricar acima do pedido formal exige `producao_excedente.autorizar` (Admin), com motivo, quantidade, custo estimado e finalidade.
@@ -239,9 +270,18 @@ Processo:
 - Baixa parcial, estorno, reajuste e cancelamento preservam o histórico.
 
 ### 6.7 Numeração
-- O número exibido é gerado em transação, é único e segue a política em `configuracoes`.
+- O número exibido é gerado em transação por incremento atômico em `sequencias_numeracao`, é único e não se repete mesmo com geração concorrente.
+- O número inicial é configurável (`configuracao.gerenciar`) para continuar a sequência já usada pela empresa. Só aceita valor maior que o maior número já usado.
 - A letra muda junto com a revisão comercial vigente. A regra final de avanço está pendente.
 - Processo derivado recebe número novo e guarda o vínculo de origem.
+
+### 6.8 Dados e segurança
+- Duas roles de banco:
+  - **migração**: dona do schema, roda DDL, usada só pelo `drizzle-kit migrate`;
+  - **aplicação**: usada pelo app e pelo seed, só DML.
+- A role da aplicação não tem `UPDATE`, `DELETE` nem `TRUNCATE` em `eventos_auditoria`, `movimentos_estoque` e `baixas` (somente inserção). A revogação entra na migration da tabela correspondente.
+- Toda Server Action e todo Route Handler passa por um wrapper de permissão com **deny by default**: sem permissão declarada, a chamada é recusada. Um teste falha se algum arquivo `"use server"` ou `route.ts` exportar função fora do wrapper.
+- Concorrência otimista por `versao` (§4).
 
 ## 7. Perfis, permissões e sigilo
 
@@ -271,6 +311,7 @@ Processo:
 | preco.ver | ✓ | ✓ | | ✓ (só AR) | | |
 | preco.definir | ✓ | | | | | Sim |
 | parceiro.gerenciar | ✓ | | ✓ | | | |
+| rfq.enviar | ✓ | | ✓ | | | |
 | cotacao_fornecedor.registrar | ✓ | | ✓ | | | |
 | custo.ver | ✓ | | ✓ | ✓ (só AP) | | |
 | margem.ver | ✓ | | | | | Sim |
@@ -278,6 +319,8 @@ Processo:
 | estoque.valorizacao.ver | ✓ | | | | | Sim |
 | desenho.gerenciar | ✓ | | | | ✓ | |
 | revisao_tecnica.criar | ✓ | | | | ✓ | |
+| revisao_tecnica.aprovar | ✓ | | | | ✓ | |
+| revisao_tecnica.liberar_parceiro | ✓ | | | | ✓ | |
 | compatibilidade.declarar | ✓ | | | | ✓ | |
 | pedido_formal.registrar | ✓ | ✓ | | | | |
 | producao.registrar | ✓ | | ✓ | | | |
@@ -311,7 +354,7 @@ Processo:
 
 Notas da matriz:
 - `processo.cancelar` e `processo.fechar` concedidas ao Comercial têm as condições do §5. Fora delas, só o Admin age.
-- `retrabalho.abrir` e `processo.reabrir` não vieram com perfil definido. Padrão adotado: retrabalho para Compras/Produção e Técnico (quem vê a não conformidade); reabrir travado no Admin. Revisar se discordar.
+- `retrabalho.abrir` para Compras/Produção e Técnico, e `processo.reabrir` travada no Admin: confirmados. `retrabalho.abrir`, `qualidade.inspecionar` e `qualidade.liberar` ficam como dado da matriz (atribuíveis pelo Admin, sem trava), porque o dono da qualidade ainda está pendente (§12).
 - A reserva firme não tem permissão de criação: nasce sozinha na liberação da qualidade.
 - `dados.exportar` fica travada no Admin enquanto as exportações não passam pela matriz de campos (§7.3). Quando passarem, pode virar atribuível.
 - `configuracao.gerenciar` cobre numeração e letra, etapas padrão e modelos de proposta.
@@ -324,10 +367,19 @@ Notas da matriz:
 - O sigilo é aplicado na serialização do servidor: o campo proibido não sai na resposta. Não basta esconder na tela.
 - Teste obrigatório: o Financeiro recebe 403 em margem, custo de lote e valorização de estoque, e nenhum agregado ao alcance dele permite deduzir margem.
 
+Vazamentos laterais, todos bloqueados no servidor:
+- **Histórico e auditoria**: outros perfis veem o evento (quem, quando, o quê), mas `antes` e `depois` saem sem os campos que o perfil não pode ver.
+- **Ordenar, filtrar ou buscar por campo oculto**: recusado. A ordem de uma lista não pode revelar um valor que o perfil não vê.
+- **Mensagens de erro**: nunca contêm valor de campo oculto nem dizem qual campo oculto causou a recusa. A recusa de consulta é uma mensagem genérica única.
+- **Agregados**: soma, média, mínimo, máximo e contagem condicionada sobre campo oculto são recusados para o perfil, qualquer que seja o tamanho do grupo. Não há exceção para grupo grande, e um grupo de item único é tratado igual. Para o Financeiro, agregados de títulos não agrupam por processo ou pedido.
+- **Exportações**: passam pelos mesmos serializadores. `dados.exportar` segue travada no Admin.
+- **Processo derivado**: nasce com a revisão comercial em `preco_pendente`, itens sem preço e sem custo. Os valores do processo de origem só aparecem pelo vínculo, e só nos campos que a matriz permite ao perfil.
+
 ### 7.4 Invariantes de segurança
 - A última conta Admin ativa não pode ser desativada nem perder permissões.
 - `usuarios.gerenciar` e `permissoes.gerenciar` exigem reautenticação recente.
 - Toda mudança em `perfil_permissoes` e em `usuarios` gera evento de auditoria com antes e depois.
+- Login auditado: sucesso e falha geram evento (e-mail informado, resultado, data/hora, IP e user agent), sem gravar a senha. Usuário inativo não consegue sessão.
 - Auditar no mínimo: preço e margem, parceiro, revisões de desenho, mudança de status, NF, pagamentos, reservas, autorização de excedente e ajuste de estoque.
 - Depois da entrega do sistema, o Admin é o dono da Express. O acesso de suporte da Noetrix é separado do Admin, temporário, nominal e auditado.
 
@@ -340,7 +392,16 @@ Notas da matriz:
   - Geradas por `drizzle-kit` pelo responsável humano no terminal, nunca editadas por agente.
   - Aplicadas só no Postgres local.
 - **Testes**: Vitest. Regras de domínio em funções puras, sem banco.
-- **Autenticação**: Better Auth (adapter Drizzle, e-mail e senha, sessão no Postgres, sem cadastro público) entra na etapa de identidade. Até lá, a fundação usa um seletor dos 5 usuários fictícios, ativo só com `NODE_ENV=development`, que alimenta o mesmo `requirePermissao()` do backend.
+- **Autenticação** (PR 1D): Better Auth `1.7.12`, versão fixada.
+  - Adapter Drizzle, e-mail e senha, sessão no Postgres, `disableSignUp` (sem cadastro público).
+  - IDs UUID (`advanced.database.generateId: "uuid"`).
+  - Tabelas mapeadas por `modelName`/`fields` para `usuarios`, `sessoes`, `contas`, `verificacoes`, com colunas em snake_case.
+  - Reautenticação recente pelo `session.freshAge` (10 minutos) nas ações de `usuarios.gerenciar` e `permissoes.gerenciar`.
+  - Usuário real é criado por script local do responsável humano, nunca por tela pública.
+- **Seletor de perfil de dev**: existe só com `NODE_ENV=development` **e** `ENABLE_DEV_SWITCHER=1`. Qualquer outra combinação falha fechado (sem sessão, sem permissão).
+  - O código do seletor fica em arquivos `*.dev.ts(x)`, que só entram como rota quando as duas condições valem (`pageExtensions`).
+  - No build de produção a rota do seletor responde 404 e o identificador do cookie de dev não aparece no bundle. Os dois são verificados por teste.
+  - O seletor só aceita usuários marcados como fictícios.
 - **Organização por domínio**:
   - `lib/dominio/<modulo>/` guarda funções puras e tipos;
   - `lib/servidor/` guarda acesso a dados (`server-only`);
@@ -359,39 +420,44 @@ Notas da matriz:
   - Conteúdo: cabeçalho e logo, número e letra, dados do cliente, itens, quantidade, unidade, descrição, preço unitário, totais, validade, prazo, pagamento, impostos e frete conforme regra, e observações.
   - O layout é validado com exemplos reais fora do repositório.
 
-## 9. Entregas por fatias
+## 9. Entregas por PR
 
-O modelo acima cobre o sistema inteiro. A implementação vai por PRs:
+O modelo acima cobre o sistema inteiro. A implementação vai por PRs, nesta ordem: chore, 1A, 1B, 1D, 1C, PR 2, PR 3, PR 4, PR 5. "Fundação" é o conjunto chore + 1A + 1B + 1D + 1C.
 
 | PR | Conteúdo |
 |---|---|
-| **chore** | Rule `usinagem-database.md`, exceção do `frontend.md` para o usinagem, hook protegendo `apps/usinagem/drizzle/**`, script `typecheck` no app. Mudanças em guardrails (`.claude/**`, `.gitignore`) são entregues como patch e aplicadas pelo responsável humano. |
-| **docs** | Esta especificação, o plano e o `apps/usinagem/CLAUDE.md` atualizado |
-| **1A. Dados** | Docker Compose com Postgres 16 local, Drizzle, schema de núcleo e processo, seed fictício, workflow de CI do GitHub Actions para o usinagem (typecheck, lint, Vitest com Postgres de serviço) |
-| **1B. Domínio** | Contratos TS de todo o domínio, RBAC puro + `requirePermissao()` + seletor de perfil de dev, funções puras e testes dos 4 cenários V2.3 |
-| **1C. Shell de UI** | Layout, navegação e componentes base definidos no `/impeccable shape` |
-| **2. Comercial (fatia 1)** | Clientes, processos, revisão comercial com preço pendente, itens, parceiros, cotações de fornecedor, desenhos por caminho, proposta PDF |
-| 3. Execução e financeiro | Pedido formal e vínculo de demanda, OP e etapas, compras e recebimentos, qualidade, NF registrada, AP/AR, margem Admin; Better Auth |
-| 4. Entregas | Programação versionada, remessas, aceite, devoluções, reprogramação |
-| 5. Estoque | Lotes, movimentos, reservas firme e estratégica, excedente, ocorrências e ajustes |
+| **chore** | Rule `usinagem-database.md`, exceção do `frontend.md` para o usinagem, hook protegendo `apps/usinagem/drizzle/**`, fontes no `.gitignore`, nota de exceção no `PRODUCT.md`, script `typecheck` no app. Mudanças em guardrails (`.claude/**`, `.gitignore`) são entregues como patch e aplicadas pelo responsável humano. |
+| **docs** | Esta especificação, os planos e o `apps/usinagem/CLAUDE.md` atualizado |
+| **1A. Dados** | Docker Compose com Postgres 16 local, roles de migração e de aplicação, Drizzle, schema de núcleo e processo com `versao`, sequência de numeração, seed fictício, workflow de CI do GitHub Actions (typecheck, lint, Vitest com Postgres de serviço) |
+| **1B. Domínio** | Contratos TS de todo o domínio, RBAC puro, sigilo por campo e vazamentos laterais, status macro, funções puras e testes dos 4 cenários V2.3, wrapper de permissão deny by default, `requirePermissao()` com usuário de dev atrás das duas condições |
+| **1D. Identidade** | Better Auth, login e logout, auditoria de login, `proxy.ts`, reautenticação recente, seletor de perfil de dev excluído do build de produção, script de criação do Admin real |
+| **1C. Shell de UI** | Layout, navegação, componentes base e entrada do seletor de dev, definidos no `/impeccable shape` |
+| **PR 2. Comercial** | Clientes, processos, revisão comercial com preço pendente, itens, parceiros, RFQ e cotações de fornecedor, desenhos e revisões técnicas por caminho, proposta PDF |
+| **PR 3. Execução e financeiro** | Pedido formal e vínculo de demanda, OP e etapas, compras e recebimentos, qualidade, NF registrada, AP/AR, margem Admin |
+| **PR 4. Entregas** | Programação versionada, remessas, aceite, devoluções, reprogramação |
+| **PR 5. Estoque** | Lotes, movimentos, reservas firme e estratégica, bloqueio com déficit, excedente, ocorrências e ajustes |
 
 O schema de estoque só se estabiliza depois que os testes puros dos 4 cenários (1B) passam. Nenhum push sem confirmação explícita do responsável humano.
 
-### 9.1 Escopo exato da fundação (1A, 1B, 1C)
+### 9.1 Escopo exato da fundação
 1. **1A**:
-   - Docker Compose com Postgres 16 local.
-   - Schema Drizzle de núcleo e processo: `usuarios`, `perfis`, `permissoes`, `perfil_permissoes`, `eventos_auditoria`, `configuracoes`, `clientes`, `processos`, `revisoes_comerciais`, `itens_revisao`.
-   - Seed fictício idempotente (5 usuários, clientes e processos marcados como fictícios).
+   - Docker Compose com Postgres 16 local e script que cria as roles de migração e de aplicação.
+   - Schema Drizzle de núcleo e processo: `usuarios`, `perfis`, `permissoes`, `perfil_permissoes`, `eventos_auditoria`, `configuracoes`, `sequencias_numeracao`, `clientes`, `processos`, `revisoes_comerciais`, `itens_revisao`, com `versao` nas editáveis.
+   - Geração de número de processo atômica, com teste concorrente.
+   - Seed fictício idempotente (5 usuários, clientes e processos marcados como fictícios), rodando com a role da aplicação.
    - Workflow de CI.
 2. **1B**, em `lib/dominio`:
    - tipos de todas as entidades da §4;
-   - funções puras de demanda, saldo de entrega e estoque/reservas;
-   - regras de cancelar e fechar processo (§5);
+   - funções puras de demanda, saldo de entrega, estoque/reservas (com bloqueio e déficit) e status macro;
+   - regras de cancelar e fechar processo (§5) e de processo derivado;
    - catálogo de permissões e matriz padrão;
    - `pode(perfil, permissao)`;
-   - serializadores com sigilo por campo;
+   - serializadores com sigilo por campo e vazamentos laterais (§7.3);
+   - formatação de data em `America/Sao_Paulo`;
+   - wrapper de permissão e teste de cobertura das Server Actions;
    - Vitest cobrindo a §10.
-3. **1C**, resultado do `/impeccable shape`:
+3. **1D**: tudo da linha 1D da tabela, com migration gerada e aplicada pelo responsável humano.
+4. **1C**, resultado do `/impeccable shape`:
    - sidebar grafite, topo, grid blueprint, tokens, fontes, pt-BR;
    - rotas: painel e lista de processos (só leitura do seed) e placeholders das outras áreas.
 
@@ -414,7 +480,10 @@ Regras também testadas na 1B:
 - lote aguardando inspeção não entra no elegível;
 - revisões incompatíveis não somam disponibilidade;
 - a mesma remessa aplicada duas vezes (mesma chave) não muda o saldo;
-- 20 peças em processo no parceiro dão estoque de acabados 0.
+- 20 peças em processo no parceiro dão estoque de acabados 0;
+- bloqueio de lote com reserva ativa marca a reserva como `comprometida_bloqueio`, mostra o déficit, não devolve nada ao livre; reliberação devolve a reserva a `ativa`.
+
+Status macro (1B): um caso por linha da tabela da §5.2, e processo reaberto volta ao status calculado pelos documentos.
 
 Processo (1B):
 - o Comercial cancela processo sem pedido, compra ou OP;
@@ -428,9 +497,29 @@ Permissões (1B):
 - o serializador do Financeiro não emite custo em AR, preço em AP, nem vínculo de processo;
 - permissão travada não pode ser concedida a outro perfil;
 - a última conta Admin não pode ser desativada nem rebaixada;
-- PDF e envio de proposta exigem revisão `precificada`.
+- PDF e envio de proposta exigem revisão `precificada`;
+- auditoria vista por perfil não Admin sai sem os campos ocultos em `antes`/`depois`;
+- ordenar, filtrar ou buscar por campo oculto é recusado com mensagem genérica, sem nome nem valor do campo;
+- agregado sobre campo oculto é recusado, inclusive com grupo de um item só; Financeiro não agrupa títulos por processo;
+- exportação passa pelo serializador e é negada fora do Admin;
+- processo derivado nasce em `preco_pendente`, sem preço nem custo nos itens;
+- o teste de cobertura falha se uma Server Action ou Route Handler não usar o wrapper de permissão;
+- o gate do seletor de dev é falso em toda combinação diferente de `NODE_ENV=development` + `ENABLE_DEV_SWITCHER=1`;
+- data exibida em `America/Sao_Paulo`.
 
-Ficam para as fatias seguintes (V2.2 e V2.3): replanejamento cria versão nova com autor; devolução de 1 ou 2 peças passa por inspeção antes de voltar a ser elegível; perfil sem permissão não altera cronograma nem confirma aceite; reatribuição de reserva exige autorização e preserva lotes.
+Dados (1A, contra o Postgres local e o do CI):
+- a role da aplicação insere em `eventos_auditoria` e recebe erro de permissão ao tentar `UPDATE` ou `DELETE`;
+- 20 gerações concorrentes de número de processo devolvem 20 números distintos e consecutivos;
+- número inicial abaixo do maior já usado é recusado.
+
+Identidade (1D):
+- login com sucesso e com falha gera evento de auditoria, sem senha;
+- usuário inativo não obtém sessão;
+- cadastro público é recusado;
+- no build de produção, a rota do seletor de dev responde 404 e o nome do cookie de dev não aparece no bundle;
+- ação de `usuarios.gerenciar` com sessão mais velha que 10 minutos é recusada.
+
+Ficam para os PRs seguintes (V2.2 e V2.3): replanejamento cria versão nova com autor; devolução de 1 ou 2 peças passa por inspeção antes de voltar a ser elegível; perfil sem permissão não altera cronograma nem confirma aceite; reatribuição de reserva exige autorização e preserva lotes.
 
 ## 11. Fora de escopo
 Integração com o sistema fiscal, portal de cliente, multiempresa, conciliação bancária, centro de custos, DRE, notificações externas e upload de arquivos CAD.
@@ -446,3 +535,7 @@ Integração com o sistema fiscal, portal de cliente, multiempresa, conciliaçã
 8. Se o comprovante de entrega é obrigatório e quais tolerâncias de quantidade valem.
 9. Fidelidade do layout do PDF aos exemplos 357-A e 358-A.
 10. Condições para liberar reserva firme sem cancelar o pedido.
+11. Regras de pagamento: o que origina AP e AR (compra, recebimento, NF, aceite), número e datas de parcelas, adiantamentos.
+12. Inventário do servidor de desenhos (estrutura de pastas, convenção de nomes) e política de backup dos arquivos CAD.
+13. Expiração e suspensão de proposta: validade padrão, o que acontece ao vencer, quem suspende e reativa.
+14. Armazenamento de anexos (fotos de inspeção, comprovantes de entrega, PDFs gerados): onde ficam, limite de tamanho por arquivo e total, e backup.

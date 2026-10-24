@@ -2,37 +2,49 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Postgres 16 local em Docker, Drizzle com schema de núcleo e processo, seed fictício idempotente, Vitest e CI do GitHub Actions para o `apps/usinagem`.
+**Goal:** Postgres 16 local em Docker com roles de migração e de aplicação, Drizzle com schema de núcleo e processo (com `versao`), numeração atômica, seed fictício idempotente, Vitest e CI do GitHub Actions para o `apps/usinagem`.
 
-**Architecture:** Schema Drizzle único em `lib/servidor/db/schema.ts`. Conexão lazy em `lib/servidor/db/index.ts` (`server-only`), com guarda pura que só aceita host local. Seed é função exportada `semear(db)` com UUIDs fixos e `onConflictDoNothing`, chamada por script e testada por Vitest contra o banco local ou o serviço do CI.
+**Architecture:**
+- Schema Drizzle único em `lib/servidor/db/schema.ts`.
+- O `drizzle-kit` usa a role de migração (`DATABASE_URL_MIGRACAO`); o app, o seed e os testes usam a role da aplicação (`DATABASE_URL`).
+- As duas URLs passam pela guarda pura `urlLocal`, que só aceita host local.
+- A conexão do app é lazy em `lib/servidor/db/index.ts` (`server-only`).
+- Numeração por `UPDATE ... RETURNING` atômico.
+- O seed é a função `semear(db)`, com UUIDs fixos e `onConflictDoNothing`.
 
-**Tech Stack:** Postgres 16 (imagem `postgres:16-alpine`), drizzle-orm 0.45.4, drizzle-kit 0.31.11, pg 8.23.1, vitest 5.0.5, Node 22 (`process.loadEnvFile`, `--env-file`), pnpm 9.15.9.
+**Tech Stack:** Postgres 16 (`postgres:16-alpine`), drizzle-orm 0.45.4, drizzle-kit 0.31.11, pg 8.23.1, vitest 5.0.5, tsx 4.23.15, Node 22 (`process.loadEnvFile`, `--env-file`), pnpm 9.15.9.
 
-**Spec:** `docs/superpowers/specs/2026-10-24-express-usinagem-erp-design.md` (§4.1, §4.2, §8, §9.1 item 1A)
+**Spec:** `docs/superpowers/specs/2026-10-24-express-usinagem-erp-design.md` (§4 convenções, §4.1, §4.2, §6.7, §6.8, §8, §9.1 item 1A, §10 "Dados")
 
 ## Global Constraints
 
-- Migrations em `apps/usinagem/drizzle/` são geradas e aplicadas pelo HUMANO (`pnpm db:generate`, `pnpm db:migrate`). Agente nunca cria, edita nem aplica migration.
+- Migrations em `apps/usinagem/drizzle/` são geradas e aplicadas pelo HUMANO (`pnpm db:generate`, `pnpm db:migrate`), sempre com a role de migração. Agente nunca cria, edita nem aplica migration.
+- App, seed e testes usam só a role da aplicação.
 - Nenhuma conexão com banco remoto. Host aceito: `localhost` ou `127.0.0.1`.
-- Nenhuma credencial no repositório. `.env.local` é criado à mão pelo humano (o app ignora `.env*`).
-- Dinheiro em centavos `bigint({ mode: "number" })`. Quantidade `integer`.
-- Dados do seed marcados: coluna `ficticio = true` e nomes com prefixo `[FICTÍCIO]`.
-- Ler `node_modules/next/dist/docs/` antes de código que toca Next.
+- Nenhuma credencial no repositório, exceto as senhas descartáveis do CI. Elas têm valor claramente de teste (`ci_*_descartavel`) e devem ser diferentes das senhas locais.
+- `.env.local` é criado à mão pelo humano (o app ignora `.env*`).
+- Dinheiro em centavos `bigint({ mode: "number" })`. Quantidade de peça `integer`. Datas `timestamp({ withTimezone: true })`.
+- Tabela editável tem `versao integer not null default 1`.
+- Dados do seed marcados: `ficticio = true` e prefixo `[FICTÍCIO]`.
 - Sem push.
 
 ---
 
-### Task 1: Dependências, Docker Compose e Vitest
+### Task 1: Dependências, Docker com roles e Vitest
 
 **Files:**
 - Modify: `apps/usinagem/package.json`
 - Create: `apps/usinagem/compose.yaml`
+- Create: `apps/usinagem/db/init/01-roles.sh` (modo 755)
 - Create: `apps/usinagem/vitest.config.ts`
 - Create: `apps/usinagem/lib/servidor/db/url-local.ts`
 - Test: `apps/usinagem/lib/servidor/db/url-local.test.ts`
 
 **Interfaces:**
-- Produces: `urlLocal(url: string | undefined): string` (lança `Error` se ausente ou host não local); scripts `db:up`, `db:down`, `db:generate`, `db:migrate`, `db:seed`, `test`.
+- Produces:
+  - `urlLocal(url: string | undefined): string` (lança `Error` se ausente ou não local);
+  - roles `usinagem_migracao` e `usinagem_app`;
+  - scripts `db:up`, `db:down`, `db:generate`, `db:migrate`, `db:seed`, `test`.
 
 - [ ] **Step 1: Instalar dependências**
 
@@ -42,8 +54,6 @@ pnpm --filter usinagem add -D drizzle-kit@0.31.11 @types/pg@8.23.1 vitest@5.0.5 
 ```
 
 - [ ] **Step 2: Scripts no `package.json`**
-
-`scripts` passa a ser:
 
 ```json
   "scripts": {
@@ -61,7 +71,35 @@ pnpm --filter usinagem add -D drizzle-kit@0.31.11 @types/pg@8.23.1 vitest@5.0.5 
   },
 ```
 
-- [ ] **Step 3: `compose.yaml`**
+- [ ] **Step 3: Script de roles**
+
+`db/init/01-roles.sh`. Roda uma vez no primeiro `db:up` (entrypoint do Postgres) e no CI:
+
+```bash
+#!/usr/bin/env bash
+# Cria as duas roles do ERP: migração (DDL) e aplicação (só DML). Sem senha no código.
+set -euo pipefail
+: "${MIGRACAO_DB_PASSWORD:?defina MIGRACAO_DB_PASSWORD}"
+: "${APP_DB_PASSWORD:?defina APP_DB_PASSWORD}"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  -v db="$POSTGRES_DB" -v mig_pw="$MIGRACAO_DB_PASSWORD" -v app_pw="$APP_DB_PASSWORD" <<'SQL'
+CREATE ROLE usinagem_migracao LOGIN PASSWORD :'mig_pw';
+CREATE ROLE usinagem_app LOGIN PASSWORD :'app_pw';
+GRANT CONNECT, CREATE ON DATABASE :"db" TO usinagem_migracao;
+GRANT CONNECT ON DATABASE :"db" TO usinagem_app;
+GRANT USAGE, CREATE ON SCHEMA public TO usinagem_migracao;
+GRANT USAGE ON SCHEMA public TO usinagem_app;
+-- Tudo que a role de migração criar fica acessível à aplicação só por DML.
+-- Tabelas de log revogam UPDATE/DELETE na própria migration (ver Task 2, Step 7).
+ALTER DEFAULT PRIVILEGES FOR ROLE usinagem_migracao IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO usinagem_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE usinagem_migracao IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO usinagem_app;
+SQL
+```
+
+- [ ] **Step 4: `compose.yaml`**
 
 ```yaml
 # Postgres local de desenvolvimento do ERP Express. Nunca usar em produção.
@@ -70,14 +108,17 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: usinagem
-      POSTGRES_USER: usinagem
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.local}
+      MIGRACAO_DB_PASSWORD: ${MIGRACAO_DB_PASSWORD:?defina MIGRACAO_DB_PASSWORD no .env.local}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env.local}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:
       - usinagem_pg:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U usinagem -d usinagem"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d usinagem"]
       interval: 2s
       timeout: 3s
       retries: 20
@@ -85,7 +126,7 @@ volumes:
   usinagem_pg:
 ```
 
-- [ ] **Step 4: `vitest.config.ts`**
+- [ ] **Step 5: `vitest.config.ts`**
 
 ```ts
 import { defineConfig } from "vitest/config";
@@ -103,7 +144,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: Teste que falha para `urlLocal`**
+- [ ] **Step 6: Teste que falha para `urlLocal`**
 
 `lib/servidor/db/url-local.test.ts`:
 
@@ -120,7 +161,7 @@ describe("urlLocal", () => {
     expect(() => urlLocal("postgres://u:p@db.exemplo.com:5432/x")).toThrow("Postgres local");
   });
   it("recusa ausente", () => {
-    expect(() => urlLocal(undefined)).toThrow("DATABASE_URL");
+    expect(() => urlLocal(undefined)).toThrow("não definida");
   });
 });
 ```
@@ -128,7 +169,7 @@ describe("urlLocal", () => {
 Run: `cd apps/usinagem && pnpm test`
 Expected: FAIL, módulo `./url-local` não existe.
 
-- [ ] **Step 6: Implementar**
+- [ ] **Step 7: Implementar**
 
 `lib/servidor/db/url-local.ts`:
 
@@ -137,9 +178,9 @@ const HOSTS_LOCAIS = new Set(["localhost", "127.0.0.1"]);
 
 // Guarda contra conexão acidental com banco real: o ERP só fala com Postgres local nesta fase.
 export function urlLocal(url: string | undefined): string {
-  if (!url) throw new Error("DATABASE_URL não definida.");
+  if (!url) throw new Error("URL do banco não definida.");
   if (!HOSTS_LOCAIS.has(new URL(url).hostname)) {
-    throw new Error("DATABASE_URL precisa apontar para o Postgres local.");
+    throw new Error("A URL do banco precisa apontar para o Postgres local.");
   }
   return url;
 }
@@ -148,11 +189,12 @@ export function urlLocal(url: string | undefined): string {
 Run: `pnpm test`
 Expected: PASS (3 testes).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/usinagem/package.json apps/usinagem/compose.yaml apps/usinagem/vitest.config.ts apps/usinagem/lib/servidor/db/url-local.ts apps/usinagem/lib/servidor/db/url-local.test.ts pnpm-lock.yaml
-git commit -m "feat(usinagem): Postgres local em Docker, Vitest e guarda de host local"
+chmod 755 apps/usinagem/db/init/01-roles.sh
+git add apps/usinagem/package.json apps/usinagem/compose.yaml apps/usinagem/db/init/01-roles.sh apps/usinagem/vitest.config.ts apps/usinagem/lib/servidor/db/url-local.ts apps/usinagem/lib/servidor/db/url-local.test.ts pnpm-lock.yaml
+git commit -m "feat(usinagem): Postgres local com roles de migração e aplicação, Vitest e guarda de host"
 ```
 
 ### Task 2: Schema de núcleo e processo, config do drizzle-kit e conexão
@@ -166,10 +208,11 @@ git commit -m "feat(usinagem): Postgres local em Docker, Vitest e guarda de host
 **Interfaces:**
 - Consumes: `urlLocal` (Task 1).
 - Produces:
-  - `PERFIS` (`readonly ["admin","comercial","compras_producao","financeiro","tecnico"]`), `type Perfil`, `NOME_PERFIL: Record<Perfil, string>`;
-  - tabelas `perfis`, `permissoes`, `perfilPermissoes`, `usuarios`, `eventosAuditoria`, `configuracoes`, `clientes`, `processos`, `revisoesComerciais`, `itensRevisao`;
-  - `ESTADOS_REVISAO`, `SITUACOES_COMERCIAIS`;
-  - `db(): NodePgDatabase<typeof schema>` (lazy, `server-only`).
+  - `PERFIS`, `type Perfil`, `NOME_PERFIL`;
+  - `SITUACOES_COMERCIAIS` (inclui `fechado` e `reaberto`), `ESTADOS_REVISAO`;
+  - tabelas `perfis`, `permissoes`, `perfilPermissoes`, `usuarios`, `eventosAuditoria`, `configuracoes`, `sequenciasNumeracao`, `clientes`, `processos`, `revisoesComerciais`, `itensRevisao`;
+  - `db(): NodePgDatabase<typeof schema>`.
+- Nota para o PR 1D: as colunas de `usuarios` (`id uuid`, `nome`, `email unique`, `criado_em`, `atualizado_em`) são compatíveis com o mapeamento `fields` do Better Auth 1.7.12. O 1D só acrescenta `email_verificado` e `imagem`.
 
 - [ ] **Step 1: Perfis**
 
@@ -211,6 +254,8 @@ import {
 
 const criadoEm = () => timestamp("criado_em", { withTimezone: true }).notNull().defaultNow();
 const atualizadoEm = () => timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow();
+// Concorrência otimista: toda atualização filtra pela versão lida e incrementa.
+const versao = () => integer("versao").notNull().default(1);
 
 export const SITUACOES_COMERCIAIS = [
   "cotacao_aberta",
@@ -218,10 +263,11 @@ export const SITUACOES_COMERCIAIS = [
   "aprovado",
   "parcialmente_contratado",
   "contratado",
+  "fechado",
+  "reaberto",
   "perdido",
   "cancelado",
   "suspenso",
-  "fechado",
 ] as const;
 
 export const ESTADOS_REVISAO = [
@@ -264,11 +310,12 @@ export const usuarios = pgTable("usuarios", {
   perfilId: text("perfil_id").notNull().references(() => perfis.id),
   ativo: boolean("ativo").notNull().default(true),
   ficticio: boolean("ficticio").notNull().default(false),
+  versao: versao(),
   criadoEm: criadoEm(),
   atualizadoEm: atualizadoEm(),
 });
 
-// Só recebe INSERT: a camada de serviço nunca atualiza nem apaga eventos.
+// Só recebe INSERT: a role da aplicação não tem UPDATE/DELETE aqui (Task 2, Step 7).
 export const eventosAuditoria = pgTable("eventos_auditoria", {
   id: uuid("id").primaryKey().defaultRandom(),
   autorId: uuid("autor_id").references(() => usuarios.id),
@@ -284,8 +331,19 @@ export const eventosAuditoria = pgTable("eventos_auditoria", {
 export const configuracoes = pgTable("configuracoes", {
   chave: text("chave").primaryKey(),
   valor: jsonb("valor").notNull(),
+  versao: versao(),
   atualizadoEm: atualizadoEm(),
 });
+
+export const sequenciasNumeracao = pgTable(
+  "sequencias_numeracao",
+  {
+    nome: text("nome").primaryKey(),
+    proximo: integer("proximo").notNull(),
+    atualizadoEm: atualizadoEm(),
+  },
+  (t) => [check("sequencias_proximo_check", sql`${t.proximo} > 0`)],
+);
 
 // ── Comercial e processos ───────────────────────────────
 export const clientes = pgTable("clientes", {
@@ -293,6 +351,7 @@ export const clientes = pgTable("clientes", {
   razaoSocial: text("razao_social").notNull(),
   cnpj: text("cnpj").unique(),
   ficticio: boolean("ficticio").notNull().default(false),
+  versao: versao(),
   criadoEm: criadoEm(),
   atualizadoEm: atualizadoEm(),
 });
@@ -309,6 +368,7 @@ export const processos = pgTable(
     titulo: text("titulo").notNull(),
     ficticio: boolean("ficticio").notNull().default(false),
     criadoPor: uuid("criado_por").notNull().references(() => usuarios.id),
+    versao: versao(),
     criadoEm: criadoEm(),
     atualizadoEm: atualizadoEm(),
   },
@@ -332,6 +392,7 @@ export const revisoesComerciais = pgTable(
     precificadaPor: uuid("precificada_por").references(() => usuarios.id),
     aprovadaPor: uuid("aprovada_por").references(() => usuarios.id),
     criadoPor: uuid("criado_por").notNull().references(() => usuarios.id),
+    versao: versao(),
     criadoEm: criadoEm(),
     atualizadoEm: atualizadoEm(),
   },
@@ -352,6 +413,7 @@ export const itensRevisao = pgTable(
     unidade: text("unidade").notNull().default("pç"),
     // null = preço pendente (só o Admin precifica).
     precoUnitarioCentavos: bigint("preco_unitario_centavos", { mode: "number" }),
+    versao: versao(),
     criadoEm: criadoEm(),
   },
   (t) => [
@@ -362,7 +424,7 @@ export const itensRevisao = pgTable(
 );
 ```
 
-- [ ] **Step 3: Conexão lazy**
+- [ ] **Step 3: Conexão lazy (role da aplicação)**
 
 `lib/servidor/db/index.ts`:
 
@@ -375,13 +437,14 @@ import { urlLocal } from "./url-local";
 let instancia: NodePgDatabase<typeof schema> | undefined;
 
 // Lazy: `next build` importa o módulo sem DATABASE_URL; a conexão só nasce no primeiro uso.
+// DATABASE_URL é sempre a role da aplicação (só DML).
 export function db(): NodePgDatabase<typeof schema> {
   instancia ??= drizzle(urlLocal(process.env.DATABASE_URL), { schema });
   return instancia;
 }
 ```
 
-- [ ] **Step 4: `drizzle.config.ts`**
+- [ ] **Step 4: `drizzle.config.ts` (role de migração)**
 
 ```ts
 import { defineConfig } from "drizzle-kit";
@@ -395,11 +458,12 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./lib/servidor/db/schema.ts",
   out: "./drizzle",
-  dbCredentials: { url: urlLocal(process.env.DATABASE_URL) },
+  // Só o drizzle-kit usa a role de migração; app e seed usam DATABASE_URL.
+  dbCredentials: { url: urlLocal(process.env.DATABASE_URL_MIGRACAO) },
 });
 ```
 
-- [ ] **Step 5: Verificar tipos e lint**
+- [ ] **Step 5: Verificar tipos, lint e build**
 
 Run: `cd apps/usinagem && pnpm typecheck && pnpm lint && pnpm build`
 Expected: código 0 nos três.
@@ -408,34 +472,203 @@ Expected: código 0 nos três.
 
 ```bash
 git add apps/usinagem/lib/dominio/permissoes/perfis.ts apps/usinagem/lib/servidor/db/schema.ts apps/usinagem/lib/servidor/db/index.ts apps/usinagem/drizzle.config.ts
-git commit -m "feat(usinagem): schema Drizzle de núcleo e processo"
+git commit -m "feat(usinagem): schema Drizzle de núcleo e processo com versao e sequência de numeração"
 ```
 
-- [ ] **Step 7: HUMANO gera e aplica a migration local**
+- [ ] **Step 7: HUMANO gera e aplica as migrations locais**
 
-O agente para e pede ao humano:
+O agente para e pede ao humano. Primeiro, o `.env.local` criado à mão. As senhas são locais e diferentes das do CI.
+
+```
+POSTGRES_PASSWORD=<superusuário local>
+MIGRACAO_DB_PASSWORD=<role de migração>
+APP_DB_PASSWORD=<role da aplicação>
+DATABASE_URL_MIGRACAO=postgres://usinagem_migracao:<senha>@127.0.0.1:54329/usinagem
+DATABASE_URL=postgres://usinagem_app:<senha>@127.0.0.1:54329/usinagem
+```
+
+Depois:
 
 ```bash
 cd apps/usinagem
-# .env.local criado à mão com POSTGRES_PASSWORD e
-# DATABASE_URL=postgres://usinagem:<senha>@127.0.0.1:54329/usinagem
 pnpm db:up
 pnpm db:generate --name nucleo_processo
-pnpm db:migrate
-git add drizzle && git commit -m "feat(usinagem): migration inicial de núcleo e processo"
+pnpm db:generate --custom --name revogar_escrita_auditoria
 ```
 
-O agente continua só depois da confirmação.
+No arquivo vazio gerado pelo `--custom`, o humano escreve:
 
-### Task 3: Seed fictício idempotente
+```sql
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE "eventos_auditoria" FROM usinagem_app;
+```
+
+E por fim:
+
+```bash
+pnpm db:migrate
+git add drizzle && git commit -m "feat(usinagem): migrations de núcleo e processo e revogação de escrita na auditoria"
+```
+
+O agente continua só depois da confirmação. As tabelas `movimentos_estoque` e `baixas` recebem a mesma revogação na migration que as criar (PR 3 e PR 5).
+
+### Task 3: Numeração atômica com número inicial configurável
+
+**Files:**
+- Create: `apps/usinagem/lib/dominio/processo/numeracao.ts`
+- Test: `apps/usinagem/lib/dominio/processo/numeracao.test.ts`
+- Create: `apps/usinagem/lib/servidor/numeracao.ts`
+- Test: `apps/usinagem/lib/servidor/numeracao.test.ts`
+
+**Interfaces:**
+- Consumes: `sequenciasNumeracao`, `processos`, `urlLocal`, `Resultado` (definido aqui em linha; a 1B cria `comum.ts` e passa a importar de lá).
+- Produces:
+  - `validarNumeroInicial(inicio: number, maiorUsado: number | null): { ok: true } | { ok: false; erro: string }`;
+  - `formatarNumeroProcesso(numero: number, letra: string): string`;
+  - `reservarNumero(banco: NodePgDatabase<typeof schema>, nome: string): Promise<number>`;
+  - `definirNumeroInicial(banco, nome: string, inicio: number): Promise<{ ok: true } | { ok: false; erro: string }>`.
+
+- [ ] **Step 1: Testes que falham**
+
+`lib/dominio/processo/numeracao.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { formatarNumeroProcesso, validarNumeroInicial } from "./numeracao";
+
+describe("numeração", () => {
+  it("formata número e letra", () => {
+    expect(formatarNumeroProcesso(357, "A")).toBe("357-A");
+  });
+  it("início precisa ser inteiro positivo", () => {
+    expect(validarNumeroInicial(0, null).ok).toBe(false);
+    expect(validarNumeroInicial(1.5, null).ok).toBe(false);
+    expect(validarNumeroInicial(357, null).ok).toBe(true);
+  });
+  it("início precisa passar do maior já usado", () => {
+    expect(validarNumeroInicial(300, 356).ok).toBe(false);
+    expect(validarNumeroInicial(356, 356).ok).toBe(false);
+    expect(validarNumeroInicial(357, 356).ok).toBe(true);
+  });
+});
+```
+
+`lib/servidor/numeracao.test.ts`:
+
+```ts
+import { afterAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { randomUUID } from "node:crypto";
+import * as schema from "./db/schema";
+import { urlLocal } from "./db/url-local";
+import { definirNumeroInicial, reservarNumero } from "./numeracao";
+
+const temBanco = Boolean(process.env.DATABASE_URL);
+
+describe.skipIf(!temBanco)("numeração no banco", () => {
+  const banco = temBanco ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;
+  const nome = `teste_${randomUUID()}`;
+  afterAll(async () => {
+    await banco.delete(schema.sequenciasNumeracao).where(eq(schema.sequenciasNumeracao.nome, nome));
+    await banco.$client.end();
+  });
+
+  it("20 gerações concorrentes: 20 números distintos e consecutivos", async () => {
+    // Sequência de teste isolada: não passa pela regra de "maior que processos existentes".
+    await banco.insert(schema.sequenciasNumeracao).values({ nome, proximo: 357 });
+    const numeros = await Promise.all(Array.from({ length: 20 }, () => reservarNumero(banco, nome)));
+    const ordenados = [...numeros].sort((a, b) => a - b);
+    expect(new Set(numeros).size).toBe(20);
+    expect(ordenados).toEqual(Array.from({ length: 20 }, (_, i) => 357 + i));
+  });
+
+  it("número inicial abaixo do maior já usado em processos é recusado", async () => {
+    // O seed tem processos até 9003.
+    expect((await definirNumeroInicial(banco, "processo", 9000)).ok).toBe(false);
+  });
+});
+```
+
+Run: `cd apps/usinagem && pnpm test lib/dominio/processo lib/servidor/numeracao.test.ts`
+Expected: FAIL, módulos não existem.
+
+- [ ] **Step 2: Implementar a regra pura**
+
+`lib/dominio/processo/numeracao.ts`:
+
+```ts
+export function validarNumeroInicial(inicio: number, maiorUsado: number | null): { ok: true } | { ok: false; erro: string } {
+  if (!Number.isInteger(inicio) || inicio < 1) return { ok: false, erro: "O número inicial precisa ser inteiro e positivo." };
+  if (maiorUsado !== null && inicio <= maiorUsado) {
+    return { ok: false, erro: "O número inicial precisa ser maior que o último número já usado." };
+  }
+  return { ok: true };
+}
+
+export const formatarNumeroProcesso = (numero: number, letra: string): string => `${numero}-${letra}`;
+```
+
+- [ ] **Step 3: Implementar a parte do banco**
+
+`lib/servidor/numeracao.ts` (sem `server-only`, porque o seed e os testes também usam):
+
+```ts
+import { eq, max, sql } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { validarNumeroInicial } from "../dominio/processo/numeracao";
+import * as schema from "./db/schema";
+
+const { sequenciasNumeracao: seq, processos } = schema;
+
+/** Incremento atômico: o UPDATE trava a linha, então chamadas concorrentes nunca repetem número. */
+export async function reservarNumero(banco: NodePgDatabase<typeof schema>, nome: string): Promise<number> {
+  const [linha] = await banco
+    .update(seq)
+    .set({ proximo: sql`${seq.proximo} + 1`, atualizadoEm: sql`now()` })
+    .where(eq(seq.nome, nome))
+    .returning({ numero: sql<number>`${seq.proximo} - 1` });
+  if (!linha) throw new Error("Sequência de numeração não configurada.");
+  return Number(linha.numero);
+}
+
+/** Continua a sequência já usada pela empresa. Só aceita início maior que o maior número de processo. */
+export async function definirNumeroInicial(banco: NodePgDatabase<typeof schema>, nome: string, inicio: number) {
+  return banco.transaction(async (tx) => {
+    const [{ maior }] = await tx.select({ maior: max(processos.numero) }).from(processos);
+    const valido = validarNumeroInicial(inicio, maior ?? null);
+    if (!valido.ok) return valido;
+    await tx
+      .insert(seq)
+      .values({ nome, proximo: inicio })
+      .onConflictDoUpdate({ target: seq.nome, set: { proximo: inicio, atualizadoEm: sql`now()` } });
+    return valido;
+  });
+}
+```
+
+- [ ] **Step 4: Rodar**
+
+Run: `pnpm test lib/dominio/processo lib/servidor/numeracao.test.ts`
+Expected: PASS. Os testes de banco rodam se o `.env.local` existir. O segundo teste de banco depende do seed (Task 4): na primeira execução, rodar de novo depois da Task 4.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/usinagem/lib/dominio/processo/numeracao.ts apps/usinagem/lib/dominio/processo/numeracao.test.ts apps/usinagem/lib/servidor/numeracao.ts apps/usinagem/lib/servidor/numeracao.test.ts
+git commit -m "feat(usinagem): numeração atômica de processo com início configurável"
+```
+
+### Task 4: Seed fictício idempotente com a role da aplicação
 
 **Files:**
 - Create: `apps/usinagem/scripts/seed.ts`
 - Test: `apps/usinagem/scripts/seed.test.ts`
 
 **Interfaces:**
-- Consumes: schema (Task 2), `PERFIS`, `NOME_PERFIL`, `urlLocal`.
-- Produces: `semear(banco: NodePgDatabase<typeof schema>): Promise<void>`; `USUARIOS_FICTICIOS: { id: string; perfil: Perfil; nome: string }[]` (um por perfil, ids fixos). Na 1B, o seletor de perfil de dev e o seed de permissões usam esses ids.
+- Consumes: schema, `PERFIS`, `NOME_PERFIL`, `urlLocal`.
+- Produces:
+  - `semear(banco: NodePgDatabase<typeof schema>): Promise<void>`;
+  - `USUARIOS_FICTICIOS: { id: string; perfil: Perfil; nome: string }[]` (um por perfil, ids fixos).
 
 - [ ] **Step 1: Teste que falha**
 
@@ -443,15 +676,15 @@ O agente continua só depois da confirmação.
 
 ```ts
 import { afterAll, describe, expect, it } from "vitest";
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
-import { semear } from "./seed";
+import { semear, USUARIOS_FICTICIOS } from "./seed";
 
 const temBanco = Boolean(process.env.DATABASE_URL);
 
-describe.skipIf(!temBanco)("seed fictício", () => {
+describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
   const banco = temBanco ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;
   afterAll(async () => {
     await banco?.$client.end();
@@ -459,13 +692,31 @@ describe.skipIf(!temBanco)("seed fictício", () => {
 
   it("é idempotente e marca tudo como fictício", async () => {
     await semear(banco);
+    const [antes] = await banco.select({ n: count() }).from(schema.usuarios);
     await semear(banco);
-    const [u] = await banco.select({ n: count() }).from(schema.usuarios);
+    const [depois] = await banco.select({ n: count() }).from(schema.usuarios);
+    expect(depois.n).toBe(antes.n);
     const [p] = await banco.select({ n: count() }).from(schema.perfis);
     expect(p.n).toBe(5);
-    expect(u.n).toBe(5);
-    const naoFicticios = (await banco.select().from(schema.usuarios)).filter((x) => !x.ficticio);
-    expect(naoFicticios).toEqual([]);
+    // Outros testes criam usuários fictícios próprios; aqui só os do seed importam.
+    const doSeed = (await banco.select().from(schema.usuarios)).filter((x) => USUARIOS_FICTICIOS.some((f) => f.id === x.id));
+    expect(doSeed).toHaveLength(5);
+    expect(doSeed.every((x) => x.ficticio)).toBe(true);
+    const [s] = await banco.select().from(schema.sequenciasNumeracao).where(eq(schema.sequenciasNumeracao.nome, "processo"));
+    expect(s.proximo).toBeGreaterThan(9003);
+  });
+
+  it("a role da aplicação insere na auditoria mas não altera nem apaga", async () => {
+    const [ev] = await banco
+      .insert(schema.eventosAuditoria)
+      .values({ operacao: "teste_role", entidade: "teste" })
+      .returning({ id: schema.eventosAuditoria.id });
+    await expect(
+      banco.update(schema.eventosAuditoria).set({ operacao: "x" }).where(eq(schema.eventosAuditoria.id, ev.id)),
+    ).rejects.toThrow(/permission denied/);
+    await expect(banco.delete(schema.eventosAuditoria).where(eq(schema.eventosAuditoria.id, ev.id))).rejects.toThrow(
+      /permission denied/,
+    );
   });
 });
 ```
@@ -529,14 +780,12 @@ export async function semear(banco: NodePgDatabase<typeof schema>): Promise<void
     await tx.insert(schema.processos).values(PROCESSOS.map((p) => ({ ...p, criadoPor: COMERCIAL, ficticio: true }))).onConflictDoNothing();
     await tx.insert(schema.revisoesComerciais).values(REVISOES).onConflictDoNothing();
     await tx.insert(schema.itensRevisao).values(ITENS).onConflictDoNothing();
-    await tx
-      .insert(schema.configuracoes)
-      .values({ chave: "numeracao", valor: { proximoNumero: 9004, formato: "{numero}-{letra}" } })
-      .onConflictDoNothing();
+    await tx.insert(schema.sequenciasNumeracao).values({ nome: "processo", proximo: 9004 }).onConflictDoNothing();
   });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // Role da aplicação (DATABASE_URL), nunca a de migração.
   const banco = drizzle(urlLocal(process.env.DATABASE_URL), { schema });
   semear(banco)
     .then(() => console.log("Seed fictício aplicado."))
@@ -546,23 +795,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 - [ ] **Step 3: Rodar contra o banco local**
 
-Run: `cd apps/usinagem && pnpm test && pnpm db:seed`
-Expected: testes PASS (o de seed roda porque `.env.local` tem `DATABASE_URL`); `Seed fictício aplicado.`
+Run: `cd apps/usinagem && pnpm db:seed && pnpm test`
+Expected: `Seed fictício aplicado.` e todos os testes PASS, inclusive os de banco (numeração, seed, role).
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add apps/usinagem/scripts/seed.ts apps/usinagem/scripts/seed.test.ts
-git commit -m "feat(usinagem): seed fictício idempotente"
+git commit -m "feat(usinagem): seed fictício idempotente e teste de permissão da role da aplicação"
 ```
 
-### Task 4: CI do GitHub Actions
+### Task 5: CI do GitHub Actions
 
 **Files:**
 - Create: `.github/workflows/usinagem.yml`
 
 **Interfaces:**
-- Consumes: scripts `typecheck`, `lint`, `test`, `db:migrate`; migration commitada pelo humano (Task 2, Step 7).
+- Consumes: `db/init/01-roles.sh`, scripts `typecheck`, `lint`, `db:migrate`, `db:seed`, `test`; migrations commitadas pelo humano (Task 2, Step 7).
 
 - [ ] **Step 1: Workflow**
 
@@ -592,16 +841,17 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_DB: usinagem
-          POSTGRES_USER: usinagem
-          # Senha descartável do container efêmero do CI, sem valor fora dele.
-          POSTGRES_PASSWORD: ci_descartavel
+          POSTGRES_USER: postgres
+          # Senhas descartáveis do container efêmero do CI. Valor de teste, diferente das senhas locais.
+          POSTGRES_PASSWORD: ci_superusuario_descartavel
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U usinagem -d usinagem"
+          --health-cmd "pg_isready -U postgres -d usinagem"
           --health-interval 2s --health-timeout 3s --health-retries 20
     env:
-      DATABASE_URL: postgres://usinagem:ci_descartavel@localhost:5432/usinagem
+      DATABASE_URL_MIGRACAO: postgres://usinagem_migracao:ci_migracao_descartavel@localhost:5432/usinagem
+      DATABASE_URL: postgres://usinagem_app:ci_app_descartavel@localhost:5432/usinagem
     defaults:
       run:
         working-directory: apps/usinagem
@@ -616,20 +866,30 @@ jobs:
         working-directory: .
       - run: pnpm typecheck
       - run: pnpm lint
+      - name: Criar roles
+        run: bash db/init/01-roles.sh
+        env:
+          PGHOST: localhost
+          PGPASSWORD: ci_superusuario_descartavel
+          POSTGRES_USER: postgres
+          POSTGRES_DB: usinagem
+          MIGRACAO_DB_PASSWORD: ci_migracao_descartavel
+          APP_DB_PASSWORD: ci_app_descartavel
       - run: pnpm db:migrate
+      - run: node --import tsx scripts/seed.ts
       - run: pnpm test
 ```
 
-`pnpm/action-setup@v4` lê a versão do campo `packageManager` da raiz (9.15.9).
+`pnpm/action-setup@v4` lê a versão do `packageManager` da raiz (9.15.9). A guarda `urlLocal` continua valendo no CI (host `localhost`).
 
 - [ ] **Step 2: Validar sintaxe localmente**
 
-Run: `node -e "require('fs').readFileSync('.github/workflows/usinagem.yml','utf8')" && pnpm dlx @action-validator/cli@0.6.0 .github/workflows/usinagem.yml`
-Expected: sem erro. (Validação real só no primeiro push, que depende de confirmação do humano.)
+Run: `pnpm dlx @action-validator/cli@0.6.0 .github/workflows/usinagem.yml`
+Expected: sem erro. A validação real só acontece no primeiro push, que depende da confirmação do humano.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/usinagem.yml
-git commit -m "ci(usinagem): typecheck, lint e Vitest com Postgres de serviço"
+git commit -m "ci(usinagem): typecheck, lint e Vitest com Postgres de serviço e roles separadas"
 ```

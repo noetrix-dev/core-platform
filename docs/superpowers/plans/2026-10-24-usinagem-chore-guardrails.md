@@ -65,7 +65,7 @@ git commit -m "chore(usinagem): script typecheck com next typegen"
 - Create: `docs/superpowers/patches/2026-10-24-guardrails-usinagem.patch`
 
 **Interfaces:**
-- Produces: patch aplicável com `git apply`, que altera `.claude/rules/frontend.md`, cria `.claude/rules/usinagem-database.md`, altera `.claude/hooks/block-protected-paths.sh` e `.gitignore`.
+- Produces: patch aplicável com `git apply`, que altera `.claude/rules/frontend.md`, cria `.claude/rules/usinagem-database.md`, altera `.claude/hooks/block-protected-paths.sh`, `.gitignore` e `PRODUCT.md` (nota de exceção aprovada, no mesmo commit do patch).
 
 - [ ] **Step 1: Montar as mudanças numa cópia temporária, fora da árvore**
 
@@ -103,6 +103,9 @@ As regras de Supabase de `database.md` não valem aqui. O usinagem usa Postgres 
 
 - Schema em `apps/usinagem/lib/servidor/db/schema.ts`. Migrations em `apps/usinagem/drizzle/`, geradas por `drizzle-kit generate` pelo responsável humano. Agente nunca cria, edita nem aplica migration.
 - Só Postgres local (Docker) ou o serviço do CI. Nunca conectar a banco remoto; `lib/servidor/db/url-local.ts` recusa host que não seja local.
+- Duas roles: migração (`DATABASE_URL_MIGRACAO`, só `drizzle-kit`) e aplicação (`DATABASE_URL`, app e seed). A role da aplicação não tem UPDATE/DELETE em tabelas de log (`eventos_auditoria`, `movimentos_estoque`, `baixas`).
+- Tabela editável tem `versao` e toda atualização filtra pela versão lida (concorrência otimista).
+- Toda Server Action e Route Handler usa o wrapper `acao`/`acaoPublica`/`rota` de `lib/servidor/acao.ts` (deny by default).
 - Acesso a dados pelo query builder do Drizzle. `sql` só como template parametrizado, nunca por concatenação de string.
 - Dinheiro em centavos inteiros (`bigint`), nunca float. Quantidade inteira.
 - Registro de negócio não é apagado: cancelar e estornar mudam estado e geram evento.
@@ -120,7 +123,13 @@ As regras de Supabase de `database.md` não valem aqui. O usinagem usa Postgres 
     exit 2 ;;
 ```
 
-4. Acrescentar ao fim de `.gitignore`:
+4. Em `PRODUCT.md` (raiz), na seção `## Stack`, logo depois do parágrafo que termina em "não é uma decisão em aberto.", acrescentar o parágrafo (texto aprovado):
+
+```markdown
+Exceção: `apps/usinagem` (ERP Express) usa PostgreSQL 16 próprio com Drizzle ORM e autenticação interna (Better Auth), sem Supabase. Ver `apps/usinagem/CLAUDE.md`.
+```
+
+5. Acrescentar ao fim de `.gitignore`:
 
 ```
 # Fontes privadas da Express (nunca versionar)
@@ -160,7 +169,7 @@ O responsável humano revisa e roda:
 
 ```bash
 git apply docs/superpowers/patches/2026-10-24-guardrails-usinagem.patch
-git add .claude .gitignore && git commit -m "chore(usinagem): guardrails de Drizzle, rule de banco e exceção de frontend"
+git add .claude .gitignore PRODUCT.md && git commit -m "chore(usinagem): guardrails de Drizzle, rule de banco, exceção de frontend e nota no PRODUCT.md"
 ```
 
 O agente para aqui até o humano confirmar.
