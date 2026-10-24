@@ -12,4 +12,11 @@ describe("urlLocal", () => {
   it("recusa ausente", () => {
     expect(() => urlLocal(undefined)).toThrow("não definida");
   });
+  it("URL malformada: mensagem genérica, sem vazar a senha", () => {
+    let erro: unknown;
+    try { urlLocal("postgres://u:segredo@[malformada"); } catch (e) { erro = e; }
+    expect(erro).toBeInstanceOf(Error);
+    expect((erro as Error).message).toBe("A URL do banco é inválida.");
+    expect(JSON.stringify(erro, Object.getOwnPropertyNames(erro))).not.toContain("segredo");
+  });
 });
