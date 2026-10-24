@@ -214,7 +214,7 @@ git commit -m "feat(usinagem): Postgres local com roles de migração e aplicaç
   - `SITUACOES_COMERCIAIS` (inclui `fechado` e `reaberto`), `ESTADOS_REVISAO`;
   - tabelas `perfis`, `permissoes`, `perfilPermissoes`, `usuarios`, `eventosAuditoria`, `configuracoes`, `sequenciasNumeracao`, `clientes`, `processos`, `revisoesComerciais`, `itensRevisao`;
   - `db(): NodePgDatabase<typeof schema>`.
-- Nota para o PR 1D: as colunas de `usuarios` (`id uuid`, `nome`, `email unique`, `criado_em`, `atualizado_em`) são compatíveis com o mapeamento `fields` do Better Auth 1.6.23. O 1D só acrescenta `email_verificado` e `imagem`.
+- Nota para o PR 1D: as colunas de `usuarios` (`id uuid`, `nome`, `email unique`, `criado_em`, `atualizado_em`) são compatíveis com o mapeamento `fields` do Better Auth 1.6.33. O 1D só acrescenta `email_verificado` e `imagem`.
 
 - [ ] **Step 1: Perfis**
 

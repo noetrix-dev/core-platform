@@ -393,7 +393,7 @@ Vazamentos laterais, todos bloqueados no servidor:
   - Geradas por `drizzle-kit` pelo responsável humano no terminal, nunca editadas por agente.
   - Aplicadas só no Postgres local.
 - **Testes**: Vitest. Regras de domínio em funções puras, sem banco.
-- **Autenticação** (PR 1D): Better Auth `1.6.23`, pino exato. A 1.7.12 tinha só 4 dias em 2026-10-24 e a regra é não usar versão com menos de 14 dias.
+- **Autenticação** (PR 1D): Better Auth `1.6.33`, pino exato. É a 1.6.x mais nova com mais de 14 dias de publicação em 2026-10-24; a linha 1.7 inteira tinha menos de 14 dias. O aviso de peer do Vitest 5 (a 1.6.33 declara até ^4) é aceito, sem override global.
   - Adapter Drizzle, e-mail e senha, sessão no Postgres, `disableSignUp` (sem cadastro público).
   - IDs UUID (`advanced.database.generateId: "uuid"`).
   - Tabelas mapeadas por `modelName`/`fields` para `usuarios`, `sessoes`, `contas`, `verificacoes`, com colunas em snake_case.

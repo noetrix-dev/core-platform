@@ -45,7 +45,7 @@ Sigilo por campo, aplicado na serialização do servidor (`lib/dominio/sigilo/`)
 - Financeiro opera título a título, sem cruzar AP e AR.
 - Margem, custo de lote e valorização de estoque: só Admin.
 
-Identidade: Better Auth 1.6.23 fixo (pino exato) (PR 1D), sem cadastro público, login auditado. Seletor de perfil de dev só com `NODE_ENV=development` **e** `ENABLE_DEV_SWITCHER=1`, em arquivos `*.dev.ts(x)`; no build de produção responde 404 (`scripts/verificar-build-producao.sh`).
+Identidade: Better Auth 1.6.33 fixo (pino exato; aviso de peer do Vitest 5 aceito, sem override) (PR 1D), sem cadastro público, login auditado. Seletor de perfil de dev só com `NODE_ENV=development` **e** `ENABLE_DEV_SWITCHER=1`, em arquivos `*.dev.ts(x)`; no build de produção responde 404 (`scripts/verificar-build-producao.sh`).
 
 ## Identidade visual
 
