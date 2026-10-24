@@ -8,3 +8,5 @@ dist
 *.log
 .vercel
 supabase/.temp/
+# Fontes privadas da Express (nunca versionar)
+docs/express-usinagem/fontes/

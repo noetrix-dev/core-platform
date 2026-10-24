@@ -12,6 +12,8 @@ Monorepo Turborepo + pnpm workspaces. Apps em Next.js 16 / React 19 / Tailwind C
 Backend e dados em Supabase (Postgres com schema por tenant + RLS, Supabase Auth).
 Stack já estabelecida pelo código existente; não é uma decisão em aberto.
 
+Exceção: `apps/usinagem` (ERP Express) usa PostgreSQL 16 próprio com Drizzle ORM e autenticação interna (Better Auth), sem Supabase. Ver `apps/usinagem/CLAUDE.md`.
+
 ## Users
 
 Dois usuários primários, com peso igual:
