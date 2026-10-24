@@ -1,45 +1,72 @@
-# CLAUDE.md — apps/usinagem
+@AGENTS.md
 
-## Produto
-Sistema de gestão de processos para Express Usinagem e Calderaria Ltda.
-Cliente piloto: Roberto Almeida — Campo Grande, Rio de Janeiro.
-Produto da Noetrix — monorepo core-platform, app separado do StudiOLD.
+# apps/usinagem: ERP Express Usinagem
 
-## Modelo de negócio do cliente
-Intermediário técnico: não fabrica, terceiriza tudo.
-Fluxo: recebe pedido → faz desenho → cota parceiros → compra MP → envia para fabricação → inspeciona → entrega.
-Três atores por processo: Cliente / Matéria Prima / Parceiros Fabricantes.
+ERP interno da Express Usinagem e Calderaria: uma intermediadora técnica que não tem máquinas. Ela desenha, cota, compra matéria-prima, terceiriza a fabricação com parceiros, inspeciona, registra a NF emitida no sistema fiscal externo e entrega ao cliente.
+
+Fonte de verdade das regras: `docs/superpowers/specs/2026-10-24-express-usinagem-erp-design.md`. Em conflito, a spec vence este arquivo.
+
+O repositório é público. Nunca versionar `docs/express-usinagem/fontes/`, dados reais, nomes de pessoas, caminhos de rede reais, endereços ou detalhes de infraestrutura.
 
 ## Stack
-Next.js 15, TypeScript, Tailwind CSS 4, Supabase (São Paulo), Vercel (team: noetrix).
-URL produção: usinagem.noetrix.com.br (a configurar no Cloudflare).
 
-## Usuários e papéis
-| Papel | Usuário | Permissões exclusivas |
-|---|---|---|
-| Admin | Roberto Almeida | Ver margem por processo, configurar usuários |
-| Comercial | Ana Ferreira | Criar e editar processos, clientes |
-| Compras/Produção | Marcos Lima | Atualizar cadeia de valor, parceiros |
-| Financeiro | Fernanda Costa | Módulo financeiro completo, registrar NF |
+- Next.js 16 (App Router). Ler `node_modules/next/dist/docs/` antes de codar. `middleware.ts` virou `proxy.ts`. `cookies()` é assíncrono. `typecheck` = `next typegen && tsc --noEmit`.
+- React 19, TypeScript estrito, Tailwind 4, shadcn/ui, React Hook Form + Zod (o mesmo schema valida no cliente e na Server Action).
+- PostgreSQL 16 em Docker local (`compose.yaml`) + Drizzle ORM. Sem Supabase neste app.
+- Vitest. Regra de negócio em função pura em `lib/dominio/`, testada sem banco.
 
-## Máquina de estados do processo
-cotacao_aberta → cotacao_enviada → em_fabricacao → pronto_entrega → nf_emitida → fechado
-Retrabalho: incrementa letra do sufixo (421-A → 421-B).
-Sub-status de fabricação: texto livre, atualizado por Compras/Produção.
+## Banco e migrations
 
-## Servidor de arquivos
-PC local na rede da empresa (\\SERVIDOR-EXPRESS\Processos\).
-Sistema armazena o caminho de rede por processo — não os arquivos.
-Não há integração direta.
+- Schema: `lib/servidor/db/schema.ts`. Conexão: `db()` em `lib/servidor/db/index.ts` (`server-only`, só aceita host local).
+- Migrations em `drizzle/`: geradas e aplicadas pelo responsável humano (`pnpm db:generate`, `pnpm db:migrate`). Agente nunca cria, edita nem aplica migration.
+- Só Postgres local ou o serviço do CI. Nenhuma conexão com banco real, VPS ou Supabase.
+- `.env.local` é editado à mão (`POSTGRES_PASSWORD`, `DATABASE_URL`). Nunca ler, imprimir ou commitar.
+- Dinheiro em centavos inteiros (`bigint`), nunca float. Identificador interno UUID separado do número exibido (ex.: `357-A`).
 
-## NF — Varitus
-Emissão feita no Varitus (sistema externo).
-Sistema registra NF (número + data) e gera conta a receber. Não emite diretamente.
+## Domínio em uma linha cada
+
+- Processo = solicitação de cotação; N pedidos formais por processo abatem a demanda; processo novo pode ser "derivado de" outro.
+- Letra (A, B, C) = revisão comercial. Revisões comercial, técnica e de retrabalho são independentes.
+- Estoque e reservas ancorados em produto + revisão técnica, nunca no processo. Peça no parceiro é "em processo", não estoque.
+- `estoque_livre = fisico_elegivel - reservas_firmes - reservas_estrategicas` (bloqueios já estão fora do elegível).
+- Entrega, aceite, NF e recebimento são eventos separados. Remessa, recebimento e NF são idempotentes.
+- Preço pendente é estado explícito: PDF e envio de proposta só depois que o Admin precifica.
+
+## Perfis e permissões
+
+Cinco perfis: Admin, Comercial, Compras/Produção, Financeiro, Desenhista/Técnico. RBAC por ação (`lib/dominio/permissoes/catalogo.ts`), checado no servidor com `requirePermissao()`. Permissões travadas são só do Admin.
+
+Sigilo por campo, aplicado na serialização do servidor (`lib/dominio/sigilo/`):
+- Compras vê custo, nunca preço.
+- Comercial vê preço, nunca custo.
+- Financeiro opera título a título, sem cruzar AP e AR.
+- Margem, custo de lote e valorização de estoque: só Admin.
+
+Até a etapa de identidade (Better Auth), o login é um seletor dos 5 usuários fictícios, ativo só com `NODE_ENV=development`.
+
+## Identidade visual
+
+- Cores: vermelho `#A81915`, grafite `#191919`/`#1A1A1A`, cobre `#B5652E`.
+- Fundo `#EEF0EE` com grid blueprint de 28 px.
+- Tipografia: IBM Plex Sans e IBM Plex Mono.
+- UI toda em pt-BR.
+
+O layout sai do `/impeccable shape`.
 
 ## Fluxo obrigatório
-1. /brainstorm → 2. /superpowers:writing-plans → 3. /impeccable shape → 4. SDD → 5. Review Opus → push
 
-## Design system
-Paleta: #191919 sidebar, #A81915 primário, #B5652E secundário, #EEF0EE fundo com grid blueprint 28px.
-Tipografia: IBM Plex Sans + IBM Plex Mono.
-Referência: prototype de validação em express-usinagem-sistema.html.
+1. `/brainstorm` → spec em `docs/superpowers/specs/`.
+2. `/superpowers:writing-plans` → plano em `docs/superpowers/plans/`.
+3. `/impeccable shape <superfície>` antes de qualquer UI.
+4. Execução subagent-driven (SDD), task a task, com review.
+5. Revisão Opus da branch inteira.
+6. PR.
+
+Regras do fluxo:
+- Trabalho só em branch (`feat/usinagem-*`). Nunca commit nem push em `main`.
+- Push e PR só com confirmação explícita do responsável humano.
+- Nenhum deploy nem `vercel link`.
+- Dados de seed sempre fictícios e marcados (`ficticio = true`, prefixo `[FICTÍCIO]`).
+- Guardrails (`.claude/**`, `.gitignore`) não são editados por agente: entregar como patch.
+
+Antes de concluir: `pnpm --filter usinagem typecheck`, `lint`, `test`, `build` limpos e nenhum segredo no diff.
