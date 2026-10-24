@@ -20,7 +20,7 @@ O repositório é público. Nunca versionar `docs/express-usinagem/fontes/`, dad
 - Schema: `lib/servidor/db/schema.ts`. Conexão: `db()` em `lib/servidor/db/index.ts` (`server-only`, só aceita host local).
 - Migrations em `drizzle/`: geradas e aplicadas pelo responsável humano (`pnpm db:generate`, `pnpm db:migrate`). Agente nunca cria, edita nem aplica migration.
 - Só Postgres local ou o serviço do CI. Nenhuma conexão com banco real, VPS ou Supabase.
-- Duas roles: migração (`DATABASE_URL_MIGRACAO`, só `drizzle-kit`) e aplicação (`DATABASE_URL`, app e seed, sem UPDATE/DELETE em tabelas de log).
+- Duas roles: migração (`DATABASE_URL_MIGRACAO`, só `drizzle-kit`) e aplicação (`DATABASE_URL`, app e seed, dona de nada, sem UPDATE/DELETE/TRUNCATE em `eventos_auditoria`, `movimentos_estoque` e `baixas`: correção é estorno).
 - Tabela editável tem `versao` (concorrência otimista). Datas em `timestamptz`, exibidas em `America/Sao_Paulo`.
 - `.env.local` é editado à mão. Nunca ler, imprimir ou commitar.
 - Dinheiro em centavos inteiros (`bigint`), nunca float. Peça vendável em quantidade inteira; MP e compras em `NUMERIC(14,3)`.
@@ -45,7 +45,7 @@ Sigilo por campo, aplicado na serialização do servidor (`lib/dominio/sigilo/`)
 - Financeiro opera título a título, sem cruzar AP e AR.
 - Margem, custo de lote e valorização de estoque: só Admin.
 
-Identidade: Better Auth 1.7.12 fixo (PR 1D), sem cadastro público, login auditado. Seletor de perfil de dev só com `NODE_ENV=development` **e** `ENABLE_DEV_SWITCHER=1`, em arquivos `*.dev.ts(x)`; no build de produção responde 404 (`scripts/verificar-build-producao.sh`).
+Identidade: Better Auth 1.6.23 fixo (pino exato) (PR 1D), sem cadastro público, login auditado. Seletor de perfil de dev só com `NODE_ENV=development` **e** `ENABLE_DEV_SWITCHER=1`, em arquivos `*.dev.ts(x)`; no build de produção responde 404 (`scripts/verificar-build-producao.sh`).
 
 ## Identidade visual
 

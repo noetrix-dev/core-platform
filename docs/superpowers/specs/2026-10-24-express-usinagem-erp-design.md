@@ -279,7 +279,8 @@ Calculado, nunca gravado, a partir dos três eixos e dos documentos. A primeira 
 - Duas roles de banco:
   - **migração**: dona do schema, roda DDL, usada só pelo `drizzle-kit migrate`;
   - **aplicação**: usada pelo app e pelo seed, só DML.
-- A role da aplicação não tem `UPDATE`, `DELETE` nem `TRUNCATE` em `eventos_auditoria`, `movimentos_estoque` e `baixas` (somente inserção). A revogação entra na migration da tabela correspondente.
+- A role de migração é dona de todas as tabelas; a role da aplicação não é dona de nenhuma e não cria tabelas.
+- A role da aplicação não tem `UPDATE`, `DELETE` nem `TRUNCATE` em `eventos_auditoria`, `movimentos_estoque` e `baixas` (append-only). Correção de estoque ou de baixa é um novo registro de estorno, nunca `UPDATE`. A revogação vai numa migration custom gerada depois da que cria cada tabela. Um teste reprova qualquer uma das três que exista sem a revogação.
 - Toda Server Action e todo Route Handler passa por um wrapper de permissão com **deny by default**: sem permissão declarada, a chamada é recusada. Um teste falha se algum arquivo `"use server"` ou `route.ts` exportar função fora do wrapper.
 - Concorrência otimista por `versao` (§4).
 
@@ -392,7 +393,7 @@ Vazamentos laterais, todos bloqueados no servidor:
   - Geradas por `drizzle-kit` pelo responsável humano no terminal, nunca editadas por agente.
   - Aplicadas só no Postgres local.
 - **Testes**: Vitest. Regras de domínio em funções puras, sem banco.
-- **Autenticação** (PR 1D): Better Auth `1.7.12`, versão fixada.
+- **Autenticação** (PR 1D): Better Auth `1.6.23`, pino exato. A 1.7.12 tinha só 4 dias em 2026-10-24 e a regra é não usar versão com menos de 14 dias.
   - Adapter Drizzle, e-mail e senha, sessão no Postgres, `disableSignUp` (sem cadastro público).
   - IDs UUID (`advanced.database.generateId: "uuid"`).
   - Tabelas mapeadas por `modelName`/`fields` para `usuarios`, `sessoes`, `contas`, `verificacoes`, com colunas em snake_case.

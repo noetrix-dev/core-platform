@@ -20,6 +20,8 @@
 
 - Migrations em `apps/usinagem/drizzle/` são geradas e aplicadas pelo HUMANO (`pnpm db:generate`, `pnpm db:migrate`), sempre com a role de migração. Agente nunca cria, edita nem aplica migration.
 - App, seed e testes usam só a role da aplicação.
+- `usinagem_migracao` é dona de todas as tabelas (o `drizzle-kit migrate` roda com ela); `usinagem_app` não é dona de nenhuma e não tem `CREATE` no schema. Teste em `pg_tables.tableowner`.
+- Tabelas append-only (`eventos_auditoria`, `movimentos_estoque`, `baixas`): `usinagem_app` sem `UPDATE`, `DELETE` e `TRUNCATE`. Correção de estoque ou de baixa é um novo registro de estorno, nunca `UPDATE`.
 - Nenhuma conexão com banco remoto. Host aceito: `localhost` ou `127.0.0.1`.
 - Nenhuma credencial no repositório, exceto as senhas descartáveis do CI. Elas têm valor claramente de teste (`ci_*_descartavel`) e devem ser diferentes das senhas locais.
 - `.env.local` é criado à mão pelo humano (o app ignora `.env*`).
@@ -212,7 +214,7 @@ git commit -m "feat(usinagem): Postgres local com roles de migração e aplicaç
   - `SITUACOES_COMERCIAIS` (inclui `fechado` e `reaberto`), `ESTADOS_REVISAO`;
   - tabelas `perfis`, `permissoes`, `perfilPermissoes`, `usuarios`, `eventosAuditoria`, `configuracoes`, `sequenciasNumeracao`, `clientes`, `processos`, `revisoesComerciais`, `itensRevisao`;
   - `db(): NodePgDatabase<typeof schema>`.
-- Nota para o PR 1D: as colunas de `usuarios` (`id uuid`, `nome`, `email unique`, `criado_em`, `atualizado_em`) são compatíveis com o mapeamento `fields` do Better Auth 1.7.12. O 1D só acrescenta `email_verificado` e `imagem`.
+- Nota para o PR 1D: as colunas de `usuarios` (`id uuid`, `nome`, `email unique`, `criado_em`, `atualizado_em`) são compatíveis com o mapeamento `fields` do Better Auth 1.6.23. O 1D só acrescenta `email_verificado` e `imagem`.
 
 - [ ] **Step 1: Perfis**
 
@@ -493,23 +495,31 @@ Depois:
 cd apps/usinagem
 pnpm db:up
 pnpm db:generate --name nucleo_processo
-pnpm db:generate --custom --name revogar_escrita_auditoria
+pnpm db:generate --custom --name revogar_escrita_append_only
 ```
+
+Ordem obrigatória: a migration `--custom` é gerada **depois** da `nucleo_processo`, então recebe número maior e roda depois da criação das tabelas. Se for gerada antes, o `REVOKE` falha porque a tabela ainda não existe.
 
 No arquivo vazio gerado pelo `--custom`, o humano escreve:
 
 ```sql
+-- Append-only: a aplicação só insere. Correção é um novo registro de estorno, nunca UPDATE.
 REVOKE UPDATE, DELETE, TRUNCATE ON TABLE "eventos_auditoria" FROM usinagem_app;
 ```
 
-E por fim:
+E por fim, com a role de migração (é ela que fica dona das tabelas):
 
 ```bash
 pnpm db:migrate
-git add drizzle && git commit -m "feat(usinagem): migrations de núcleo e processo e revogação de escrita na auditoria"
+git add drizzle && git commit -m "feat(usinagem): migrations de núcleo e processo e revogação de escrita append-only"
 ```
 
-O agente continua só depois da confirmação. As tabelas `movimentos_estoque` e `baixas` recebem a mesma revogação na migration que as criar (PR 3 e PR 5).
+O agente continua só depois da confirmação.
+
+**`movimentos_estoque` e `baixas` ainda não existem no 1A.** O schema de estoque só se estabiliza depois dos testes puros da 1B (spec §9), e `baixas` é do PR 3. Um `REVOKE` sobre tabela inexistente derruba a migration. Por isso:
+- a lista das 3 tabelas fica em código (`TABELAS_APPEND_ONLY`, Task 4);
+- o teste de permissão cobre as 3, falhando se qualquer uma existir com `UPDATE`, `DELETE` ou `TRUNCATE` para a aplicação;
+- quando o PR 3 criar `baixas` e o PR 5 criar `movimentos_estoque`, o teste fica vermelho até a migration custom daquele PR trazer o `REVOKE` correspondente, sempre gerada depois da que cria a tabela.
 
 ### Task 3: Numeração atômica com número inicial configurável
 
@@ -662,6 +672,7 @@ git commit -m "feat(usinagem): numeração atômica de processo com início conf
 
 **Files:**
 - Create: `apps/usinagem/scripts/seed.ts`
+- Create: `apps/usinagem/lib/servidor/db/append-only.ts`
 - Test: `apps/usinagem/scripts/seed.test.ts`
 
 **Interfaces:**
@@ -680,6 +691,7 @@ import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
+import { TABELAS_APPEND_ONLY } from "../lib/servidor/db/append-only";
 import { semear, USUARIOS_FICTICIOS } from "./seed";
 
 const temBanco = Boolean(process.env.DATABASE_URL);
@@ -706,6 +718,34 @@ describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
     expect(s.proximo).toBeGreaterThan(9003);
   });
 
+  it("usinagem_migracao é dona de todas as tabelas; usinagem_app de nenhuma", async () => {
+    const { rows } = await banco.$client.query<{ schemaname: string; tablename: string; tableowner: string }>(
+      "select schemaname, tablename, tableowner from pg_tables where schemaname in ('public', 'drizzle')",
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.filter((r) => r.tableowner !== "usinagem_migracao")).toEqual([]);
+    const { rows: criar } = await banco.$client.query<{ pode: boolean }>(
+      "select has_schema_privilege('usinagem_app', 'public', 'CREATE') as pode",
+    );
+    expect(criar[0].pode).toBe(false);
+  });
+
+  it("append-only: a aplicação não tem UPDATE, DELETE nem TRUNCATE nas 3 tabelas", async () => {
+    const { rows } = await banco.$client.query<{ tabela: string; existe: boolean; update: boolean | null; del: boolean | null; trunc: boolean | null }>(
+      `select t as tabela, to_regclass(t) is not null as existe,
+              case when to_regclass(t) is null then null else has_table_privilege('usinagem_app', t, 'UPDATE') end as update,
+              case when to_regclass(t) is null then null else has_table_privilege('usinagem_app', t, 'DELETE') end as del,
+              case when to_regclass(t) is null then null else has_table_privilege('usinagem_app', t, 'TRUNCATE') end as trunc
+         from unnest($1::text[]) as t`,
+      [TABELAS_APPEND_ONLY],
+    );
+    expect(rows.map((r) => r.tabela)).toEqual([...TABELAS_APPEND_ONLY]);
+    // eventos_auditoria existe desde o 1A; as outras passam a ser checadas quando forem criadas (PR 3 e PR 5).
+    expect(rows.find((r) => r.tabela === "eventos_auditoria")?.existe).toBe(true);
+    const comEscrita = rows.filter((r) => r.existe && (r.update || r.del || r.trunc));
+    expect(comEscrita).toEqual([]);
+  });
+
   it("a role da aplicação insere na auditoria mas não altera nem apaga", async () => {
     const [ev] = await banco
       .insert(schema.eventosAuditoria)
@@ -725,6 +765,17 @@ Run: `cd apps/usinagem && pnpm test scripts/seed.test.ts`
 Expected: FAIL, módulo `./seed` não existe.
 
 - [ ] **Step 2: Implementar**
+
+`lib/servidor/db/append-only.ts`:
+
+```ts
+/**
+ * Tabelas em que a aplicação só insere (spec §6.8). Correção vira um novo registro de estorno.
+ * Cada uma recebe REVOKE UPDATE, DELETE, TRUNCATE de usinagem_app numa migration custom gerada
+ * depois da migration que cria a tabela. O seed.test.ts falha se alguma existir sem a revogação.
+ */
+export const TABELAS_APPEND_ONLY = ["eventos_auditoria", "movimentos_estoque", "baixas"] as const;
+```
 
 `scripts/seed.ts`:
 
@@ -796,12 +847,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 - [ ] **Step 3: Rodar contra o banco local**
 
 Run: `cd apps/usinagem && pnpm db:seed && pnpm test`
-Expected: `Seed fictício aplicado.` e todos os testes PASS, inclusive os de banco (numeração, seed, role).
+Expected: `Seed fictício aplicado.` e todos os testes PASS, inclusive os de banco (numeração, seed, dono das tabelas, append-only, role).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add apps/usinagem/scripts/seed.ts apps/usinagem/scripts/seed.test.ts
+git add apps/usinagem/scripts/seed.ts apps/usinagem/scripts/seed.test.ts apps/usinagem/lib/servidor/db/append-only.ts
 git commit -m "feat(usinagem): seed fictício idempotente e teste de permissão da role da aplicação"
 ```
 

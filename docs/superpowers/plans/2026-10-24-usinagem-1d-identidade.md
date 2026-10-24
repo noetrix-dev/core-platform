@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Entregar a identidade do ERP:
-- login real com e-mail e senha (Better Auth 1.7.12), sem cadastro público;
+- login real com e-mail e senha (Better Auth 1.6.23), sem cadastro público;
 - login auditado, com sucesso e falha;
 - usuário inativo bloqueado e reautenticação recente nas ações sensíveis;
 - gate no `proxy.ts`;
@@ -17,7 +17,7 @@
 - **Sessão no servidor**: `usuarioAtual()` tenta a sessão Better Auth e só cai no seletor de dev atrás do gate da 1B.
 - **Seletor de dev**: vive em arquivos `*.dev.ts(x)`, que só viram rota quando `pageExtensions` inclui `dev.tsx`. Isso só acontece com o gate ligado.
 
-**Tech Stack:** better-auth 1.7.12 (peer: drizzle-orm ^0.45.2, next ^16, react ^19), Next 16.3.4 (`proxy.ts`, `pageExtensions`), Drizzle 0.45.4, Zod 4.6.7, Vitest 5.0.5.
+**Tech Stack:** better-auth 1.6.23 (peer: drizzle-orm ^0.45.2, next ^16, react ^19), Next 16.3.4 (`proxy.ts`, `pageExtensions`), Drizzle 0.45.4, Zod 4.6.7, Vitest 5.0.5.
 
 **Spec:** `docs/superpowers/specs/2026-10-24-express-usinagem-erp-design.md` (§4.1, §7.4, §8 "Autenticação" e "Seletor de perfil de dev", §10 "Identidade")
 
@@ -31,12 +31,17 @@
 - Usuário com senha criado no servidor: `ctx.internalAdapter.createUser`, depois `ctx.password.hash`, depois `ctx.internalAdapter.linkAccount({ providerId: "credential" })`. É o padrão do plugin admin.
 - `nextCookies()` precisa ser o último plugin. `auth.api.getSession({ headers: await headers() })` no servidor.
 - `advanced.validateSchema` vem ligado fora de produção e acusa divergência entre schema e mapeamento no primeiro request.
-- O Context7 indexa até a 1.6.23; o npm publica a 1.7.12, compatível com drizzle-orm 0.45 e Next 16 pelos peers. Se o `tsc` acusar divergência de API, a referência é o `.d.ts` instalado, nunca a memória.
+- **Versão fixada: 1.6.23** (decisão registrada em 2026-10-24, pela regra dos 14 dias):
+  - `npm view better-auth time dist-tags` mostrou `latest` 1.7.12, publicada em 2026-10-20 (4 dias). Antes dela: 1.7.11 (10-19), 1.7.10 (10-15), 1.7.9 (10-15) e 1.7.8 (10-14). Todas com menos de 14 dias.
+  - A 1.6.23 (2026-06-29) é a versão mais nova indexada no Context7, então a documentação consultada corresponde ao código instalado.
+  - Peers da 1.6.23: drizzle-orm ^0.45.2, drizzle-kit >=0.31.4, next ^16, react ^19. O peer opcional `vitest` vai só até ^4 e nós usamos a 5.0.5: o pnpm emite aviso de peer, sem erro, e o Better Auth não usa o Vitest em runtime.
+  - A linha 1.6 tem manutenção até a 1.6.33 (tag `release-1.6`, 2026-09-14, mesmos peers). Trocar para ela fica a critério do responsável humano.
+- Na Task 1, repetir `npm view better-auth time dist-tags` e registrar o resultado no relatório da task. Se o `tsc` acusar divergência de API em relação a este plano, a referência é o `.d.ts` instalado, nunca a memória.
 
 ## Global Constraints
 
 - Depende de 1A e 1B concluídos.
-- Versão fixa: `better-auth@1.7.12` (sem `^`).
+- Versão fixa: `better-auth@1.6.23` (sem `^`).
 - Agente nunca cria, edita nem aplica migration. O humano gera e aplica (Task 1, Step 4).
 - Segredos (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`) só no `.env.local`, editado à mão. O CI usa valor descartável de teste.
 - Nenhuma tela de cadastro, de recuperação de senha nem de convite.
@@ -57,10 +62,13 @@
 - [ ] **Step 1: Instalar**
 
 ```bash
-pnpm --filter usinagem add better-auth@1.7.12
+pnpm --filter usinagem add better-auth@1.6.23
 ```
 
-Conferir em `apps/usinagem/package.json`: `"better-auth": "1.7.12"`, sem `^`. Se vier com `^`, editar para fixar.
+Conferir em `apps/usinagem/package.json`: `"better-auth": "1.6.23"`, pino exato, sem `^` nem `~`. Se vier com caret, editar para fixar.
+
+Run: `npm view better-auth time dist-tags --json`
+Registrar no relatório da task as datas de `latest` e da 1.6.23. Se surgir motivo para outra versão, parar e perguntar ao humano antes de trocar.
 
 - [ ] **Step 2: Colunas novas em `usuarios`**
 
@@ -76,7 +84,7 @@ Em `lib/servidor/db/schema.ts`, dentro de `usuarios`, depois de `email`:
 Ao fim de `lib/servidor/db/schema.ts`, adicionar `index` ao import de `drizzle-orm/pg-core` e:
 
 ```ts
-// ── Identidade (Better Auth 1.7.12, nomes mapeados em auth-config.ts) ──
+// ── Identidade (Better Auth 1.6.23, nomes mapeados em auth-config.ts) ──
 export const sessoes = pgTable(
   "sessoes",
   {
@@ -132,7 +140,7 @@ Expected: limpo.
 
 ```bash
 git add apps/usinagem/package.json pnpm-lock.yaml apps/usinagem/lib/servidor/db/schema.ts
-git commit -m "feat(usinagem): schema de identidade para Better Auth 1.7.12"
+git commit -m "feat(usinagem): schema de identidade para Better Auth 1.6.23"
 ```
 
 - [ ] **Step 4: HUMANO gera e aplica a migration**
@@ -435,7 +443,7 @@ export async function criarUsuarioComSenha(
 - [ ] **Step 7: Rodar**
 
 Run: `cd apps/usinagem && pnpm test lib/dominio/seguranca lib/servidor/auth.test.ts && pnpm typecheck`
-Expected: PASS. Se o `tsc` acusar campo ou assinatura diferente na 1.7.12, ajustar pelo `.d.ts` em `node_modules/better-auth` e registrar o ajuste no relatório da task.
+Expected: PASS. Se o `tsc` acusar campo ou assinatura diferente na 1.6.23, ajustar pelo `.d.ts` em `node_modules/better-auth` e registrar o ajuste no relatório da task.
 
 - [ ] **Step 8: Commit**
 
