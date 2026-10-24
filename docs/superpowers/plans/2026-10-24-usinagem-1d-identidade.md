@@ -257,11 +257,14 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { randomUUID } from "node:crypto";
 import * as schema from "./db/schema";
+import { bancoDisponivel } from "./db/teste-banco";
 import { urlLocal } from "./db/url-local";
 import { criarAuth } from "./auth-config";
 import { criarUsuarioComSenha } from "./usuarios-auth";
 
-const pronto = Boolean(process.env.DATABASE_URL && process.env.BETTER_AUTH_SECRET);
+// Mesma política do 1A: no CI, banco ou segredo ausente falha em vez de pular.
+if (process.env.CI && !process.env.BETTER_AUTH_SECRET) throw new Error("Testes de auth exigem BETTER_AUTH_SECRET no CI.");
+const pronto = bancoDisponivel() && Boolean(process.env.BETTER_AUTH_SECRET);
 
 describe.skipIf(!pronto)("Better Auth contra o Postgres local", () => {
   const banco = pronto ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;

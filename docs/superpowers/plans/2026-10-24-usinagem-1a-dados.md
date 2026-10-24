@@ -38,9 +38,16 @@
 - Modify: `apps/usinagem/package.json`
 - Create: `apps/usinagem/compose.yaml`
 - Create: `apps/usinagem/db/init/01-roles.sh` (modo 755)
-- Create: `apps/usinagem/vitest.config.ts`
+- Create: `apps/usinagem/vitest.config.mts` (criado como `.ts` e renomeado no fix round 2)
 - Create: `apps/usinagem/lib/servidor/db/url-local.ts`
 - Test: `apps/usinagem/lib/servidor/db/url-local.test.ts`
+- Create (fix round 2): `apps/usinagem/lib/servidor/db/teste-banco.ts` e `teste-banco.test.ts`
+
+Executado (commits `1b95873`, `7e1c61b`, `c55dbab`). Mudanças pedidas na revisão e incorporadas:
+- healthcheck por TCP (`pg_isready -h 127.0.0.1`);
+- `urlLocal` com mensagem genérica sem `cause` para URL malformada, allowlist de query (`sslmode`, `application_name`) e testes adversariais de host. O `pg` deixa `?host=` sobrescrever o host da URL, e é por isso que existe a allowlist;
+- `bancoDisponivel()`: no CI, sem `DATABASE_URL`, falha; fora do CI, pula com aviso;
+- `@types/node` 22.20.5 com pino exato.
 
 **Interfaces:**
 - Produces:
@@ -570,10 +577,12 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { randomUUID } from "node:crypto";
 import * as schema from "./db/schema";
+import { bancoDisponivel } from "./db/teste-banco";
 import { urlLocal } from "./db/url-local";
 import { definirNumeroInicial, reservarNumero } from "./numeracao";
 
-const temBanco = Boolean(process.env.DATABASE_URL);
+// No CI, ausência de DATABASE_URL falha em vez de pular (política em teste-banco.ts).
+const temBanco = bancoDisponivel();
 
 describe.skipIf(!temBanco)("numeração no banco", () => {
   const banco = temBanco ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;
@@ -692,9 +701,11 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
 import { TABELAS_APPEND_ONLY } from "../lib/servidor/db/append-only";
+import { bancoDisponivel } from "../lib/servidor/db/teste-banco";
 import { semear, USUARIOS_FICTICIOS } from "./seed";
 
-const temBanco = Boolean(process.env.DATABASE_URL);
+// No CI, ausência de DATABASE_URL falha em vez de pular (política em teste-banco.ts).
+const temBanco = bancoDisponivel();
 
 describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
   const banco = temBanco ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;
