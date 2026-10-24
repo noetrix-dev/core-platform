@@ -1,0 +1,22 @@
+# Postgres local de desenvolvimento do ERP Express. Nunca usar em produção.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: usinagem
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.local}
+      MIGRACAO_DB_PASSWORD: ${MIGRACAO_DB_PASSWORD:?defina MIGRACAO_DB_PASSWORD no .env.local}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env.local}
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - usinagem_pg:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d usinagem"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  usinagem_pg:
