@@ -80,4 +80,11 @@ describe("catálogo de permissões", () => {
     expect(() => validarConcessao("comercial", "nao.existe" as Permissao)).not.toThrow();
     expect(validarConcessao("comercial", "nao.existe" as Permissao).ok).toBe(false);
   });
+
+  it("permissão inexistente em concedidas nega acesso sem lançar", () => {
+    expect(() => pode("comercial", "nao.existe" as Permissao, ["nao.existe" as Permissao])).not.toThrow();
+    expect(pode("comercial", "nao.existe" as Permissao, ["nao.existe" as Permissao])).toBe(false);
+    expect(() => pode("comercial", "processo.ver", ["nao.existe" as Permissao])).not.toThrow();
+    expect(pode("comercial", "processo.ver", ["nao.existe" as Permissao])).toBe(false);
+  });
 });
