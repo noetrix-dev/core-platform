@@ -924,6 +924,26 @@ git commit -m "feat(usinagem): seed fictício idempotente e teste de permissão 
 **Interfaces:**
 - Consumes: `db/init/01-roles.sh`, scripts `typecheck`, `lint`, `db:migrate`, `db:seed`, `test`; migrations commitadas pelo humano (Task 2, Step 7).
 
+Executado (commit `aacc1da`), revisado pelo humano antes da instalação. A fonte de verdade é `.github/workflows/usinagem.yml`; o YAML abaixo é o rascunho original e está superado. Mudanças em relação a ele:
+- **Gatilho e permissões**:
+  - só `pull_request`, nunca `pull_request_target`, sem gatilho de push;
+  - `permissions: contents: read`, sem nenhum secret;
+  - `concurrency` por PR.
+- **`paths`**: `apps/usinagem/**`, o próprio workflow, `pnpm-lock.yaml`, `package.json` e `pnpm-workspace.yaml` da raiz. O app não importa nenhum `packages/*`.
+- **Actions fixadas por SHA de commit**, todas com 14 dias ou mais em 2026-10-24:
+  - `actions/checkout` v7.0.1 (`3d3c42e5…`), com `persist-credentials: false`;
+  - `pnpm/action-setup` v6.1.0, fixado no commit `ea17c68d…` (a tag é anotada). Vai sem `version`, porque o `packageManager` da raiz fixa a 9.15.9;
+  - `actions/setup-node` v7.1.0 (`949feb24…`), com Node `22.23.2`.
+- **Versões**: um passo confere `node --version` = `v22.23.2` e `pnpm --version` = `9.15.9`.
+- **Instalação**: `pnpm install --frozen-lockfile --filter ./apps/usinagem...`, testado localmente com `--lockfile-only`.
+- **Banco**:
+  - roles criadas pelo MESMO `db/init/01-roles.sh`, com senhas `ci_*_descartavel`;
+  - healthcheck `pg_isready -h 127.0.0.1`;
+  - `CI: "true"` com `DATABASE_URL` definida: os testes de banco rodam e nunca são pulados.
+- **Ordem**: typecheck, lint, `db:migrate` (role de migração), test (role da aplicação, o seed roda dentro dos testes), build.
+- Validado com actionlint 1.7.12 (0 erros; shellcheck ausente na máquina).
+- **Risco não validado**: depende do cliente `psql` no runner `ubuntu-24.04`. Só a primeira execução confirma.
+
 - [ ] **Step 1: Workflow**
 
 ```yaml
