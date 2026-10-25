@@ -47,7 +47,8 @@ export async function semear(banco: NodePgDatabase<typeof schema>): Promise<void
     await tx.insert(schema.perfis).values(PERFIS.map((id) => ({ id, nome: NOME_PERFIL[id] }))).onConflictDoNothing();
     await tx
       .insert(schema.usuarios)
-      .values(USUARIOS_FICTICIOS.map((u) => ({ id: u.id, nome: u.nome, email: `${u.perfil}@ficticio.invalid`, perfilId: u.perfil, ficticio: true })))
+      // criado_por nulo só no Admin (bootstrap, spec §4); os demais são criados por ele. A FK NO ACTION é checada no fim do INSERT.
+      .values(USUARIOS_FICTICIOS.map((u) => ({ id: u.id, nome: u.nome, email: `${u.perfil}@ficticio.invalid`, perfilId: u.perfil, ficticio: true, criadoPor: u.perfil === "admin" ? null : ADMIN })))
       .onConflictDoNothing();
     await tx.insert(schema.clientes).values(CLIENTES.map((c) => ({ ...c, criadoPor: COMERCIAL, ficticio: true }))).onConflictDoNothing();
     await tx.insert(schema.processos).values(PROCESSOS.map((p) => ({ ...p, criadoPor: COMERCIAL, ficticio: true }))).onConflictDoNothing();
