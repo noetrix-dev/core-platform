@@ -38,9 +38,16 @@
 - Modify: `apps/usinagem/package.json`
 - Create: `apps/usinagem/compose.yaml`
 - Create: `apps/usinagem/db/init/01-roles.sh` (modo 755)
-- Create: `apps/usinagem/vitest.config.ts`
+- Create: `apps/usinagem/vitest.config.mts` (criado como `.ts` e renomeado no fix round 2)
 - Create: `apps/usinagem/lib/servidor/db/url-local.ts`
 - Test: `apps/usinagem/lib/servidor/db/url-local.test.ts`
+- Create (fix round 2): `apps/usinagem/lib/servidor/db/teste-banco.ts` e `teste-banco.test.ts`
+
+Executado (commits `1b95873`, `7e1c61b`, `c55dbab`). Mudanças pedidas na revisão e incorporadas:
+- healthcheck por TCP (`pg_isready -h 127.0.0.1`);
+- `urlLocal` com mensagem genérica sem `cause` para URL malformada, allowlist de query (`sslmode`, `application_name`) e testes adversariais de host. O `pg` deixa `?host=` sobrescrever o host da URL, e é por isso que existe a allowlist;
+- `bancoDisponivel()`: no CI, sem `DATABASE_URL`, falha; fora do CI, pula com aviso;
+- `@types/node` 22.20.5 com pino exato.
 
 **Interfaces:**
 - Produces:
@@ -215,6 +222,22 @@ git commit -m "feat(usinagem): Postgres local com roles de migração e aplicaç
   - tabelas `perfis`, `permissoes`, `perfilPermissoes`, `usuarios`, `eventosAuditoria`, `configuracoes`, `sequenciasNumeracao`, `clientes`, `processos`, `revisoesComerciais`, `itensRevisao`;
   - `db(): NodePgDatabase<typeof schema>`.
 - Nota para o PR 1D: as colunas de `usuarios` (`id uuid`, `nome`, `email unique`, `criado_em`, `atualizado_em`) são compatíveis com o mapeamento `fields` do Better Auth 1.6.33. O 1D só acrescenta `email_verificado` e `imagem`.
+
+Executado (commits `a3e9488`, `18ba676`). O humano pediu ajustes antes da migration, e eles valem sobre o código abaixo. A fonte de verdade é o `schema.ts` commitado.
+- `eventos_auditoria.entidade_id` é `text`: chaves de configuracoes, perfis e permissoes são text, e UUIDs entram como texto.
+- `processos` não tem `letra`.
+- `revisoes_comerciais` ganha:
+  - `sequencia integer not null`, com `CHECK > 0` e unique `(processo_id, sequencia)`;
+  - `CHECK letra ~ '^[A-Z]{1,2}$'`.
+- A revisão vigente é a de maior `sequencia`. A letra é só rótulo. O número exibido é `processos.numero` + a letra da revisão vigente.
+- Índices `<tabela>_<coluna>_idx` em toda FK que não é a primeira coluna de um unique composto, mais `eventos_auditoria_entidade_idx (entidade, entidade_id, criado_em)`.
+- `db()` usa um `Pool` explícito do `pg`:
+  - `max: 10` e `on("error")` registrando só código e mensagem;
+  - instância em `globalThis` só em desenvolvimento.
+- Fix round 2 (`f0cf6f0`), decisão do humano:
+  - CHECKs `processos.numero > 0`, `derivado_de_processo_id <> id`, `validade_dias > 0` (quando não nulo) e `usuarios.email = lower(email)`;
+  - `atualizado_em` em `itens_revisao`.
+  - O Better Auth 1.6.33 põe o e-mail em minúsculas no `createUser`, no `findUserByEmail`, no cadastro e na troca de e-mail (`dist/db/internal-adapter.mjs`), então o CHECK é compatível.
 
 - [ ] **Step 1: Perfis**
 
@@ -537,6 +560,12 @@ O agente continua só depois da confirmação.
   - `reservarNumero(banco: NodePgDatabase<typeof schema>, nome: string): Promise<number>`;
   - `definirNumeroInicial(banco, nome: string, inicio: number): Promise<{ ok: true } | { ok: false; erro: string }>`.
 
+Executado (commits `d4f5d86`, `6159b9d`; `server-only` acrescentado no plano 0002). A fonte de verdade é o código commitado. O código abaixo tem **dois defeitos já corrigidos, que não devem ser reintroduzidos**:
+- O teste "número inicial abaixo do maior já usado" chamava `definirNumeroInicial(banco, "processo", 9000)`. Sem o seed, isso gravaria a sequência real `processo` com 9000, e o seed (`onConflictDoNothing`) manteria esse valor, colidindo com 9001 a 9003. O código commitado usa a sequência de teste aleatória do arquivo, com valor 1, e chama `semear(banco)` no `beforeAll`, porque o Vitest roda arquivos em paralelo.
+- Os testes de banco usam `bancoDisponivel()`.
+- Limpeza pedida pelo humano: o marcador `// OBSERVADO_PG` saiu e o aviso do `bancoDisponivel` passou a sair uma vez só, com teste.
+- Adiado para o PR 2 (tela de configuração): `definirNumeroInicial` lê o maior número e faz o upsert sem lock e pode rebaixar o `proximo`. Uma colisão vira erro no `unique` de `processos.numero`. A correção é `SELECT ... FOR UPDATE` na sequência e comparar com o `proximo` atual.
+
 - [ ] **Step 1: Testes que falham**
 
 `lib/dominio/processo/numeracao.test.ts`:
@@ -570,10 +599,12 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { randomUUID } from "node:crypto";
 import * as schema from "./db/schema";
+import { bancoDisponivel } from "./db/teste-banco";
 import { urlLocal } from "./db/url-local";
 import { definirNumeroInicial, reservarNumero } from "./numeracao";
 
-const temBanco = Boolean(process.env.DATABASE_URL);
+// No CI, ausência de DATABASE_URL falha em vez de pular (política em teste-banco.ts).
+const temBanco = bancoDisponivel();
 
 describe.skipIf(!temBanco)("numeração no banco", () => {
   const banco = temBanco ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;
@@ -681,20 +712,32 @@ git commit -m "feat(usinagem): numeração atômica de processo com início conf
   - `semear(banco: NodePgDatabase<typeof schema>): Promise<void>`;
   - `USUARIOS_FICTICIOS: { id: string; perfil: Perfil; nome: string }[]` (um por perfil, ids fixos).
 
+Executado (commits `b72d855`, `fd52a33`; colunas de registro no plano 0002). A fonte de verdade é o código commitado. O código abaixo tem **defeitos já corrigidos, que não devem ser reintroduzidos**:
+- Os dois testes de idempotência contavam `usuarios` e `perfis` no banco inteiro. Isso falha de forma intermitente quando outros arquivos, rodando em paralelo, criam usuários (o 1D vai criar). O código commitado conta só as linhas do seed: `inArray` com os ids de `USUARIOS_FICTICIOS` e com `PERFIS`.
+- O teste de `permission denied` confere o código 42501 na causa do erro, porque o Drizzle embrulha o erro do Postgres como "Failed query". Não usar `toThrow(/permission denied/)`.
+- O teste de dono também prova que a `usinagem_app` não tem `CREATE` no schema `drizzle`.
+- O teste append-only também cobre `has_any_column_privilege(..., 'UPDATE')`, para pegar GRANT por coluna.
+- O seed do plano tinha a linha `const PROCESSOS = [` duplicada; o código commitado tem uma só.
+- Adiados (registrados no ledger):
+  - o guard `import.meta.url` do `seed.ts` quebra com espaço, acento ou symlink no caminho; trocar por `pathToFileURL(process.argv[1]).href` quando mexer no arquivo;
+  - o seed não tem sentinela contra banco com dados reais. Ela é necessária antes de existir qualquer banco que não seja local de desenvolvimento.
+
 - [ ] **Step 1: Teste que falha**
 
 `scripts/seed.test.ts`:
 
 ```ts
 import { afterAll, describe, expect, it } from "vitest";
-import { count, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
 import { TABELAS_APPEND_ONLY } from "../lib/servidor/db/append-only";
+import { bancoDisponivel } from "../lib/servidor/db/teste-banco";
 import { semear, USUARIOS_FICTICIOS } from "./seed";
 
-const temBanco = Boolean(process.env.DATABASE_URL);
+// No CI, ausência de DATABASE_URL falha em vez de pular (política em teste-banco.ts).
+const temBanco = bancoDisponivel();
 
 describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
   const banco = temBanco ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;
@@ -758,6 +801,34 @@ describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
       /permission denied/,
     );
   });
+
+  it("auditoria registra entidade com chave text (configuracoes) e com UUID como texto", async () => {
+    const [cfg] = await banco
+      .insert(schema.eventosAuditoria)
+      .values({ operacao: "teste_chave_text", entidade: "configuracoes", entidadeId: "letra", depois: { regra: "pendente" } })
+      .returning();
+    expect(cfg.entidadeId).toBe("letra");
+    const uuid = USUARIOS_FICTICIOS[0].id;
+    const [usr] = await banco
+      .insert(schema.eventosAuditoria)
+      .values({ operacao: "teste_chave_text", entidade: "usuarios", entidadeId: uuid })
+      .returning();
+    expect(usr.entidadeId).toBe(uuid);
+    const achados = await banco
+      .select()
+      .from(schema.eventosAuditoria)
+      .where(and(eq(schema.eventosAuditoria.entidade, "configuracoes"), eq(schema.eventosAuditoria.entidadeId, "letra")));
+    expect(achados.some((e) => e.id === cfg.id)).toBe(true);
+  });
+
+  it("revisão vigente é a de maior sequencia, não a de maior letra em texto", async () => {
+    const revs = await banco
+      .select()
+      .from(schema.revisoesComerciais)
+      .where(eq(schema.revisoesComerciais.processoId, "00000000-0000-4000-8000-000000000202"))
+      .orderBy(desc(schema.revisoesComerciais.sequencia));
+    expect(revs.map((r) => [r.sequencia, r.letra])).toEqual([[2, "B"], [1, "A"]]);
+  });
 });
 ```
 
@@ -803,21 +874,26 @@ const ADMIN = USUARIOS_FICTICIOS[0].id;
 const COMERCIAL = USUARIOS_FICTICIOS[1].id;
 
 const PROCESSOS = [
-  { id: "00000000-0000-4000-8000-000000000201", numero: 9001, letra: "A", clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Polia dentada 40 dentes", situacaoComercial: "cotacao_aberta" },
-  { id: "00000000-0000-4000-8000-000000000202", numero: 9002, letra: "B", clienteId: CLIENTES[1].id, titulo: "[FICTÍCIO] Eixo retificado", situacaoComercial: "cotacao_enviada" },
-  { id: "00000000-0000-4000-8000-000000000203", numero: 9003, letra: "A", clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Flange usinado", situacaoComercial: "aprovado" },
+// processos não guarda letra: o número exibido usa a letra da revisão de maior `sequencia`.
+const PROCESSOS = [
+  { id: "00000000-0000-4000-8000-000000000201", numero: 9001, clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Polia dentada 40 dentes", situacaoComercial: "cotacao_aberta" },
+  { id: "00000000-0000-4000-8000-000000000202", numero: 9002, clienteId: CLIENTES[1].id, titulo: "[FICTÍCIO] Eixo retificado", situacaoComercial: "cotacao_enviada" },
+  { id: "00000000-0000-4000-8000-000000000203", numero: 9003, clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Flange usinado", situacaoComercial: "aprovado" },
 ];
 
+// 9002 tem duas revisões: A (sequencia 1, substituída) e B (sequencia 2, vigente). Exibe 9002-B.
 const REVISOES = [
-  { id: "00000000-0000-4000-8000-000000000301", processoId: PROCESSOS[0].id, letra: "A", estado: "preco_pendente", criadoPor: COMERCIAL },
-  { id: "00000000-0000-4000-8000-000000000302", processoId: PROCESSOS[1].id, letra: "B", estado: "enviada", criadoPor: COMERCIAL, precificadaPor: ADMIN },
-  { id: "00000000-0000-4000-8000-000000000303", processoId: PROCESSOS[2].id, letra: "A", estado: "aprovada", criadoPor: COMERCIAL, precificadaPor: ADMIN, aprovadaPor: COMERCIAL },
+  { id: "00000000-0000-4000-8000-000000000301", processoId: PROCESSOS[0].id, sequencia: 1, letra: "A", estado: "preco_pendente", criadoPor: COMERCIAL },
+  { id: "00000000-0000-4000-8000-000000000304", processoId: PROCESSOS[1].id, sequencia: 1, letra: "A", estado: "substituida", criadoPor: COMERCIAL, precificadaPor: ADMIN },
+  { id: "00000000-0000-4000-8000-000000000302", processoId: PROCESSOS[1].id, sequencia: 2, letra: "B", estado: "enviada", criadoPor: COMERCIAL, precificadaPor: ADMIN },
+  { id: "00000000-0000-4000-8000-000000000303", processoId: PROCESSOS[2].id, sequencia: 1, letra: "A", estado: "aprovada", criadoPor: COMERCIAL, precificadaPor: ADMIN, aprovadaPor: COMERCIAL },
 ];
 
 const ITENS = [
   { id: "00000000-0000-4000-8000-000000000401", revisaoId: REVISOES[0].id, ordem: 1, descricao: "[FICTÍCIO] Polia dentada aço 1045", quantidade: 20, precoUnitarioCentavos: null },
-  { id: "00000000-0000-4000-8000-000000000402", revisaoId: REVISOES[1].id, ordem: 1, descricao: "[FICTÍCIO] Eixo Ø40 x 300", quantidade: 10, precoUnitarioCentavos: 18_500 },
-  { id: "00000000-0000-4000-8000-000000000403", revisaoId: REVISOES[2].id, ordem: 1, descricao: "[FICTÍCIO] Flange DN100", quantidade: 40, precoUnitarioCentavos: 9_990 },
+  { id: "00000000-0000-4000-8000-000000000404", revisaoId: REVISOES[1].id, ordem: 1, descricao: "[FICTÍCIO] Eixo Ø40 x 300", quantidade: 10, precoUnitarioCentavos: 19_900 },
+  { id: "00000000-0000-4000-8000-000000000402", revisaoId: REVISOES[2].id, ordem: 1, descricao: "[FICTÍCIO] Eixo Ø40 x 300", quantidade: 10, precoUnitarioCentavos: 18_500 },
+  { id: "00000000-0000-4000-8000-000000000403", revisaoId: REVISOES[3].id, ordem: 1, descricao: "[FICTÍCIO] Flange DN100", quantidade: 40, precoUnitarioCentavos: 9_990 },
 ];
 
 export async function semear(banco: NodePgDatabase<typeof schema>): Promise<void> {
@@ -863,6 +939,30 @@ git commit -m "feat(usinagem): seed fictício idempotente e teste de permissão 
 
 **Interfaces:**
 - Consumes: `db/init/01-roles.sh`, scripts `typecheck`, `lint`, `db:migrate`, `db:seed`, `test`; migrations commitadas pelo humano (Task 2, Step 7).
+
+Executado (commit `aacc1da`), revisado pelo humano antes da instalação. A fonte de verdade é `.github/workflows/usinagem.yml`; o YAML abaixo é o rascunho original e está superado. Mudanças em relação a ele:
+- **Gatilho e permissões**:
+  - só `pull_request`, nunca `pull_request_target`, sem gatilho de push;
+  - `permissions: contents: read`, sem nenhum secret;
+  - `concurrency` por PR.
+- **`paths`**: `apps/usinagem/**`, o próprio workflow, `pnpm-lock.yaml`, `package.json` e `pnpm-workspace.yaml` da raiz. O app não importa nenhum `packages/*`.
+- **Actions fixadas por SHA de commit**, todas com 14 dias ou mais em 2026-10-24:
+  - `actions/checkout` v7.0.1 (`3d3c42e5…`), com `persist-credentials: false`;
+  - `pnpm/action-setup` v6.1.0, fixado no commit `ea17c68d…` (a tag é anotada). Vai sem `version`, porque o `packageManager` da raiz fixa a 9.15.9;
+  - `actions/setup-node` v7.1.0 (`949feb24…`), com Node `22.23.2`.
+- **Versões**: um passo confere `node --version` = `v22.23.2` e `pnpm --version` = `9.15.9`.
+- **Instalação**: `pnpm install --frozen-lockfile --filter ./apps/usinagem...`, testado localmente com `--lockfile-only`.
+- **Banco**:
+  - roles criadas pelo MESMO `db/init/01-roles.sh`, com senhas `ci_*_descartavel`;
+  - healthcheck `pg_isready -h 127.0.0.1`;
+  - `CI: "true"` com `DATABASE_URL` definida: os testes de banco rodam e nunca são pulados.
+- **Ordem**: typecheck, lint, `db:migrate` (role de migração), test (role da aplicação, o seed roda dentro dos testes), build.
+- Validado com actionlint 1.7.12 (0 erros; shellcheck ausente na máquina).
+- **Risco não validado**: depende do cliente `psql` no runner `ubuntu-24.04`. Só a primeira execução confirma.
+- **Adiados para depois do primeiro PR** (revisão final, decisão do humano em 2026-10-25):
+  - fixar `postgres:16-alpine` por digest (`@sha256:...`), no compose e no workflow;
+  - gatilho `push` em `main` (ou job "noop") para validar `main` depois do merge e não deixar check obrigatório pendente em PR fora dos `paths`. Ao ligar, revisar o risco de envenenamento do cache de `main`;
+  - configurar no repositório a aprovação obrigatória de workflows de colaboradores externos.
 
 - [ ] **Step 1: Workflow**
 

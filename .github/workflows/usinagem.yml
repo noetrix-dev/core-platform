@@ -1,0 +1,98 @@
+# CI do ERP Express (apps/usinagem). Repositório público: sem secrets, sem deploy.
+name: usinagem
+
+on:
+  # Nunca pull_request_target: PRs de fork não recebem token com escrita nem secrets.
+  pull_request:
+    # apps/usinagem não importa nenhum packages/* (a pasta nem existe); se passar a importar, incluir aqui.
+    paths:
+      - "apps/usinagem/**"
+      - ".github/workflows/usinagem.yml"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usinagem-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: usinagem
+          POSTGRES_USER: postgres
+          # Senhas descartáveis do container efêmero do CI. Valor de teste, diferente das senhas locais.
+          POSTGRES_PASSWORD: ci_superusuario_descartavel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d usinagem"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      # Com CI=true e DATABASE_URL definida, os testes de banco rodam; sem DATABASE_URL eles falham, nunca pulam.
+      CI: "true"
+      # localhost: passa na guarda urlLocal. Migração usa a role dona; testes, seed e build usam a role da aplicação.
+      DATABASE_URL_MIGRACAO: postgres://usinagem_migracao:ci_migracao_descartavel@localhost:5432/usinagem
+      DATABASE_URL: postgres://usinagem_app:ci_app_descartavel@localhost:5432/usinagem
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Sem `version`: a versão vem do packageManager da raiz (pnpm@9.15.9 com hash).
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Conferir versões fixadas
+        run: |
+          test "$(node --version)" = "v22.23.2"
+          test "$(pnpm --version)" = "9.15.9"
+
+      - name: Instalar dependências (só o usinagem e as dependências dele)
+        run: pnpm install --frozen-lockfile --filter ./apps/usinagem...
+
+      # Risco não validado: depende do cliente psql no runner ubuntu-24.04. Só a primeira execução confirma.
+      - name: Criar roles (o mesmo script do compose)
+        working-directory: apps/usinagem
+        env:
+          PGHOST: localhost
+          PGPASSWORD: ci_superusuario_descartavel
+          POSTGRES_USER: postgres
+          POSTGRES_DB: usinagem
+          MIGRACAO_DB_PASSWORD: ci_migracao_descartavel
+          APP_DB_PASSWORD: ci_app_descartavel
+        run: bash db/init/01-roles.sh
+
+      - name: Typecheck
+        working-directory: apps/usinagem
+        run: pnpm typecheck
+
+      - name: Lint
+        working-directory: apps/usinagem
+        run: pnpm lint
+
+      - name: Migrar (role de migração)
+        working-directory: apps/usinagem
+        run: pnpm db:migrate
+
+      - name: Testes (role da aplicação)
+        working-directory: apps/usinagem
+        run: pnpm test
+
+      - name: Build
+        working-directory: apps/usinagem
+        run: pnpm build

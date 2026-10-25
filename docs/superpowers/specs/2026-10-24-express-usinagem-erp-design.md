@@ -40,9 +40,9 @@ Fora do escopo do primeiro ciclo: multiempresa, assinatura, portal de cliente, i
 
 **Processo**: registro de uma demanda de cliente, desde a solicitação de cotação. É a própria solicitação na fase de cotação. Tem identificador interno imutável (UUID) e número exibido (ex.: `357-A`).
 
-**Número exibido**: parte numérica sequencial mais a letra. O formato e a política são configuráveis. Nunca serve de chave.
+**Número exibido**: parte numérica sequencial do processo mais a letra da revisão comercial vigente (ex.: 357-A). O formato e a política são configuráveis. Nunca serve de chave.
 
-**Letra**: marca da revisão comercial vigente do processo (A, B, C...). O evento que avança a letra está pendente de validação (ver §12).
+**Letra**: rótulo de exibição da revisão comercial (A, B, C... até duas maiúsculas). Não ordena nada: a revisão vigente é a de maior `sequencia` (inteiro), porque em ordem de texto "AA" viria antes de "B". O processo não guarda a letra. O evento que avança a letra está pendente de validação (ver §12).
 
 **Revisão comercial**: versão de quantidades, preços, prazos e condições do processo. Cada proposta enviada congela uma revisão.
 
@@ -109,7 +109,13 @@ Divergências resolvidas pelo brainstorm:
 
 Convenções valem para todas as tabelas:
 - PK `id uuid`, nunca reutilizada.
-- `criado_em`, `criado_por`, `atualizado_em`.
+- `criado_em` e `atualizado_em`: `timestamptz NOT NULL DEFAULT now()`. `criado_por`: FK para `usuarios`, nullable, sem ação referencial (NO ACTION). Onde `criado_por` já nasceu obrigatório (processos, revisões comerciais), continua NOT NULL.
+- Exceções documentadas:
+  - tabelas append-only (`eventos_auditoria`, `movimentos_estoque`, `baixas`) não têm `atualizado_em`, porque não são alteradas; `eventos_auditoria` usa `autor_id` no lugar de `criado_por`;
+  - `perfil_permissoes` tem só `criado_em`: a linha é concedida ou removida, nunca editada;
+  - `perfis`, `permissoes` e `perfil_permissoes` não têm `criado_por`: são catálogo, semeado pelo sistema;
+  - em `usuarios`, `criado_por` é nulo para o primeiro Admin (não há quem o crie).
+- Tabela append-only não pode ter FK com `ON DELETE` ou `ON UPDATE` em `CASCADE`, `SET NULL` ou `SET DEFAULT`. A ação referencial roda com o privilégio da dona da tabela e alteraria ou apagaria linhas que a aplicação não pode tocar. Um teste reprova qualquer FK assim.
 - Datas e horas em `timestamptz`, gravadas em UTC e exibidas em `America/Sao_Paulo`.
 - Tabela de registro editável tem `versao integer` para concorrência otimista. A atualização exige a versão lida; se outra pessoa salvou antes, a operação falha com conflito e nada é sobrescrito.
 - Dinheiro em centavos inteiros (`bigint`), nunca float. Percentual em pontos-base inteiros.
@@ -123,15 +129,15 @@ Convenções valem para todas as tabelas:
 - `perfis` (5 fixos)
 - `permissoes` (catálogo fixo em código; flag `travada_admin`)
 - `perfil_permissoes` (perfil × permissão; editável pelo Admin, exceto as travadas)
-- `eventos_auditoria` (autor, operação, entidade, entidade_id, antes, depois, justificativa, data/hora). Só recebe insert.
+- `eventos_auditoria` (autor, operação, entidade, `entidade_id` em texto, antes, depois, justificativa, data/hora). Só recebe insert. `entidade_id` é texto porque configurações, perfis e permissões têm chave textual; UUIDs entram como texto. Índice por (entidade, entidade_id, criado_em).
 - `configuracoes` (letra, etapas padrão, modelos de proposta)
 - `sequencias_numeracao` (nome, próximo número). Número inicial configurável pelo Admin para continuar a sequência já usada pela empresa.
 - `chaves_idempotencia` (chave única, operação, resultado)
 
 ### 4.2 Comercial e processos
 - `clientes`, `contatos_cliente`
-- `processos` (número, letra vigente, cliente, situação, `derivado_de_processo_id` opcional)
-- `revisoes_comerciais` (processo, letra, estado `rascunho | preco_pendente | precificada | enviada | aprovada | recusada | substituida`, condições, validade, prazo, pagamento, impostos/frete, observações, quem precificou, quem aprovou)
+- `processos` (número, cliente, situação, `derivado_de_processo_id` opcional). Sem letra: ela vem da revisão vigente.
+- `revisoes_comerciais` (processo, `sequencia` inteira > 0 e única por processo, cuja maior define a vigente; letra de 1 a 2 maiúsculas, única por processo, só rótulo; estado `rascunho | preco_pendente | precificada | enviada | aprovada | recusada | substituida`, condições, validade, prazo, pagamento, impostos/frete, observações, quem precificou, quem aprovou)
 - `itens_revisao` (revisão, descrição, quantidade, unidade, revisão técnica referenciada, preço unitário em centavos)
 - `custos_estimados_item` (item, origem: cotação de fornecedor ou manual; campo de custo)
 - `propostas` (revisão comercial congelada, PDF gerado, data de envio, destinatário)
@@ -272,15 +278,16 @@ Calculado, nunca gravado, a partir dos três eixos e dos documentos. A primeira 
 ### 6.7 Numeração
 - O número exibido é gerado em transação por incremento atômico em `sequencias_numeracao`, é único e não se repete mesmo com geração concorrente.
 - O número inicial é configurável (`configuracao.gerenciar`) para continuar a sequência já usada pela empresa. Só aceita valor maior que o maior número já usado.
-- A letra muda junto com a revisão comercial vigente. A regra final de avanço está pendente.
+- A letra exibida é a da revisão comercial vigente (maior `sequencia`). Uma revisão nova recebe a próxima `sequencia`. A regra final de quando nasce uma revisão nova (e portanto uma letra nova) está pendente.
 - Processo derivado recebe número novo e guarda o vínculo de origem.
 
 ### 6.8 Dados e segurança
 - Duas roles de banco:
-  - **migração**: dona do schema, roda DDL, usada só pelo `drizzle-kit migrate`;
+  - **migração**: dona de todas as tabelas, com `CREATE` no schema `public` (cujo dono continua sendo `pg_database_owner`), roda DDL, usada só pelo `drizzle-kit migrate`;
   - **aplicação**: usada pelo app e pelo seed, só DML.
 - A role de migração é dona de todas as tabelas; a role da aplicação não é dona de nenhuma e não cria tabelas.
 - A role da aplicação não tem `UPDATE`, `DELETE` nem `TRUNCATE` em `eventos_auditoria`, `movimentos_estoque` e `baixas` (append-only). Correção de estoque ou de baixa é um novo registro de estorno, nunca `UPDATE`. A revogação vai numa migration custom gerada depois da que cria cada tabela. Um teste reprova qualquer uma das três que exista sem a revogação.
+- FK que sai de tabela append-only nunca usa `CASCADE`, `SET NULL` nem `SET DEFAULT` (§4), porque a ação rodaria como dona da tabela e furaria a revogação.
 - Toda Server Action e todo Route Handler passa por um wrapper de permissão com **deny by default**: sem permissão declarada, a chamada é recusada. Um teste falha se algum arquivo `"use server"` ou `route.ts` exportar função fora do wrapper.
 - Concorrência otimista por `versao` (§4).
 
@@ -463,6 +470,20 @@ O schema de estoque só se estabiliza depois que os testes puros dos 4 cenários
    - rotas: painel e lista de processos (só leitura do seed) e placeholders das outras áreas.
 
 Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o Playwright (aceitação visual em 375 px e 1280 px).
+
+### 9.2 Pendências técnicas adiadas (revisão final do 1A, 2026-10-25)
+
+| Pendência | Onde entra |
+|---|---|
+| A auditoria aceita `criado_em` informado no INSERT: a aplicação pode gravar evento com data retroativa. Fechar com INSERT só nas colunas permitidas ou com trigger `BEFORE INSERT` forçando `now()`. | PR 2 |
+| Plano 1D: import duplicado de `index` no Step 3 e falta do `BETTER_AUTH_SECRET` descartável no workflow. | PR 1D (registrado no plano) |
+| `.env.local` único entrega ao `next dev` a URL da role de migração e a senha do superusuário. Separar as senhas de banco (compose e migração) das variáveis do app. | Trilha de infraestrutura |
+| Imagem `postgres:16-alpine` fixada por digest; gatilho `push` em `main`; aprovação obrigatória de workflows de colaboradores externos. | Depois do primeiro PR (plano 1A, Task 5) |
+| Sentinela no seed contra banco com dado real (recusar se houver usuário com `ficticio = false` ou banco diferente do esperado). | PR 2 |
+| Trava em `definirNumeroInicial`: hoje ele lê o maior número e faz o upsert sem lock, e pode rebaixar o `proximo`. Usar `SELECT ... FOR UPDATE` na linha da sequência e comparar com o `proximo` atual. | PR 2 |
+| Check pendente com filtro de `paths`: se o workflow `usinagem` virar check obrigatório, um PR que não toca os `paths` fica esperando para sempre. Resolver com job "noop" ou gatilho sem `paths` antes de ligar a proteção de branch. | Antes de tornar o check obrigatório |
+| `estrutura.test.ts`: comparar `conrelid::regclass::text` depende de o `search_path` incluir `public`. Com nome qualificado, o teste de FK append-only passaria sem checar nada. Trocar por `conrelid = any($1::regclass[])`. | Próximo commit que mexer no teste |
+| `estrutura.test.ts`: o `fks.find` pega só a primeira FK em `criado_por` por tabela. Com mais de uma FK nessa coluna, as demais não seriam conferidas. Conferir todas, por exemplo com `filter` e `every`. | Próximo commit que mexer no teste |
 
 ## 10. Testes de aceite
 

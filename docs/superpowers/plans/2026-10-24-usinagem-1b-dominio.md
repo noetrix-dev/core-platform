@@ -156,7 +156,8 @@ type Versionado = { versao: number };
 // Núcleo
 export type Usuario = Versionado & { id: Id; nome: string; email: string; perfil: Perfil; ativo: boolean; ficticio: boolean };
 export type EventoAuditoria = {
-  id: Id; autorId: Id | null; operacao: string; entidade: string; entidadeId: Id | null;
+  // entidadeId é text no banco: chaves de configuracoes/perfis/permissoes são text; UUIDs entram como texto.
+  id: Id; autorId: Id | null; operacao: string; entidade: string; entidadeId: string | null;
   antes: Record<string, unknown> | null; depois: Record<string, unknown> | null; justificativa: string | null; criadoEm: string;
 };
 
@@ -167,13 +168,15 @@ export type SituacaoComercial =
   | "cotacao_aberta" | "cotacao_enviada" | "aprovado" | "parcialmente_contratado" | "contratado"
   | "fechado" | "reaberto" | "perdido" | "cancelado" | "suspenso";
 export type Processo = Registro & Versionado & {
-  numero: number; letra: string; clienteId: Id; titulo: string;
+  // Sem letra: o número exibido é numero + letra da revisão comercial de maior `sequencia`.
+  numero: number; clienteId: Id; titulo: string;
   situacaoComercial: SituacaoComercial; derivadoDeProcessoId: Id | null; ficticio: boolean;
 };
 export type EstadoRevisao =
   | "rascunho" | "preco_pendente" | "precificada" | "enviada" | "aprovada" | "recusada" | "substituida";
 export type RevisaoComercial = Registro & Versionado & {
-  processoId: Id; letra: string; estado: EstadoRevisao; validadeDias: number | null;
+  // `sequencia` ordena (a maior é a vigente); `letra` é só rótulo de exibição (1 a 2 maiúsculas).
+  processoId: Id; sequencia: number; letra: string; estado: EstadoRevisao; validadeDias: number | null;
   prazoEntrega: string | null; condicoesPagamento: string | null; observacoes: string | null;
   precificadaPor: Id | null; aprovadaPor: Id | null;
 };

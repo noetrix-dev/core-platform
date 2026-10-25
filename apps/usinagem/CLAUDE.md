@@ -21,6 +21,8 @@ O repositório é público. Nunca versionar `docs/express-usinagem/fontes/`, dad
 - Migrations em `drizzle/`: geradas e aplicadas pelo responsável humano (`pnpm db:generate`, `pnpm db:migrate`). Agente nunca cria, edita nem aplica migration.
 - Só Postgres local ou o serviço do CI. Nenhuma conexão com banco real, VPS ou Supabase.
 - Duas roles: migração (`DATABASE_URL_MIGRACAO`, só `drizzle-kit`) e aplicação (`DATABASE_URL`, app e seed, dona de nada, sem UPDATE/DELETE/TRUNCATE em `eventos_auditoria`, `movimentos_estoque` e `baixas`: correção é estorno).
+- Tabela append-only nunca tem FK com `ON DELETE` ou `ON UPDATE` em CASCADE, SET NULL ou SET DEFAULT: a ação roda como dona da tabela e furaria o REVOKE. O teste `lib/servidor/db/estrutura.test.ts` reprova.
+- Tabelas têm `criado_em` e `atualizado_em` (`timestamptz NOT NULL DEFAULT now()`) e `criado_por` (FK nullable para `usuarios`), com as exceções da spec §4 (append-only sem `atualizado_em`; catálogos sem `criado_por`).
 - Tabela editável tem `versao` (concorrência otimista). Datas em `timestamptz`, exibidas em `America/Sao_Paulo`.
 - `.env.local` é editado à mão. Nunca ler, imprimir ou commitar.
 - Dinheiro em centavos inteiros (`bigint`), nunca float. Peça vendável em quantidade inteira; MP e compras em `NUMERIC(14,3)`.
