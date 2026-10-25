@@ -1,3 +1,5 @@
+import "server-only";
+
 import { eq, max, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { validarNumeroInicial } from "../dominio/processo/numeracao";
