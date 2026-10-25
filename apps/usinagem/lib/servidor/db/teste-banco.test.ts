@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { decidirTesteDeBanco } from "./teste-banco";
 
 describe("decidirTesteDeBanco", () => {
@@ -15,5 +15,22 @@ describe("decidirTesteDeBanco", () => {
   });
   it("sem CI e com URL roda", () => {
     expect(decidirTesteDeBanco({ DATABASE_URL: "postgres://x" })).toBe("rodar");
+  });
+});
+
+describe("bancoDisponivel", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+  it("avisa uma única vez por processo", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("CI", "");
+    vi.resetModules();
+    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { bancoDisponivel } = await import("./teste-banco");
+    expect(bancoDisponivel()).toBe(false);
+    expect(bancoDisponivel()).toBe(false);
+    expect(aviso).toHaveBeenCalledTimes(1);
   });
 });

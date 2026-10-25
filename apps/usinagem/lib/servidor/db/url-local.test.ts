@@ -26,7 +26,6 @@ describe("urlLocal", () => {
     const client = new Client({
       connectionString: "postgres://u:p@localhost:54329/usinagem?host=db.exemplo.com",
     });
-    // OBSERVADO_PG
     expect(client.host).toBe("db.exemplo.com");
     // Por isso a guarda não pode olhar só o hostname: precisa da allowlist de parâmetros.
   });

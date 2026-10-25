@@ -4,10 +4,15 @@ export function decidirTesteDeBanco(env: { CI?: string; DATABASE_URL?: string })
   return "pular";
 }
 
+let avisado = false;
+
 // Uso: describe.skipIf(!bancoDisponivel())(...). No CI sem URL o erro propaga e o arquivo falha.
 export function bancoDisponivel(): boolean {
   if (decidirTesteDeBanco({ CI: process.env.CI, DATABASE_URL: process.env.DATABASE_URL }) === "pular") {
-    console.warn("Testes de banco pulados: DATABASE_URL ausente (fora do CI).");
+    if (!avisado) {
+      avisado = true;
+      console.warn("Testes de banco pulados: DATABASE_URL ausente (fora do CI).");
+    }
     return false;
   }
   return true;
