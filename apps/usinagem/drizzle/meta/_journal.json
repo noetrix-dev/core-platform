@@ -15,6 +15,13 @@
       "when": 1792893313240,
       "tag": "0001_revogar_escrita_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792934229389,
+      "tag": "0002_colunas_de_registro",
+      "breakpoints": true
     }
   ]
 }
