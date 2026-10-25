@@ -82,7 +82,11 @@ export const usuarios = pgTable(
     criadoEm: criadoEm(),
     atualizadoEm: atualizadoEm(),
   },
-  (t) => [index("usuarios_perfil_id_idx").on(t.perfilId)],
+  (t) => [
+    // E-mail sempre minúsculo: o unique fica insensível a maiúsculas sem citext.
+    check("usuarios_email_minusculo_check", sql`${t.email} = lower(${t.email})`),
+    index("usuarios_perfil_id_idx").on(t.perfilId),
+  ],
 );
 
 // Só recebe INSERT: a role da aplicação não tem UPDATE/DELETE aqui (Task 2, Step 7).
@@ -151,6 +155,9 @@ export const processos = pgTable(
   },
   (t) => [
     check("processos_situacao_check", sql`${t.situacaoComercial} in (${lista(SITUACOES_COMERCIAIS)})`),
+    check("processos_numero_check", sql`${t.numero} > 0`),
+    // Um processo não deriva de si mesmo.
+    check("processos_derivado_check", sql`${t.derivadoDeProcessoId} is null or ${t.derivadoDeProcessoId} <> ${t.id}`),
     index("processos_cliente_id_idx").on(t.clienteId),
     index("processos_derivado_de_processo_id_idx").on(t.derivadoDeProcessoId),
     index("processos_criado_por_idx").on(t.criadoPor),
@@ -183,6 +190,7 @@ export const revisoesComerciais = pgTable(
   (t) => [
     unique("revisoes_processo_letra_uq").on(t.processoId, t.letra),
     unique("revisoes_processo_sequencia_uq").on(t.processoId, t.sequencia),
+    check("revisoes_validade_check", sql`${t.validadeDias} is null or ${t.validadeDias} > 0`),
     check("revisoes_sequencia_check", sql`${t.sequencia} > 0`),
     check("revisoes_letra_check", sql`${t.letra} ~ '^[A-Z]{1,2}$'`),
     index("revisoes_comerciais_precificada_por_idx").on(t.precificadaPor),
@@ -206,6 +214,7 @@ export const itensRevisao = pgTable(
     precoUnitarioCentavos: bigint("preco_unitario_centavos", { mode: "number" }),
     versao: versao(),
     criadoEm: criadoEm(),
+    atualizadoEm: atualizadoEm(),
   },
   (t) => [
     unique("itens_revisao_ordem_uq").on(t.revisaoId, t.ordem),
