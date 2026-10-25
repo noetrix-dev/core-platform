@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   check,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -62,33 +63,48 @@ export const perfilPermissoes = pgTable(
     perfilId: text("perfil_id").notNull().references(() => perfis.id),
     permissao: text("permissao").notNull().references(() => permissoes.codigo),
   },
-  (t) => [primaryKey({ columns: [t.perfilId, t.permissao] })],
+  (t) => [
+    primaryKey({ columns: [t.perfilId, t.permissao] }),
+    index("perfil_permissoes_permissao_idx").on(t.permissao),
+  ],
 );
 
-export const usuarios = pgTable("usuarios", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  nome: text("nome").notNull(),
-  email: text("email").notNull().unique(),
-  perfilId: text("perfil_id").notNull().references(() => perfis.id),
-  ativo: boolean("ativo").notNull().default(true),
-  ficticio: boolean("ficticio").notNull().default(false),
-  versao: versao(),
-  criadoEm: criadoEm(),
-  atualizadoEm: atualizadoEm(),
-});
+export const usuarios = pgTable(
+  "usuarios",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nome: text("nome").notNull(),
+    email: text("email").notNull().unique(),
+    perfilId: text("perfil_id").notNull().references(() => perfis.id),
+    ativo: boolean("ativo").notNull().default(true),
+    ficticio: boolean("ficticio").notNull().default(false),
+    versao: versao(),
+    criadoEm: criadoEm(),
+    atualizadoEm: atualizadoEm(),
+  },
+  (t) => [index("usuarios_perfil_id_idx").on(t.perfilId)],
+);
 
 // Só recebe INSERT: a role da aplicação não tem UPDATE/DELETE aqui (Task 2, Step 7).
-export const eventosAuditoria = pgTable("eventos_auditoria", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  autorId: uuid("autor_id").references(() => usuarios.id),
-  operacao: text("operacao").notNull(),
-  entidade: text("entidade").notNull(),
-  entidadeId: uuid("entidade_id"),
-  antes: jsonb("antes"),
-  depois: jsonb("depois"),
-  justificativa: text("justificativa"),
-  criadoEm: criadoEm(),
-});
+export const eventosAuditoria = pgTable(
+  "eventos_auditoria",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    autorId: uuid("autor_id").references(() => usuarios.id),
+    operacao: text("operacao").notNull(),
+    entidade: text("entidade").notNull(),
+    // text: chaves de configuracoes/perfis/permissoes são text; UUIDs entram como texto.
+    entidadeId: text("entidade_id"),
+    antes: jsonb("antes"),
+    depois: jsonb("depois"),
+    justificativa: text("justificativa"),
+    criadoEm: criadoEm(),
+  },
+  (t) => [
+    index("eventos_auditoria_autor_id_idx").on(t.autorId),
+    index("eventos_auditoria_entidade_idx").on(t.entidade, t.entidadeId, t.criadoEm),
+  ],
+);
 
 export const configuracoes = pgTable("configuracoes", {
   chave: text("chave").primaryKey(),
@@ -123,7 +139,6 @@ export const processos = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     numero: integer("numero").notNull().unique(),
-    letra: text("letra").notNull().default("A"),
     clienteId: uuid("cliente_id").notNull().references(() => clientes.id),
     situacaoComercial: text("situacao_comercial").notNull().default("cotacao_aberta"),
     derivadoDeProcessoId: uuid("derivado_de_processo_id").references((): AnyPgColumn => processos.id),
@@ -136,16 +151,23 @@ export const processos = pgTable(
   },
   (t) => [
     check("processos_situacao_check", sql`${t.situacaoComercial} in (${lista(SITUACOES_COMERCIAIS)})`),
-    check("processos_letra_check", sql`${t.letra} ~ '^[A-Z]{1,2}$'`),
+    index("processos_cliente_id_idx").on(t.clienteId),
+    index("processos_derivado_de_processo_id_idx").on(t.derivadoDeProcessoId),
+    index("processos_criado_por_idx").on(t.criadoPor),
   ],
 );
 
+// Revisão vigente = a de maior `sequencia` do processo (ordem numérica; texto ordenaria "AA" antes de "B").
+// `letra` é só rótulo de exibição; o número exibido é processos.numero + letra da revisão vigente (ex.: 357-A).
+// processos não guarda letra: uma cópia exigiria sincronização e poderia divergir.
+// processo_id não ganha índice próprio: é a primeira coluna dos uniques compostos.
 export const revisoesComerciais = pgTable(
   "revisoes_comerciais",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     processoId: uuid("processo_id").notNull().references(() => processos.id),
     letra: text("letra").notNull(),
+    sequencia: integer("sequencia").notNull(),
     estado: text("estado").notNull().default("rascunho"),
     validadeDias: integer("validade_dias"),
     prazoEntrega: text("prazo_entrega"),
@@ -160,10 +182,17 @@ export const revisoesComerciais = pgTable(
   },
   (t) => [
     unique("revisoes_processo_letra_uq").on(t.processoId, t.letra),
+    unique("revisoes_processo_sequencia_uq").on(t.processoId, t.sequencia),
+    check("revisoes_sequencia_check", sql`${t.sequencia} > 0`),
+    check("revisoes_letra_check", sql`${t.letra} ~ '^[A-Z]{1,2}$'`),
+    index("revisoes_comerciais_precificada_por_idx").on(t.precificadaPor),
+    index("revisoes_comerciais_aprovada_por_idx").on(t.aprovadaPor),
+    index("revisoes_comerciais_criado_por_idx").on(t.criadoPor),
     check("revisoes_estado_check", sql`${t.estado} in (${lista(ESTADOS_REVISAO)})`),
   ],
 );
 
+// revisao_id não ganha índice próprio: é a primeira coluna do unique composto.
 export const itensRevisao = pgTable(
   "itens_revisao",
   {
