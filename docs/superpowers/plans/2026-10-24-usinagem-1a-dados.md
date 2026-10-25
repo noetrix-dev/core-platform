@@ -234,6 +234,10 @@ Executado (commits `a3e9488`, `18ba676`). O humano pediu ajustes antes da migrat
 - `db()` usa um `Pool` explícito do `pg`:
   - `max: 10` e `on("error")` registrando só código e mensagem;
   - instância em `globalThis` só em desenvolvimento.
+- Fix round 2 (`f0cf6f0`), decisão do humano:
+  - CHECKs `processos.numero > 0`, `derivado_de_processo_id <> id`, `validade_dias > 0` (quando não nulo) e `usuarios.email = lower(email)`;
+  - `atualizado_em` em `itens_revisao`.
+  - O Better Auth 1.6.33 põe o e-mail em minúsculas no `createUser`, no `findUserByEmail`, no cadastro e na troca de e-mail (`dist/db/internal-adapter.mjs`), então o CHECK é compatível.
 
 - [ ] **Step 1: Perfis**
 
