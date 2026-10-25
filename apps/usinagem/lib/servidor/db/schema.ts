@@ -50,11 +50,15 @@ const lista = (valores: readonly string[]) => sql.raw(valores.map((v) => `'${v}'
 export const perfis = pgTable("perfis", {
   id: text("id").primaryKey(),
   nome: text("nome").notNull(),
+  criadoEm: criadoEm(),
+  atualizadoEm: atualizadoEm(),
 });
 
 export const permissoes = pgTable("permissoes", {
   codigo: text("codigo").primaryKey(),
   travadaAdmin: boolean("travada_admin").notNull(),
+  criadoEm: criadoEm(),
+  atualizadoEm: atualizadoEm(),
 });
 
 export const perfilPermissoes = pgTable(
@@ -62,6 +66,7 @@ export const perfilPermissoes = pgTable(
   {
     perfilId: text("perfil_id").notNull().references(() => perfis.id),
     permissao: text("permissao").notNull().references(() => permissoes.codigo),
+    criadoEm: criadoEm(),
   },
   (t) => [
     primaryKey({ columns: [t.perfilId, t.permissao] }),
@@ -78,6 +83,8 @@ export const usuarios = pgTable(
     perfilId: text("perfil_id").notNull().references(() => perfis.id),
     ativo: boolean("ativo").notNull().default(true),
     ficticio: boolean("ficticio").notNull().default(false),
+    // Nullable: o primeiro Admin não tem quem o crie.
+    criadoPor: uuid("criado_por").references((): AnyPgColumn => usuarios.id),
     versao: versao(),
     criadoEm: criadoEm(),
     atualizadoEm: atualizadoEm(),
@@ -86,9 +93,11 @@ export const usuarios = pgTable(
     // E-mail sempre minúsculo: o unique fica insensível a maiúsculas sem citext.
     check("usuarios_email_minusculo_check", sql`${t.email} = lower(${t.email})`),
     index("usuarios_perfil_id_idx").on(t.perfilId),
+    index("usuarios_criado_por_idx").on(t.criadoPor),
   ],
 );
 
+// Append-only: FK daqui nunca usa CASCADE, SET NULL nem SET DEFAULT (a ação rodaria como dona e furaria o REVOKE).
 // Só recebe INSERT: a role da aplicação não tem UPDATE/DELETE aqui (Task 2, Step 7).
 export const eventosAuditoria = pgTable(
   "eventos_auditoria",
@@ -110,33 +119,49 @@ export const eventosAuditoria = pgTable(
   ],
 );
 
-export const configuracoes = pgTable("configuracoes", {
-  chave: text("chave").primaryKey(),
-  valor: jsonb("valor").notNull(),
-  versao: versao(),
-  atualizadoEm: atualizadoEm(),
-});
+export const configuracoes = pgTable(
+  "configuracoes",
+  {
+    chave: text("chave").primaryKey(),
+    valor: jsonb("valor").notNull(),
+    versao: versao(),
+    criadoEm: criadoEm(),
+    criadoPor: uuid("criado_por").references(() => usuarios.id),
+    atualizadoEm: atualizadoEm(),
+  },
+  (t) => [index("configuracoes_criado_por_idx").on(t.criadoPor)],
+);
 
 export const sequenciasNumeracao = pgTable(
   "sequencias_numeracao",
   {
     nome: text("nome").primaryKey(),
     proximo: integer("proximo").notNull(),
+    criadoEm: criadoEm(),
+    criadoPor: uuid("criado_por").references(() => usuarios.id),
     atualizadoEm: atualizadoEm(),
   },
-  (t) => [check("sequencias_proximo_check", sql`${t.proximo} > 0`)],
+  (t) => [
+    check("sequencias_proximo_check", sql`${t.proximo} > 0`),
+    index("sequencias_numeracao_criado_por_idx").on(t.criadoPor),
+  ],
 );
 
 // ── Comercial e processos ───────────────────────────────
-export const clientes = pgTable("clientes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  razaoSocial: text("razao_social").notNull(),
-  cnpj: text("cnpj").unique(),
-  ficticio: boolean("ficticio").notNull().default(false),
-  versao: versao(),
-  criadoEm: criadoEm(),
-  atualizadoEm: atualizadoEm(),
-});
+export const clientes = pgTable(
+  "clientes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    razaoSocial: text("razao_social").notNull(),
+    cnpj: text("cnpj").unique(),
+    ficticio: boolean("ficticio").notNull().default(false),
+    criadoPor: uuid("criado_por").references(() => usuarios.id),
+    versao: versao(),
+    criadoEm: criadoEm(),
+    atualizadoEm: atualizadoEm(),
+  },
+  (t) => [index("clientes_criado_por_idx").on(t.criadoPor)],
+);
 
 export const processos = pgTable(
   "processos",
@@ -212,6 +237,7 @@ export const itensRevisao = pgTable(
     unidade: text("unidade").notNull().default("pç"),
     // null = preço pendente (só o Admin precifica).
     precoUnitarioCentavos: bigint("preco_unitario_centavos", { mode: "number" }),
+    criadoPor: uuid("criado_por").references(() => usuarios.id),
     versao: versao(),
     criadoEm: criadoEm(),
     atualizadoEm: atualizadoEm(),
@@ -220,5 +246,6 @@ export const itensRevisao = pgTable(
     unique("itens_revisao_ordem_uq").on(t.revisaoId, t.ordem),
     check("itens_quantidade_check", sql`${t.quantidade} > 0`),
     check("itens_preco_check", sql`${t.precoUnitarioCentavos} is null or ${t.precoUnitarioCentavos} >= 0`),
+    index("itens_revisao_criado_por_idx").on(t.criadoPor),
   ],
 );

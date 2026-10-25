@@ -49,11 +49,11 @@ export async function semear(banco: NodePgDatabase<typeof schema>): Promise<void
       .insert(schema.usuarios)
       .values(USUARIOS_FICTICIOS.map((u) => ({ id: u.id, nome: u.nome, email: `${u.perfil}@ficticio.invalid`, perfilId: u.perfil, ficticio: true })))
       .onConflictDoNothing();
-    await tx.insert(schema.clientes).values(CLIENTES.map((c) => ({ ...c, ficticio: true }))).onConflictDoNothing();
+    await tx.insert(schema.clientes).values(CLIENTES.map((c) => ({ ...c, criadoPor: COMERCIAL, ficticio: true }))).onConflictDoNothing();
     await tx.insert(schema.processos).values(PROCESSOS.map((p) => ({ ...p, criadoPor: COMERCIAL, ficticio: true }))).onConflictDoNothing();
     await tx.insert(schema.revisoesComerciais).values(REVISOES).onConflictDoNothing();
-    await tx.insert(schema.itensRevisao).values(ITENS).onConflictDoNothing();
-    await tx.insert(schema.sequenciasNumeracao).values({ nome: "processo", proximo: 9004 }).onConflictDoNothing();
+    await tx.insert(schema.itensRevisao).values(ITENS.map((i) => ({ ...i, criadoPor: COMERCIAL }))).onConflictDoNothing();
+    await tx.insert(schema.sequenciasNumeracao).values({ nome: "processo", proximo: 9004, criadoPor: ADMIN }).onConflictDoNothing();
   });
 }
 
