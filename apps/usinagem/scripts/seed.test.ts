@@ -1,10 +1,11 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
 import { TABELAS_APPEND_ONLY } from "../lib/servidor/db/append-only";
 import { bancoDisponivel } from "../lib/servidor/db/teste-banco";
+import { PERFIS } from "../lib/dominio/permissoes/perfis";
 import { semear, USUARIOS_FICTICIOS } from "./seed";
 
 // No CI, ausência de DATABASE_URL falha em vez de pular (política em teste-banco.ts).
@@ -17,12 +18,15 @@ describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
   });
 
   it("é idempotente e marca tudo como fictício", async () => {
+    const idsSeed = USUARIOS_FICTICIOS.map((u) => u.id);
+    const contaUsuarios = async () =>
+      (await banco.select({ n: count() }).from(schema.usuarios).where(inArray(schema.usuarios.id, idsSeed)))[0].n;
     await semear(banco);
-    const [antes] = await banco.select({ n: count() }).from(schema.usuarios);
+    const antes = await contaUsuarios();
     await semear(banco);
-    const [depois] = await banco.select({ n: count() }).from(schema.usuarios);
-    expect(depois.n).toBe(antes.n);
-    const [p] = await banco.select({ n: count() }).from(schema.perfis);
+    expect(antes).toBe(5);
+    expect(await contaUsuarios()).toBe(5);
+    const [p] = await banco.select({ n: count() }).from(schema.perfis).where(inArray(schema.perfis.id, [...PERFIS]));
     expect(p.n).toBe(5);
     // Outros testes criam usuários fictícios próprios; aqui só os do seed importam.
     const doSeed = (await banco.select().from(schema.usuarios)).filter((x) => USUARIOS_FICTICIOS.some((f) => f.id === x.id));
@@ -42,12 +46,17 @@ describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
       "select has_schema_privilege('usinagem_app', 'public', 'CREATE') as pode",
     );
     expect(criar[0].pode).toBe(false);
+    const { rows: criarDrizzle } = await banco.$client.query<{ pode: boolean }>(
+      "select has_schema_privilege('usinagem_app', 'drizzle', 'CREATE') as pode",
+    );
+    expect(criarDrizzle[0].pode).toBe(false);
   });
 
   it("append-only: a aplicação não tem UPDATE, DELETE nem TRUNCATE nas 3 tabelas", async () => {
-    const { rows } = await banco.$client.query<{ tabela: string; existe: boolean; update: boolean | null; del: boolean | null; trunc: boolean | null }>(
+    const { rows } = await banco.$client.query<{ tabela: string; existe: boolean; update: boolean | null; colUpdate: boolean | null; del: boolean | null; trunc: boolean | null }>(
       `select t as tabela, to_regclass(t) is not null as existe,
               case when to_regclass(t) is null then null else has_table_privilege('usinagem_app', t, 'UPDATE') end as update,
+              case when to_regclass(t) is null then null else has_any_column_privilege('usinagem_app', t, 'UPDATE') end as "colUpdate",
               case when to_regclass(t) is null then null else has_table_privilege('usinagem_app', t, 'DELETE') end as del,
               case when to_regclass(t) is null then null else has_table_privilege('usinagem_app', t, 'TRUNCATE') end as trunc
          from unnest($1::text[]) as t`,
@@ -56,7 +65,7 @@ describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
     expect(rows.map((r) => r.tabela)).toEqual([...TABELAS_APPEND_ONLY]);
     // eventos_auditoria existe desde o 1A; as outras passam a ser checadas quando forem criadas (PR 3 e PR 5).
     expect(rows.find((r) => r.tabela === "eventos_auditoria")?.existe).toBe(true);
-    const comEscrita = rows.filter((r) => r.existe && (r.update || r.del || r.trunc));
+    const comEscrita = rows.filter((r) => r.existe && (r.update || r.colUpdate || r.del || r.trunc));
     expect(comEscrita).toEqual([]);
   });
 
