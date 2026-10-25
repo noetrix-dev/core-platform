@@ -479,6 +479,11 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | Plano 1D: import duplicado de `index` no Step 3 e falta do `BETTER_AUTH_SECRET` descartável no workflow. | PR 1D (registrado no plano) |
 | `.env.local` único entrega ao `next dev` a URL da role de migração e a senha do superusuário. Separar as senhas de banco (compose e migração) das variáveis do app. | Trilha de infraestrutura |
 | Imagem `postgres:16-alpine` fixada por digest; gatilho `push` em `main`; aprovação obrigatória de workflows de colaboradores externos. | Depois do primeiro PR (plano 1A, Task 5) |
+| Sentinela no seed contra banco com dado real (recusar se houver usuário com `ficticio = false` ou banco diferente do esperado). | PR 2 |
+| Trava em `definirNumeroInicial`: hoje ele lê o maior número e faz o upsert sem lock, e pode rebaixar o `proximo`. Usar `SELECT ... FOR UPDATE` na linha da sequência e comparar com o `proximo` atual. | PR 2 |
+| Check pendente com filtro de `paths`: se o workflow `usinagem` virar check obrigatório, um PR que não toca os `paths` fica esperando para sempre. Resolver com job "noop" ou gatilho sem `paths` antes de ligar a proteção de branch. | Antes de tornar o check obrigatório |
+| `estrutura.test.ts`: comparar `conrelid::regclass::text` depende de o `search_path` incluir `public`. Com nome qualificado, o teste de FK append-only passaria sem checar nada. Trocar por `conrelid = any($1::regclass[])`. | Próximo commit que mexer no teste |
+| `estrutura.test.ts`: o `fks.find` pega só a primeira FK em `criado_por` por tabela. Com mais de uma FK nessa coluna, as demais não seriam conferidas. Conferir todas, por exemplo com `filter` e `every`. | Próximo commit que mexer no teste |
 
 ## 10. Testes de aceite
 

@@ -218,7 +218,7 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
 ```
 
 Run: `cd apps/usinagem && pnpm exec vitest run lib/servidor/db/estrutura.test.ts`
-Expected: FAIL nos testes 1 e 3, porque as colunas novas ainda não existem no banco. Os testes 2 e 4 devem passar já, e o relatório registra isso.
+Expected: os testes 1, 2 e 3 ficam vermelhos antes da migração, porque as colunas novas ainda não existem no banco. O 2 depende de `perfil_permissoes.criado_em`, que só chega com a 0002. O 4 passa: hoje a única tabela append-only é `eventos_auditoria`, e a FK `autor_id` dela é NO ACTION. O relatório registra quais passam e quais falham. (Execução real: 1, 2 e 3 falharam e o 4 passou; depois da 0002, os 4 passaram.)
 
 - [ ] **Step 2: Schema**
 
