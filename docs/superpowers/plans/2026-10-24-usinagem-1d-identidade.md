@@ -39,6 +39,13 @@
 - **Aviso de peer do Vitest aceito**: o peer opcional `vitest` da 1.6.33 vai até ^4 e usamos a 5.0.5. O pnpm emite aviso, sem erro, e o Better Auth não usa o Vitest em runtime. Não silenciar com override global (`pnpm.overrides` nem `peerDependencyRules` no `package.json` da raiz): o aviso fica visível e é registrado no relatório da Task 1.
 - Na Task 1, repetir `npm view better-auth time dist-tags` e registrar o resultado no relatório da task. Se o `tsc` acusar divergência de API em relação a este plano, a referência é o `.d.ts` instalado, nunca a memória.
 
+## Pendências conhecidas deste plano (revisão final do 1A, 2026-10-25)
+
+Corrigir ao executar o 1D, antes da task correspondente:
+1. **Task 1, Step 3**: o `index` já é importado de `drizzle-orm/pg-core` em `schema.ts` desde o 1A. Não acrescentar de novo, porque duplicaria o identificador.
+2. **CI**: nenhuma task edita `.github/workflows/usinagem.yml`. Sem `BETTER_AUTH_SECRET`, a guarda do `auth.test.ts` falha no CI (falha fechada, correta). Acrescentar ao `env` do job um valor descartável de teste, por exemplo `BETTER_AUTH_SECRET: ci_better_auth_descartavel_0123456789abcdef`, e `BETTER_AUTH_URL: http://localhost:3000`. Junto, o passo `bash scripts/verificar-build-producao.sh` da Task 4. Mudança de workflow passa por revisão do humano, como na Task 5 do 1A.
+3. **Schema**: `usuarios` ganhou `criado_por` (FK nullable, autorreferência) no plano 0002. O `criarUsuarioComSenha` pode preenchê-lo com o Admin que cria, e o mapeamento do Better Auth não o expõe (`input: false`, se for declarado em `additionalFields`).
+
 ## Global Constraints
 
 - Depende de 1A e 1B concluídos.

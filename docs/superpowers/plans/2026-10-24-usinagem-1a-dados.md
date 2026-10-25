@@ -560,6 +560,12 @@ O agente continua só depois da confirmação.
   - `reservarNumero(banco: NodePgDatabase<typeof schema>, nome: string): Promise<number>`;
   - `definirNumeroInicial(banco, nome: string, inicio: number): Promise<{ ok: true } | { ok: false; erro: string }>`.
 
+Executado (commits `d4f5d86`, `6159b9d`; `server-only` acrescentado no plano 0002). A fonte de verdade é o código commitado. O código abaixo tem **dois defeitos já corrigidos, que não devem ser reintroduzidos**:
+- O teste "número inicial abaixo do maior já usado" chamava `definirNumeroInicial(banco, "processo", 9000)`. Sem o seed, isso gravaria a sequência real `processo` com 9000, e o seed (`onConflictDoNothing`) manteria esse valor, colidindo com 9001 a 9003. O código commitado usa a sequência de teste aleatória do arquivo, com valor 1, e chama `semear(banco)` no `beforeAll`, porque o Vitest roda arquivos em paralelo.
+- Os testes de banco usam `bancoDisponivel()`.
+- Limpeza pedida pelo humano: o marcador `// OBSERVADO_PG` saiu e o aviso do `bancoDisponivel` passou a sair uma vez só, com teste.
+- Adiado para o PR 2 (tela de configuração): `definirNumeroInicial` lê o maior número e faz o upsert sem lock e pode rebaixar o `proximo`. Uma colisão vira erro no `unique` de `processos.numero`. A correção é `SELECT ... FOR UPDATE` na sequência e comparar com o `proximo` atual.
+
 - [ ] **Step 1: Testes que falham**
 
 `lib/dominio/processo/numeracao.test.ts`:
@@ -705,6 +711,16 @@ git commit -m "feat(usinagem): numeração atômica de processo com início conf
 - Produces:
   - `semear(banco: NodePgDatabase<typeof schema>): Promise<void>`;
   - `USUARIOS_FICTICIOS: { id: string; perfil: Perfil; nome: string }[]` (um por perfil, ids fixos).
+
+Executado (commits `b72d855`, `fd52a33`; colunas de registro no plano 0002). A fonte de verdade é o código commitado. O código abaixo tem **defeitos já corrigidos, que não devem ser reintroduzidos**:
+- Os dois testes de idempotência contavam `usuarios` e `perfis` no banco inteiro. Isso falha de forma intermitente quando outros arquivos, rodando em paralelo, criam usuários (o 1D vai criar). O código commitado conta só as linhas do seed: `inArray` com os ids de `USUARIOS_FICTICIOS` e com `PERFIS`.
+- O teste de `permission denied` confere o código 42501 na causa do erro, porque o Drizzle embrulha o erro do Postgres como "Failed query". Não usar `toThrow(/permission denied/)`.
+- O teste de dono também prova que a `usinagem_app` não tem `CREATE` no schema `drizzle`.
+- O teste append-only também cobre `has_any_column_privilege(..., 'UPDATE')`, para pegar GRANT por coluna.
+- O seed do plano tinha a linha `const PROCESSOS = [` duplicada; o código commitado tem uma só.
+- Adiados (registrados no ledger):
+  - o guard `import.meta.url` do `seed.ts` quebra com espaço, acento ou symlink no caminho; trocar por `pathToFileURL(process.argv[1]).href` quando mexer no arquivo;
+  - o seed não tem sentinela contra banco com dados reais. Ela é necessária antes de existir qualquer banco que não seja local de desenvolvimento.
 
 - [ ] **Step 1: Teste que falha**
 
@@ -943,6 +959,10 @@ Executado (commit `aacc1da`), revisado pelo humano antes da instalação. A font
 - **Ordem**: typecheck, lint, `db:migrate` (role de migração), test (role da aplicação, o seed roda dentro dos testes), build.
 - Validado com actionlint 1.7.12 (0 erros; shellcheck ausente na máquina).
 - **Risco não validado**: depende do cliente `psql` no runner `ubuntu-24.04`. Só a primeira execução confirma.
+- **Adiados para depois do primeiro PR** (revisão final, decisão do humano em 2026-10-25):
+  - fixar `postgres:16-alpine` por digest (`@sha256:...`), no compose e no workflow;
+  - gatilho `push` em `main` (ou job "noop") para validar `main` depois do merge e não deixar check obrigatório pendente em PR fora dos `paths`. Ao ligar, revisar o risco de envenenamento do cache de `main`;
+  - configurar no repositório a aprovação obrigatória de workflows de colaboradores externos.
 
 - [ ] **Step 1: Workflow**
 
