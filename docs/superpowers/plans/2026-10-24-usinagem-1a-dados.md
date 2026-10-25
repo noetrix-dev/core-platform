@@ -223,6 +223,18 @@ git commit -m "feat(usinagem): Postgres local com roles de migração e aplicaç
   - `db(): NodePgDatabase<typeof schema>`.
 - Nota para o PR 1D: as colunas de `usuarios` (`id uuid`, `nome`, `email unique`, `criado_em`, `atualizado_em`) são compatíveis com o mapeamento `fields` do Better Auth 1.6.33. O 1D só acrescenta `email_verificado` e `imagem`.
 
+Executado (commits `a3e9488`, `18ba676`). O humano pediu ajustes antes da migration, e eles valem sobre o código abaixo. A fonte de verdade é o `schema.ts` commitado.
+- `eventos_auditoria.entidade_id` é `text`: chaves de configuracoes, perfis e permissoes são text, e UUIDs entram como texto.
+- `processos` não tem `letra`.
+- `revisoes_comerciais` ganha:
+  - `sequencia integer not null`, com `CHECK > 0` e unique `(processo_id, sequencia)`;
+  - `CHECK letra ~ '^[A-Z]{1,2}$'`.
+- A revisão vigente é a de maior `sequencia`. A letra é só rótulo. O número exibido é `processos.numero` + a letra da revisão vigente.
+- Índices `<tabela>_<coluna>_idx` em toda FK que não é a primeira coluna de um unique composto, mais `eventos_auditoria_entidade_idx (entidade, entidade_id, criado_em)`.
+- `db()` usa um `Pool` explícito do `pg`:
+  - `max: 10` e `on("error")` registrando só código e mensagem;
+  - instância em `globalThis` só em desenvolvimento.
+
 - [ ] **Step 1: Perfis**
 
 `lib/dominio/permissoes/perfis.ts`:
@@ -696,7 +708,7 @@ git commit -m "feat(usinagem): numeração atômica de processo com início conf
 
 ```ts
 import { afterAll, describe, expect, it } from "vitest";
-import { count, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
@@ -769,6 +781,34 @@ describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
       /permission denied/,
     );
   });
+
+  it("auditoria registra entidade com chave text (configuracoes) e com UUID como texto", async () => {
+    const [cfg] = await banco
+      .insert(schema.eventosAuditoria)
+      .values({ operacao: "teste_chave_text", entidade: "configuracoes", entidadeId: "letra", depois: { regra: "pendente" } })
+      .returning();
+    expect(cfg.entidadeId).toBe("letra");
+    const uuid = USUARIOS_FICTICIOS[0].id;
+    const [usr] = await banco
+      .insert(schema.eventosAuditoria)
+      .values({ operacao: "teste_chave_text", entidade: "usuarios", entidadeId: uuid })
+      .returning();
+    expect(usr.entidadeId).toBe(uuid);
+    const achados = await banco
+      .select()
+      .from(schema.eventosAuditoria)
+      .where(and(eq(schema.eventosAuditoria.entidade, "configuracoes"), eq(schema.eventosAuditoria.entidadeId, "letra")));
+    expect(achados.some((e) => e.id === cfg.id)).toBe(true);
+  });
+
+  it("revisão vigente é a de maior sequencia, não a de maior letra em texto", async () => {
+    const revs = await banco
+      .select()
+      .from(schema.revisoesComerciais)
+      .where(eq(schema.revisoesComerciais.processoId, "00000000-0000-4000-8000-000000000202"))
+      .orderBy(desc(schema.revisoesComerciais.sequencia));
+    expect(revs.map((r) => [r.sequencia, r.letra])).toEqual([[2, "B"], [1, "A"]]);
+  });
 });
 ```
 
@@ -814,21 +854,26 @@ const ADMIN = USUARIOS_FICTICIOS[0].id;
 const COMERCIAL = USUARIOS_FICTICIOS[1].id;
 
 const PROCESSOS = [
-  { id: "00000000-0000-4000-8000-000000000201", numero: 9001, letra: "A", clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Polia dentada 40 dentes", situacaoComercial: "cotacao_aberta" },
-  { id: "00000000-0000-4000-8000-000000000202", numero: 9002, letra: "B", clienteId: CLIENTES[1].id, titulo: "[FICTÍCIO] Eixo retificado", situacaoComercial: "cotacao_enviada" },
-  { id: "00000000-0000-4000-8000-000000000203", numero: 9003, letra: "A", clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Flange usinado", situacaoComercial: "aprovado" },
+// processos não guarda letra: o número exibido usa a letra da revisão de maior `sequencia`.
+const PROCESSOS = [
+  { id: "00000000-0000-4000-8000-000000000201", numero: 9001, clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Polia dentada 40 dentes", situacaoComercial: "cotacao_aberta" },
+  { id: "00000000-0000-4000-8000-000000000202", numero: 9002, clienteId: CLIENTES[1].id, titulo: "[FICTÍCIO] Eixo retificado", situacaoComercial: "cotacao_enviada" },
+  { id: "00000000-0000-4000-8000-000000000203", numero: 9003, clienteId: CLIENTES[0].id, titulo: "[FICTÍCIO] Flange usinado", situacaoComercial: "aprovado" },
 ];
 
+// 9002 tem duas revisões: A (sequencia 1, substituída) e B (sequencia 2, vigente). Exibe 9002-B.
 const REVISOES = [
-  { id: "00000000-0000-4000-8000-000000000301", processoId: PROCESSOS[0].id, letra: "A", estado: "preco_pendente", criadoPor: COMERCIAL },
-  { id: "00000000-0000-4000-8000-000000000302", processoId: PROCESSOS[1].id, letra: "B", estado: "enviada", criadoPor: COMERCIAL, precificadaPor: ADMIN },
-  { id: "00000000-0000-4000-8000-000000000303", processoId: PROCESSOS[2].id, letra: "A", estado: "aprovada", criadoPor: COMERCIAL, precificadaPor: ADMIN, aprovadaPor: COMERCIAL },
+  { id: "00000000-0000-4000-8000-000000000301", processoId: PROCESSOS[0].id, sequencia: 1, letra: "A", estado: "preco_pendente", criadoPor: COMERCIAL },
+  { id: "00000000-0000-4000-8000-000000000304", processoId: PROCESSOS[1].id, sequencia: 1, letra: "A", estado: "substituida", criadoPor: COMERCIAL, precificadaPor: ADMIN },
+  { id: "00000000-0000-4000-8000-000000000302", processoId: PROCESSOS[1].id, sequencia: 2, letra: "B", estado: "enviada", criadoPor: COMERCIAL, precificadaPor: ADMIN },
+  { id: "00000000-0000-4000-8000-000000000303", processoId: PROCESSOS[2].id, sequencia: 1, letra: "A", estado: "aprovada", criadoPor: COMERCIAL, precificadaPor: ADMIN, aprovadaPor: COMERCIAL },
 ];
 
 const ITENS = [
   { id: "00000000-0000-4000-8000-000000000401", revisaoId: REVISOES[0].id, ordem: 1, descricao: "[FICTÍCIO] Polia dentada aço 1045", quantidade: 20, precoUnitarioCentavos: null },
-  { id: "00000000-0000-4000-8000-000000000402", revisaoId: REVISOES[1].id, ordem: 1, descricao: "[FICTÍCIO] Eixo Ø40 x 300", quantidade: 10, precoUnitarioCentavos: 18_500 },
-  { id: "00000000-0000-4000-8000-000000000403", revisaoId: REVISOES[2].id, ordem: 1, descricao: "[FICTÍCIO] Flange DN100", quantidade: 40, precoUnitarioCentavos: 9_990 },
+  { id: "00000000-0000-4000-8000-000000000404", revisaoId: REVISOES[1].id, ordem: 1, descricao: "[FICTÍCIO] Eixo Ø40 x 300", quantidade: 10, precoUnitarioCentavos: 19_900 },
+  { id: "00000000-0000-4000-8000-000000000402", revisaoId: REVISOES[2].id, ordem: 1, descricao: "[FICTÍCIO] Eixo Ø40 x 300", quantidade: 10, precoUnitarioCentavos: 18_500 },
+  { id: "00000000-0000-4000-8000-000000000403", revisaoId: REVISOES[3].id, ordem: 1, descricao: "[FICTÍCIO] Flange DN100", quantidade: 40, precoUnitarioCentavos: 9_990 },
 ];
 
 export async function semear(banco: NodePgDatabase<typeof schema>): Promise<void> {

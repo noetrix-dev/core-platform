@@ -40,9 +40,9 @@ Fora do escopo do primeiro ciclo: multiempresa, assinatura, portal de cliente, i
 
 **Processo**: registro de uma demanda de cliente, desde a solicitação de cotação. É a própria solicitação na fase de cotação. Tem identificador interno imutável (UUID) e número exibido (ex.: `357-A`).
 
-**Número exibido**: parte numérica sequencial mais a letra. O formato e a política são configuráveis. Nunca serve de chave.
+**Número exibido**: parte numérica sequencial do processo mais a letra da revisão comercial vigente (ex.: 357-A). O formato e a política são configuráveis. Nunca serve de chave.
 
-**Letra**: marca da revisão comercial vigente do processo (A, B, C...). O evento que avança a letra está pendente de validação (ver §12).
+**Letra**: rótulo de exibição da revisão comercial (A, B, C... até duas maiúsculas). Não ordena nada: a revisão vigente é a de maior `sequencia` (inteiro), porque em ordem de texto "AA" viria antes de "B". O processo não guarda a letra. O evento que avança a letra está pendente de validação (ver §12).
 
 **Revisão comercial**: versão de quantidades, preços, prazos e condições do processo. Cada proposta enviada congela uma revisão.
 
@@ -123,15 +123,15 @@ Convenções valem para todas as tabelas:
 - `perfis` (5 fixos)
 - `permissoes` (catálogo fixo em código; flag `travada_admin`)
 - `perfil_permissoes` (perfil × permissão; editável pelo Admin, exceto as travadas)
-- `eventos_auditoria` (autor, operação, entidade, entidade_id, antes, depois, justificativa, data/hora). Só recebe insert.
+- `eventos_auditoria` (autor, operação, entidade, `entidade_id` em texto, antes, depois, justificativa, data/hora). Só recebe insert. `entidade_id` é texto porque configurações, perfis e permissões têm chave textual; UUIDs entram como texto. Índice por (entidade, entidade_id, criado_em).
 - `configuracoes` (letra, etapas padrão, modelos de proposta)
 - `sequencias_numeracao` (nome, próximo número). Número inicial configurável pelo Admin para continuar a sequência já usada pela empresa.
 - `chaves_idempotencia` (chave única, operação, resultado)
 
 ### 4.2 Comercial e processos
 - `clientes`, `contatos_cliente`
-- `processos` (número, letra vigente, cliente, situação, `derivado_de_processo_id` opcional)
-- `revisoes_comerciais` (processo, letra, estado `rascunho | preco_pendente | precificada | enviada | aprovada | recusada | substituida`, condições, validade, prazo, pagamento, impostos/frete, observações, quem precificou, quem aprovou)
+- `processos` (número, cliente, situação, `derivado_de_processo_id` opcional). Sem letra: ela vem da revisão vigente.
+- `revisoes_comerciais` (processo, `sequencia` inteira > 0 e única por processo, cuja maior define a vigente; letra de 1 a 2 maiúsculas, única por processo, só rótulo; estado `rascunho | preco_pendente | precificada | enviada | aprovada | recusada | substituida`, condições, validade, prazo, pagamento, impostos/frete, observações, quem precificou, quem aprovou)
 - `itens_revisao` (revisão, descrição, quantidade, unidade, revisão técnica referenciada, preço unitário em centavos)
 - `custos_estimados_item` (item, origem: cotação de fornecedor ou manual; campo de custo)
 - `propostas` (revisão comercial congelada, PDF gerado, data de envio, destinatário)
@@ -272,7 +272,7 @@ Calculado, nunca gravado, a partir dos três eixos e dos documentos. A primeira 
 ### 6.7 Numeração
 - O número exibido é gerado em transação por incremento atômico em `sequencias_numeracao`, é único e não se repete mesmo com geração concorrente.
 - O número inicial é configurável (`configuracao.gerenciar`) para continuar a sequência já usada pela empresa. Só aceita valor maior que o maior número já usado.
-- A letra muda junto com a revisão comercial vigente. A regra final de avanço está pendente.
+- A letra exibida é a da revisão comercial vigente (maior `sequencia`). Uma revisão nova recebe a próxima `sequencia`. A regra final de quando nasce uma revisão nova (e portanto uma letra nova) está pendente.
 - Processo derivado recebe número novo e guarda o vínculo de origem.
 
 ### 6.8 Dados e segurança
