@@ -52,6 +52,8 @@ describe("urlLocal", () => {
     "postgres://u:p@[::1]:54329/x",
     "postgres:///usinagem",
     "postgres://a,b/db",
+    // "@" a mais no userinfo: o host real é o que vem depois do último @.
+    "postgres://u:p@localhost:54329@db.exemplo.com/usinagem",
   ])("recusa host adversarial %s", (u) => {
     let erro: unknown;
     try { urlLocal(u); } catch (e) { erro = e; }

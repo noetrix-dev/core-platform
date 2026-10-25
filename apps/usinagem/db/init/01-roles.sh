@@ -13,7 +13,7 @@ GRANT CONNECT ON DATABASE :"db" TO usinagem_app;
 GRANT USAGE, CREATE ON SCHEMA public TO usinagem_migracao;
 GRANT USAGE ON SCHEMA public TO usinagem_app;
 -- Tudo que a role de migração criar fica acessível à aplicação só por DML.
--- Tabelas de log revogam UPDATE/DELETE na própria migration (ver Task 2, Step 7).
+-- Tabelas append-only (eventos_auditoria, movimentos_estoque, baixas) revogam UPDATE, DELETE e TRUNCATE numa migration custom posterior.
 ALTER DEFAULT PRIVILEGES FOR ROLE usinagem_migracao IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO usinagem_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE usinagem_migracao IN SCHEMA public
