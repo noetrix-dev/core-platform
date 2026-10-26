@@ -4,6 +4,7 @@ import {
   MENSAGEM_CONSULTA_NEGADA, exportarLinhas, serializarEventoAuditoria, serializarItemRevisao,
   serializarTituloPagar, serializarTituloReceber, validarAgregado, validarConsulta,
 } from "./serializar";
+import { podeVerCampo } from "./campos";
 
 const item: ItemRevisao = {
   id: "i1", revisaoId: "r1", ordem: 1, descricao: "Polia", quantidade: 20, unidade: "pç",
@@ -171,5 +172,39 @@ describe("lista de permitidos (falha fechada)", () => {
   });
   it("exportação sem leitura do contexto é nula", () => {
     expect(exportarLinhas([ap], "comercial", "titulo_pagar")).toBeNull();
+  });
+});
+
+describe("permissões concedidas pelo banco", () => {
+  it("Compras sem custo.ver concedido não vê custo", () => {
+    const s = serializarItemRevisao(item, "compras_producao", ["processo.ver"])!;
+    expect("custoEstimadoCentavos" in s).toBe(false);
+  });
+  it("Comercial sem processo.ver concedido recebe null", () => {
+    expect(serializarItemRevisao(item, "comercial", ["preco.ver"])).toBeNull();
+  });
+  it("Financeiro sem titulo_receber.operar concedido: AR e auditoria dão null", () => {
+    expect(serializarTituloReceber(ar, "financeiro", ["preco.ver"])).toBeNull();
+    expect(serializarEventoAuditoria(evento("titulos_receber"), "financeiro", ["processo.ver", "preco.ver"])).toBeNull();
+  });
+  it("AP sem titulo_pagar.operar concedido dá null", () => {
+    expect(serializarTituloPagar(ap, "financeiro", ["custo.ver"])).toBeNull();
+  });
+  it("permissão travada continua negada mesmo concedida", () => {
+    expect(podeVerCampo("financeiro", "titulo_pagar", "processoId", ["titulo_pagar.operar"])).toBe(false);
+  });
+  it("consulta e agregado recusam quando concedidas tiram a permissão do campo", () => {
+    expect(validarConsulta("compras_producao", "item_revisao", { ordenarPor: "custoEstimadoCentavos" }, ["processo.ver"]).ok).toBe(false);
+    expect(validarAgregado("compras_producao", "item_revisao", { campo: "custoEstimadoCentavos" }, ["processo.ver"]).ok).toBe(false);
+    expect(validarConsulta("compras_producao", "item_revisao", { ordenarPor: "custoEstimadoCentavos" }).ok).toBe(true);
+  });
+  it("exportação respeita concedidas (sem leitura do contexto, null)", () => {
+    expect(exportarLinhas([item], "comercial", "item_revisao", ["dados.exportar"])).toBeNull();
+  });
+  it("entidade com nome do protótipo vale como entidade sem contexto", () => {
+    const s = serializarEventoAuditoria(evento("constructor"), "comercial")!;
+    expect(s).not.toBeNull();
+    expect(s.antes).toBeNull();
+    expect(s.depois).toBeNull();
   });
 });

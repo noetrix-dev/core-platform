@@ -22,7 +22,9 @@ export const PERMISSAO_DE_LEITURA: Record<Contexto, Permissao> = {
   titulo_pagar: "titulo_pagar.operar", titulo_receber: "titulo_receber.operar",
 };
 
-export const podeLerContexto = (perfil: Perfil, contexto: Contexto) => pode(perfil, PERMISSAO_DE_LEITURA[contexto]);
+/** `concedidas` (de `perfil_permissoes`) é repassada a todo `pode`; sem ela vale a matriz padrão. */
+export const podeLerContexto = (perfil: Perfil, contexto: Contexto, concedidas?: readonly Permissao[]) =>
+  pode(perfil, PERMISSAO_DE_LEITURA[contexto], concedidas);
 
 /** Entidade da auditoria → contexto. Entidade fora do mapa: antes/depois só para o Admin. */
 export const CONTEXTO_DA_ENTIDADE: Record<string, Contexto> = {
@@ -32,15 +34,15 @@ export const CONTEXTO_DA_ENTIDADE: Record<string, Contexto> = {
   titulos_receber: "titulo_receber",
 };
 
-export function podeVerCampo(perfil: Perfil, contexto: Contexto, campo: string): boolean {
-  if (!podeLerContexto(perfil, contexto)) return false;
+export function podeVerCampo(perfil: Perfil, contexto: Contexto, campo: string, concedidas?: readonly Permissao[]): boolean {
+  if (!podeLerContexto(perfil, contexto, concedidas)) return false;
   if (!Object.hasOwn(CAMPOS[contexto], campo)) return false;
   if (perfil === "admin") return true;
   const categoria = CAMPOS[contexto][campo];
   if (categoria === "publico") return true;
   // Financeiro: preço só em AR, custo só em AP (spec §7.3).
-  if (categoria === "preco") return pode(perfil, "preco.ver") && (perfil !== "financeiro" || contexto === "titulo_receber");
-  if (categoria === "custo") return pode(perfil, "custo.ver") && (perfil !== "financeiro" || contexto === "titulo_pagar");
+  if (categoria === "preco") return pode(perfil, "preco.ver", concedidas) && (perfil !== "financeiro" || contexto === "titulo_receber");
+  if (categoria === "custo") return pode(perfil, "custo.ver", concedidas) && (perfil !== "financeiro" || contexto === "titulo_pagar");
   // Vínculo de processo em título: só Admin (pendente com o dono, spec §12).
   return false;
 }
