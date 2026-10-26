@@ -20,22 +20,22 @@ const evento = (entidade: string): EventoAuditoria => ({
 
 describe("sigilo por campo", () => {
   it("Admin vê preço e custo lado a lado", () => {
-    const s = serializarItemRevisao(item, "admin");
+    const s = serializarItemRevisao(item, "admin")!;
     expect(s.precoUnitarioCentavos).toBe(10_000);
     expect(s.custoEstimadoCentavos).toBe(6_000);
   });
   it("Comercial vê preço, nunca custo", () => {
-    const s = serializarItemRevisao(item, "comercial");
+    const s = serializarItemRevisao(item, "comercial")!;
     expect(s.precoUnitarioCentavos).toBe(10_000);
     expect("custoEstimadoCentavos" in s).toBe(false);
   });
   it("Compras vê custo, nunca preço", () => {
-    const s = serializarItemRevisao(item, "compras_producao");
+    const s = serializarItemRevisao(item, "compras_producao")!;
     expect(s.custoEstimadoCentavos).toBe(6_000);
     expect("precoUnitarioCentavos" in s).toBe(false);
   });
   it("Financeiro não vê preço nem custo no item da revisão", () => {
-    const s = serializarItemRevisao(item, "financeiro");
+    const s = serializarItemRevisao(item, "financeiro")!;
     expect("precoUnitarioCentavos" in s).toBe(false);
     expect("custoEstimadoCentavos" in s).toBe(false);
   });
@@ -119,5 +119,57 @@ describe("vazamentos laterais", () => {
     expect(exportarLinhas([item], "comercial", "item_revisao")).toBeNull();
     expect(exportarLinhas([ap], "financeiro", "titulo_pagar")).toBeNull();
     expect(exportarLinhas([item], "admin", "item_revisao")).toEqual([item]);
+  });
+});
+
+describe("lista de permitidos (falha fechada)", () => {
+  it("campo desconhecido some para Comercial e aparece para Admin", () => {
+    const extra = { ...item, margemPontosBase: 10 };
+    expect("margemPontosBase" in serializarItemRevisao(extra, "comercial")!).toBe(false);
+    expect((serializarItemRevisao(extra, "admin") as Record<string, unknown>).margemPontosBase).toBe(10);
+  });
+  it("chave snake_case some para Comercial", () => {
+    const extra = { ...item, custo_estimado_centavos: 6_000 };
+    expect("custo_estimado_centavos" in serializarItemRevisao(extra, "comercial")!).toBe(false);
+  });
+  it("valor aninhado some para Comercial", () => {
+    const extra = { ...item, itens: [{ custoEstimadoCentavos: 1 }] };
+    expect("itens" in serializarItemRevisao(extra, "comercial")!).toBe(false);
+  });
+  it("auditoria de titulos_receber: Comercial recebe null", () => {
+    expect(serializarEventoAuditoria(evento("titulos_receber"), "comercial")).toBeNull();
+  });
+  it("auditoria de titulos_receber: Financeiro vê valor, sem processoId, sem snake_case nem aninhado", () => {
+    const ev: EventoAuditoria = {
+      ...evento("titulos_receber"),
+      antes: { valorCentavos: 1, processoId: "p", valor_centavos: 2, extra: { a: 1 } },
+      depois: { valorCentavos: 3, processoId: "p" },
+    };
+    const s = serializarEventoAuditoria(ev, "financeiro")!;
+    expect(s.antes).toEqual({ valorCentavos: 1 });
+    expect(s.depois).toEqual({ valorCentavos: 3 });
+  });
+  it("consulta recusa caixa, snake_case, caminho com ponto e nome vazio", () => {
+    for (const c of ["CustoEstimadoCentavos", "custo_estimado_centavos", "itens.custoEstimadoCentavos", ""]) {
+      expect(validarConsulta("admin", "item_revisao", { ordenarPor: c }).ok).toBe(false);
+      expect(validarConsulta("comercial", "item_revisao", { filtros: [c] }).ok).toBe(false);
+    }
+  });
+  it("nome do protótipo não é campo", () => {
+    expect(validarConsulta("admin", "item_revisao", { busca: ["constructor"] }).ok).toBe(false);
+    expect(validarConsulta("admin", "item_revisao", { busca: ["__proto__"] }).ok).toBe(false);
+  });
+  it("Comercial consultando titulo_pagar é recusado", () => {
+    expect(validarConsulta("comercial", "titulo_pagar", { ordenarPor: "vencimento" }).ok).toBe(false);
+  });
+  it("agregado com campo visível mas filtro ou busca oculto é recusado", () => {
+    expect(validarAgregado("comercial", "item_revisao", { campo: "precoUnitarioCentavos", filtros: ["custoEstimadoCentavos"] }).ok).toBe(false);
+    expect(validarAgregado("comercial", "item_revisao", { campo: "precoUnitarioCentavos", busca: ["custoEstimadoCentavos"] }).ok).toBe(false);
+  });
+  it("Comercial agregando vencimento de titulo_pagar é recusado", () => {
+    expect(validarAgregado("comercial", "titulo_pagar", { campo: "vencimento" }).ok).toBe(false);
+  });
+  it("exportação sem leitura do contexto é nula", () => {
+    expect(exportarLinhas([ap], "comercial", "titulo_pagar")).toBeNull();
   });
 });
