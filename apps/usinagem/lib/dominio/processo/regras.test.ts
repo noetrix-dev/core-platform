@@ -113,3 +113,29 @@ describe("processo derivado", () => {
     expect(prepararRevisaoDerivada([])).toEqual({ estado: "preco_pendente", itens: [] });
   });
 });
+
+describe("matriz concedida do banco", () => {
+  it("concedidas vazio nega até o Comercial ao fechar", () => {
+    expect(validarFechamento("comercial", fechado, undefined, []).ok).toBe(false);
+  });
+  it("concessão extra do banco vale ao cancelar", () => {
+    expect(validarCancelamento("tecnico", semVinculo, "motivo", ["processo.cancelar"]).ok).toBe(true);
+  });
+  it("proposta recusada quando concedidas não inclui a permissão", () => {
+    expect(validarProposta("comercial", "proposta.gerar_pdf", "precificada", ["processo.ver"]).ok).toBe(false);
+  });
+  it("trava do Admin: reabrir e precificar não valem por concessão", () => {
+    expect(validarReabertura("comercial", "motivo", ["processo.reabrir"]).ok).toBe(false);
+    expect(validarPrecificacao("comercial", [{ precoUnitarioCentavos: 100 }], ["preco.definir"]).ok).toBe(false);
+  });
+  it("Admin não depende de concedidas", () => {
+    expect(validarPrecificacao("admin", [{ precoUnitarioCentavos: 100 }], []).ok).toBe(true);
+  });
+});
+
+describe("preço seguro", () => {
+  it("recusa 1e300 e aceita MAX_SAFE_INTEGER", () => {
+    expect(validarPrecificacao("admin", [{ precoUnitarioCentavos: 1e300 }]).ok).toBe(false);
+    expect(validarPrecificacao("admin", [{ precoUnitarioCentavos: Number.MAX_SAFE_INTEGER }]).ok).toBe(true);
+  });
+});
