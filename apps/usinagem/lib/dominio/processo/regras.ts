@@ -64,8 +64,12 @@ export function validarPrecificacao(perfil: Perfil, itens: { precoUnitarioCentav
 export function prepararRevisaoDerivada(itens: ItemRevisao[]) {
   return {
     estado: "preco_pendente" as const,
-    itens: itens.map(({ id: _id, revisaoId: _rev, ...resto }) => ({
-      ...resto,
+    itens: itens.map((i) => ({
+      ordem: i.ordem,
+      descricao: i.descricao,
+      quantidade: i.quantidade,
+      unidade: i.unidade,
+      revisaoTecnicaId: i.revisaoTecnicaId,
       precoUnitarioCentavos: null,
       custoEstimadoCentavos: null,
     })),
