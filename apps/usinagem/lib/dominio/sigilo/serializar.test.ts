@@ -207,4 +207,17 @@ describe("permissões concedidas pelo banco", () => {
     expect(s.antes).toBeNull();
     expect(s.depois).toBeNull();
   });
+  it("concedidas vazio nega tudo a não-Admin, sem cair na matriz padrão", () => {
+    expect(serializarItemRevisao(item, "comercial", [])).toBeNull();
+    expect(serializarItemRevisao(item, "admin", [])).not.toBeNull();
+    expect(podeVerCampo("compras_producao", "item_revisao", "descricao", [])).toBe(false);
+    expect(validarConsulta("comercial", "item_revisao", { ordenarPor: "descricao" }, []).ok).toBe(false);
+    expect(validarAgregado("comercial", "item_revisao", { campo: "descricao" }, []).ok).toBe(false);
+    expect(serializarEventoAuditoria(evento("itens_revisao"), "comercial", [])).toBeNull();
+  });
+
+  it("dados.exportar concedida a não-Admin não destrava a exportação; Admin exporta", () => {
+    expect(exportarLinhas([item], "comercial", "item_revisao", ["processo.ver", "dados.exportar"])).toBeNull();
+    expect(exportarLinhas([item], "admin", "item_revisao", [])).toEqual([item]);
+  });
 });
