@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_rethrow } from "next/navigation";
 import type { ZodType } from "zod";
 import type { UsuarioSessao } from "../dominio/permissoes/acesso";
+import { ErroDominio } from "../dominio/comum";
 import type { Permissao } from "../dominio/permissoes/catalogo";
 import { ErroPermissao, requirePermissao } from "./sessao";
 
@@ -9,11 +10,19 @@ export type RespostaAcao<T> = { ok: true; dados: T } | { ok: false; erro: string
 
 const ERRO_GENERICO = "Não foi possível concluir a operação.";
 
-// Log nunca leva valores: erro de banco traz detail/cause com dados da linha. Só nome, mensagem e código.
+// Log nunca leva valores: DrizzleQueryError e erros do pg trazem SQL, params e dados da linha na mensagem.
+// Só ErroDominio e ErroPermissao têm mensagem controlada por nós; o resto grava nome e código (erro.code ou erro.cause.code).
+function codigoDe(erro: Error): string | undefined {
+  const { code, cause } = erro as { code?: unknown; cause?: { code?: unknown } | null };
+  if (typeof code === "string") return code;
+  const doCause = cause?.code;
+  return typeof doCause === "string" ? doCause : undefined;
+}
+
 function registrarErro(erro: unknown): void {
   if (!(erro instanceof Error)) return console.error({ nome: typeof erro });
-  const { code } = erro as { code?: unknown };
-  console.error({ nome: erro.name, mensagem: erro.message, codigo: typeof code === "string" ? code : undefined });
+  const seguro = erro instanceof ErroDominio || erro instanceof ErroPermissao;
+  console.error({ nome: erro.name, ...(seguro ? { mensagem: erro.message } : {}), codigo: codigoDe(erro) });
 }
 
 async function executar<E, S>(esquema: ZodType<E>, entrada: unknown, fn: (e: E) => Promise<S>): Promise<RespostaAcao<S>> {
@@ -35,8 +44,10 @@ export function acao<E, S>(permissao: Permissao, esquema: ZodType<E>, fn: (entra
     try {
       usuario = await requirePermissao(permissao);
     } catch (erro) {
+      unstable_rethrow(erro);
       if (erro instanceof ErroPermissao) return { ok: false, erro: erro.message };
-      throw erro;
+      registrarErro(erro);
+      return { ok: false, erro: ERRO_GENERICO };
     }
     return executar(esquema, entrada, (e) => fn(e, usuario));
   };

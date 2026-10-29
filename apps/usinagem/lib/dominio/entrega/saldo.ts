@@ -1,4 +1,4 @@
-import { ehQuantidadeValida, falha, ok, type Resultado } from "../comum";
+import { ehQuantidadeValida, ErroDominio, falha, ok, type Resultado } from "../comum";
 
 export type EventoEntrega = { chave: string; tipo: "expedido" | "aceito" | "recusado" | "devolvido"; quantidade: number };
 export type SituacaoEntrega = "nao_programada" | "programada" | "parcialmente_entregue" | "entregue";
@@ -9,15 +9,15 @@ export type PosicaoEntrega = {
 
 export function posicaoEntrega(contratado: number, programado: number, eventos: EventoEntrega[]): PosicaoEntrega {
   const inteiroNaoNegativo = (n: number) => n === 0 || ehQuantidadeValida(n);
-  if (!inteiroNaoNegativo(contratado) || !inteiroNaoNegativo(programado)) throw new Error("Posição de entrega inválida.");
+  if (!inteiroNaoNegativo(contratado) || !inteiroNaoNegativo(programado)) throw new ErroDominio("Posição de entrega inválida.");
   const soma = { expedido: 0, aceito: 0, recusado: 0, devolvido: 0 };
   const vistos = new Map<string, EventoEntrega>();
   for (const e of eventos) {
-    if (!Object.hasOwn(soma, e.tipo) || !ehQuantidadeValida(e.quantidade)) throw new Error("Evento de entrega inválido.");
+    if (!Object.hasOwn(soma, e.tipo) || !ehQuantidadeValida(e.quantidade)) throw new ErroDominio("Evento de entrega inválido.");
     const anterior = vistos.get(e.chave);
     if (anterior) {
       if (anterior.tipo !== e.tipo || anterior.quantidade !== e.quantidade) {
-        throw new Error("Evento de entrega repetido com conteúdo diferente.");
+        throw new ErroDominio("Evento de entrega repetido com conteúdo diferente.");
       }
       continue;
     }
@@ -25,7 +25,7 @@ export function posicaoEntrega(contratado: number, programado: number, eventos: 
     soma[e.tipo] += e.quantidade;
   }
   // total acumulado, não ordem dos eventos
-  if (soma.devolvido > soma.aceito) throw new Error("Devolução maior que o aceito.");
+  if (soma.devolvido > soma.aceito) throw new ErroDominio("Devolução maior que o aceito.");
   const aceitoLiquido = soma.aceito - soma.devolvido;
   const situacao: SituacaoEntrega =
     contratado > 0 && aceitoLiquido >= contratado ? "entregue"

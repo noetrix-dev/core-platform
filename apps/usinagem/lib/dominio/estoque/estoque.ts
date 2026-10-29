@@ -1,4 +1,4 @@
-import { deduplicarPorChave, falha, ok, type Resultado } from "../comum";
+import { deduplicarPorChave, ErroDominio, falha, ok, type Resultado } from "../comum";
 
 export type SituacaoQualidade = "aguardando_inspecao" | "liberado" | "rejeitado" | "quarentena";
 export type Lote = { id: string; produtoId: string; revisaoTecnicaId: string; situacao: SituacaoQualidade };
@@ -29,18 +29,18 @@ const STATUS_RESERVA = { ativa: 1, comprometida_bloqueio: 1, consumida: 1, liber
 export function validarEstado(e: EstadoEstoque): void {
   const idsLote = new Set<string>();
   for (const l of e.lotes) {
-    if (!Object.hasOwn(SITUACOES, l.situacao) || idsLote.has(l.id)) throw new Error(INCONSISTENTE);
+    if (!Object.hasOwn(SITUACOES, l.situacao) || idsLote.has(l.id)) throw new ErroDominio(INCONSISTENTE);
     idsLote.add(l.id);
   }
   const vistos = new Map<string, MovimentoEstoque>();
   for (const m of e.movimentos) {
     if (!Object.hasOwn(TIPOS_MOVIMENTO, m.tipo) || !Number.isSafeInteger(m.quantidade) || m.quantidade === 0) {
-      throw new Error("Movimento de estoque inválido.");
+      throw new ErroDominio("Movimento de estoque inválido.");
     }
     const antes = vistos.get(m.chave);
     if (!antes) vistos.set(m.chave, m);
     else if (antes.loteId !== m.loteId || antes.tipo !== m.tipo || antes.quantidade !== m.quantidade) {
-      throw new Error("Movimento de estoque repetido com conteúdo diferente.");
+      throw new ErroDominio("Movimento de estoque repetido com conteúdo diferente.");
     }
   }
   for (const r of e.reservas) {
@@ -48,19 +48,19 @@ export function validarEstado(e: EstadoEstoque): void {
       !Number.isSafeInteger(r.quantidade) || r.quantidade < 0 ||
       !Object.hasOwn(TIPOS_RESERVA, r.tipo) || !Object.hasOwn(STATUS_RESERVA, r.status)
     ) {
-      throw new Error("Reserva de estoque inválida.");
+      throw new ErroDominio("Reserva de estoque inválida.");
     }
   }
   if (
     e.movimentos.some((m) => !idsLote.has(m.loteId)) || e.reservas.some((r) => !idsLote.has(r.loteId)) ||
     new Set(e.reservas.map((r) => r.id)).size !== e.reservas.length
   ) {
-    throw new Error(INCONSISTENTE);
+    throw new ErroDominio(INCONSISTENTE);
   }
   for (const l of e.lotes) {
     const fisico = fisicoDoLote(e, l.id);
     const ativas = reservadoNoLote(e, l.id);
-    if (fisico < 0 || (l.situacao === "liberado" ? ativas > fisico : ativas > 0)) throw new Error(INCONSISTENTE);
+    if (fisico < 0 || (l.situacao === "liberado" ? ativas > fisico : ativas > 0)) throw new ErroDominio(INCONSISTENTE);
   }
 }
 

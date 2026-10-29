@@ -15,3 +15,8 @@ export function deduplicarPorChave<T extends { chave: string }>(itens: T[]): T[]
 }
 
 export const ehQuantidadeValida = (n: number): boolean => Number.isInteger(n) && n > 0;
+
+/** Dado corrompido ou estado impossível. Só a mensagem destes erros é segura para log: nunca carrega valor de linha. */
+export class ErroDominio extends Error {
+  override name = "ErroDominio";
+}

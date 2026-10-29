@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ErroDominio } from "../comum";
 import { statusMacro, type EntradaStatusMacro } from "./status-macro";
 
 const base: EntradaStatusMacro = { situacaoComercial: "cotacao_aberta", estadoRevisaoVigente: "rascunho", pedidosAtivos: 0, itens: [] };
@@ -80,7 +81,7 @@ describe("status macro (spec §5.2)", () => {
 
 describe("status macro: dado corrompido falha alto", () => {
   const MSG = "Entrada de status inválida.";
-  const falha = (e: unknown) => expect(() => statusMacro(e as EntradaStatusMacro)).toThrow(new Error(MSG));
+  const falha = (e: unknown) => expect(() => statusMacro(e as EntradaStatusMacro)).toThrow(new ErroDominio(MSG));
 
   it.each(["toString", "__proto__", "inventado", "", 3, null, undefined])("situacaoComercial inválida %s", (s) => {
     falha({ ...base, situacaoComercial: s });
@@ -112,7 +113,7 @@ describe("status macro: dado corrompido falha alto", () => {
 });
 
 describe("status macro: combinações inválidas dos eixos", () => {
-  const falha = (e: EntradaStatusMacro) => expect(() => statusMacro(e)).toThrow(new Error("Entrada de status inválida."));
+  const falha = (e: EntradaStatusMacro) => expect(() => statusMacro(e)).toThrow(new ErroDominio("Entrada de status inválida."));
 
   it("(a) itens com pedidosAtivos 0", () => {
     falha({ ...base, itens: [item(0, 0, 0)] });

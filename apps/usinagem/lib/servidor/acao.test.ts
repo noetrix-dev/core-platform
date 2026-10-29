@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DrizzleQueryError } from "drizzle-orm";
 import { z } from "zod";
 
 vi.mock("server-only", () => ({}));
@@ -18,6 +19,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { unstable_rethrow } from "next/navigation";
+import { ErroDominio } from "../dominio/comum";
 import { acao, acaoPublica, rota } from "./acao";
 import { ErroPermissao, requirePermissao } from "./sessao";
 
@@ -36,6 +38,8 @@ afterEach(() => log.mockRestore());
 
 const logado = () => JSON.stringify(log.mock.calls);
 const erroDeBanco = () => Object.assign(new Error("Estado de estoque inconsistente."), { detail: "valor-secreto", code: "23505" });
+const erroDrizzle = () =>
+  new DrizzleQueryError("insert into t (a) values ($1)", ["valor-secreto"], Object.assign(new Error('duplicate key "valor-secreto"'), { code: "23505" }));
 
 describe("acao", () => {
   it("sem sessão: erro de sessão e fn nunca roda", async () => {
@@ -73,8 +77,31 @@ describe("acao", () => {
     expect(r).toEqual({ ok: false, erro: GENERICA });
     expect(JSON.stringify(r)).not.toContain("estoque");
     expect(log).toHaveBeenCalledTimes(1);
-    expect(log).toHaveBeenCalledWith({ nome: "Error", mensagem: "Estado de estoque inconsistente.", codigo: "23505" });
+    expect(log).toHaveBeenCalledWith({ nome: "Error", codigo: "23505" });
     expect(logado()).not.toContain("valor-secreto");
+    expect(logado()).not.toContain("estoque");
+  });
+  it("DrizzleQueryError: nem SQL nem params no log; código vem de cause", async () => {
+    const r = await acao("processo.ver", esquema, async () => {
+      throw erroDrizzle();
+    })({ n: 1 });
+    expect(r).toEqual({ ok: false, erro: GENERICA });
+    expect(logado()).not.toContain("valor-secreto");
+    expect(logado()).not.toContain("insert into");
+    expect(log.mock.calls[0][0]).toMatchObject({ codigo: "23505" });
+  });
+  it("erro do pg com valor na mensagem: o valor não vai ao log", async () => {
+    await acao("processo.ver", esquema, async () => {
+      throw new Error('invalid input syntax for type uuid: "abc"');
+    })({ n: 1 });
+    expect(logado()).not.toContain("abc");
+  });
+  it("ErroDominio: a mensagem vai ao log, o cliente recebe só a genérica", async () => {
+    const r = await acao("processo.ver", esquema, async () => {
+      throw new ErroDominio("Posição de demanda inválida.");
+    })({ n: 1 });
+    expect(r).toEqual({ ok: false, erro: GENERICA });
+    expect(log).toHaveBeenCalledWith({ nome: "ErroDominio", mensagem: "Posição de demanda inválida." });
   });
   it("throw que não é Error: log só com o tipo", async () => {
     const r = await acao("processo.ver", esquema, async () => {
@@ -100,12 +127,19 @@ describe("acao", () => {
     expect(unstable_rethrow).toHaveBeenCalledWith(redir);
     expect(log).not.toHaveBeenCalled();
   });
-  it("erro que não é ErroPermissao vindo de requirePermissao propaga", async () => {
-    const boom = new Error("banco fora");
-    permissao.mockRejectedValue(boom);
+  // Alteração de teste (era "propaga"): ruling do controller, Minor 4 do review.
+  it("erro que não é ErroPermissao vindo de requirePermissao vira genérico, é logado sem valor e fn não roda", async () => {
+    permissao.mockRejectedValue(erroDrizzle());
     const fn = vi.fn();
-    await expect(acao("processo.ver", esquema, fn)({ n: 1 })).rejects.toBe(boom);
+    expect(await acao("processo.ver", esquema, fn)({ n: 1 })).toEqual({ ok: false, erro: GENERICA });
     expect(fn).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(logado()).not.toContain("valor-secreto");
+  });
+  it("redirect vindo de requirePermissao é relançado", async () => {
+    const redir = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/x;307;" });
+    permissao.mockRejectedValue(redir);
+    await expect(acao("processo.ver", esquema, vi.fn())({ n: 1 })).rejects.toBe(redir);
   });
 });
 
@@ -152,8 +186,15 @@ describe("rota", () => {
     })(req);
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ erro: GENERICA });
-    expect(log).toHaveBeenCalledWith({ nome: "Error", mensagem: "Estado de estoque inconsistente.", codigo: "23505" });
+    expect(log).toHaveBeenCalledWith({ nome: "Error", codigo: "23505" });
     expect(logado()).not.toContain("valor-secreto");
+  });
+  it("DrizzleQueryError no handler: sem SQL nem params no log", async () => {
+    await rota("processo.ver", async () => {
+      throw erroDrizzle();
+    })(req);
+    expect(logado()).not.toContain("valor-secreto");
+    expect(log.mock.calls[0][0]).toMatchObject({ codigo: "23505" });
   });
   it("sucesso passa a resposta do handler e entrega req e usuário", async () => {
     const resposta = new Response("ok", { status: 201 });

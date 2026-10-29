@@ -1,3 +1,4 @@
+import { ErroDominio } from "../comum";
 import type { EstadoRevisao, SituacaoComercial } from "../contratos";
 
 export type StatusMacro =
@@ -25,7 +26,7 @@ const ESTADOS: Record<EstadoRevisao, true> = {
 };
 
 function invalida(): never {
-  throw new Error("Entrada de status inválida.");
+  throw new ErroDominio("Entrada de status inválida.");
 }
 const seguro = (n: unknown): n is number => typeof n === "number" && Number.isSafeInteger(n);
 
