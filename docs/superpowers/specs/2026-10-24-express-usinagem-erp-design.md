@@ -482,6 +482,7 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | Origem de `reservaFirmeAtiva` por item de pedido para o status macro: criar um helper que some reservas `firme` e `ativa` do item (decidido: `comprometida_bloqueio` não conta), para o chamador não reinventar o filtro. | PR 2 |
 | `aceitoSemNf` não tem produtor na 1B. Até o PR da NF, o chamador do painel passa 0 explicitamente. | PR 2 e PR da NF |
 | Justificativa de auditoria é texto livre: avaliar limite de tamanho e se ela pode carregar dado sigiloso. | PR 2 |
+| `concedidas` é opcional nos serializadores e validadores de sigilo: `serializar*(x, sessao.perfil)` sem a lista compila e cai em silêncio na matriz padrão, ignorando revogação feita pelo Admin. Tornar o parâmetro obrigatório ou receber a sessão autorizada inteira antes da primeira ação real. | PR 2 |
 | `ProgramacaoEntrega.versao` é versão de negócio, não lock otimista. Não reaproveitar como controle de concorrência. | PR 2 |
 | O seed não revoga concessão que saiu da matriz padrão (`onConflictDoNothing`): depois do bootstrap o banco é a fonte da verdade. Documentar no procedimento de seed. | PR 2 |
 | `ItemRevisao`, `Usuario` e `Cliente` nos contratos sem `criadoEm`/`criadoPor`: conferir contra as exceções da §4 quando as telas usarem esses tipos. | PR 2 |
