@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MENSAGENS_DE_DOMINIO } from "../lib/dominio/comum";
+import { ehMensagemDeDominio, mensagensDeDominio } from "../lib/dominio/comum";
 import { ACOES_PUBLICAS, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
 
 const IMP = `import { acao, acaoPublica } from "@/lib/servidor/acao";\n`;
@@ -243,10 +243,25 @@ describe("consistência das mensagens de ErroDominio", () => {
   it("toda mensagem lançada no app (domínio e comum incluídos) está no conjunto registrado", () => {
     const lancadas = arquivosVerificados().flatMap((a) => mensagensDeErroDominio(a.codigo));
     expect(lancadas.length).toBeGreaterThanOrEqual(10);
-    expect(lancadas.filter((m) => !MENSAGENS_DE_DOMINIO.has(m))).toEqual([]);
+    expect(lancadas.filter((m) => !ehMensagemDeDominio(m))).toEqual([]);
   });
   it("o conjunto não tem entrada que nenhum código lance (sem lixo), exceto a genérica", () => {
     const lancadas = new Set(arquivosVerificados().flatMap((a) => mensagensDeErroDominio(a.codigo)));
-    expect([...MENSAGENS_DE_DOMINIO].filter((m) => !lancadas.has(m) && m !== "Erro de domínio.")).toEqual([]);
+    expect(mensagensDeDominio().filter((m) => !lancadas.has(m) && m !== "Erro de domínio.")).toEqual([]);
+  });
+});
+
+describe("o conjunto de mensagens de domínio não vaza", () => {
+  const NOME = ["MENSAGENS_DE", "DOMINIO"].join("_");
+  const todos = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? todos(join(dir, e.name)) : /\.[cm]?[jt]sx?$/.test(e.name) ? [join(dir, e.name)] : []));
+
+  it("nenhum arquivo (testes incluídos) importa nem exporta o conjunto; só comum.ts o declara, sem export", () => {
+    const arquivos = ["lib", "scripts", "app"].flatMap((d) => todos(join(process.cwd(), d)));
+    const referem = arquivos.filter((f) => readFileSync(f, "utf8").includes(NOME)).map((f) => f.slice(process.cwd().length + 1));
+    expect(referem).toEqual(["lib/dominio/comum.ts"]);
+    const comum = readFileSync(join(process.cwd(), "lib/dominio/comum.ts"), "utf8");
+    expect(comum).toMatch(new RegExp(`^const ${NOME} = new Set`, "m"));
+    expect(comum).not.toMatch(new RegExp(`export\\s+(?:const|let|var)\\s+${NOME}|export\\s*\\{[^}]*${NOME}`));
   });
 });

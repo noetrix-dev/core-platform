@@ -18,9 +18,9 @@ export const ehQuantidadeValida = (n: number): boolean => Number.isSafeInteger(n
 
 /**
  * Toda mensagem de ErroDominio, uma a uma, como literal. Mensagem fora daqui vira a genérica: valor de linha nunca entra.
- * O teste de consistência (scripts/cobertura-acoes.test.ts) prova que tudo que o código lança está aqui.
+ * Privado: ninguém acrescenta mensagem em runtime. O teste de consistência (scripts/cobertura-acoes.test.ts) prova que tudo que o código lança está aqui.
  */
-export const MENSAGENS_DE_DOMINIO = new Set<string>([
+const MENSAGENS_DE_DOMINIO = new Set<string>([
   "Posição de demanda inválida.",
   "Vínculo de demanda inválido.",
   "Posição de entrega inválida.",
@@ -36,11 +36,16 @@ export const MENSAGENS_DE_DOMINIO = new Set<string>([
   "Erro de domínio.",
 ]);
 
+export const ehMensagemDeDominio = (m: unknown): boolean => typeof m === "string" && MENSAGENS_DE_DOMINIO.has(m);
+
+/** Cópia: só para o teste de consistência. Alterar o array não altera o conjunto. */
+export const mensagensDeDominio = (): string[] => [...MENSAGENS_DE_DOMINIO];
+
 /** Dado corrompido ou estado impossível. A mensagem é fechada em runtime e a instância é congelada: nada a altera depois. */
 export class ErroDominio extends Error {
   override name = "ErroDominio";
   constructor(mensagem: string) {
-    super(MENSAGENS_DE_DOMINIO.has(mensagem) ? mensagem : "Erro de domínio.");
+    super(ehMensagemDeDominio(mensagem) ? mensagem : "Erro de domínio.");
     Object.freeze(this);
   }
 }

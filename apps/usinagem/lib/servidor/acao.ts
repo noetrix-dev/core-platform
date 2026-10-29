@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_rethrow } from "next/navigation";
 import type { ZodType } from "zod";
-import { ErroDominio, MENSAGENS_DE_DOMINIO } from "../dominio/comum";
+import { ehMensagemDeDominio, ErroDominio } from "../dominio/comum";
 import type { Permissao } from "../dominio/permissoes/catalogo";
 import { ErroPermissao, requirePermissao, type SessaoAutorizada } from "./sessao";
 
@@ -11,18 +11,21 @@ const ERRO_GENERICO = "Não foi possível concluir a operação.";
 
 // Log nunca leva valores: DrizzleQueryError e erros do pg trazem SQL, params e dados da linha na mensagem.
 // Só ErroDominio e ErroPermissao têm mensagem controlada por nós; o resto grava nome e código (erro.code ou erro.cause.code).
+const SQLSTATE = /^[0-9A-Z]{5}$/;
+const NOME_SEGURO = /^[A-Za-z]{1,40}$/;
+
+// Só formato conhecido vai ao log: SQLSTATE no código, letras no nome. Qualquer outra coisa pode carregar valor.
 function codigoDe(erro: Error): string | undefined {
   const { code, cause } = erro as { code?: unknown; cause?: { code?: unknown } | null };
-  if (typeof code === "string") return code;
-  const doCause = cause?.code;
-  return typeof doCause === "string" ? doCause : undefined;
+  return [code, cause?.code].find((c): c is string => typeof c === "string" && SQLSTATE.test(c));
 }
 
 function registrarErro(erro: unknown): void {
   if (!(erro instanceof Error)) return console.error({ nome: typeof erro });
   // Redundante com o construtor de ErroDominio, de propósito: defesa em profundidade.
-  const seguro = (erro instanceof ErroDominio && MENSAGENS_DE_DOMINIO.has(erro.message)) || erro instanceof ErroPermissao;
-  console.error({ nome: erro.name, ...(seguro ? { mensagem: erro.message } : {}), codigo: codigoDe(erro) });
+  const seguro = (erro instanceof ErroDominio && ehMensagemDeDominio(erro.message)) || erro instanceof ErroPermissao;
+  const nome = NOME_SEGURO.test(erro.name) ? erro.name : "Error";
+  console.error({ nome, ...(seguro ? { mensagem: erro.message } : {}), codigo: codigoDe(erro) });
 }
 
 async function executar<E, S>(esquema: ZodType<E>, entrada: unknown, fn: (e: E) => Promise<S>): Promise<RespostaAcao<S>> {

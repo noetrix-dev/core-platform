@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deduplicarPorChave, ehQuantidadeValida, ErroDominio, falha, MENSAGENS_DE_DOMINIO, ok, somar } from "./comum";
+import { deduplicarPorChave, ehQuantidadeValida, ehMensagemDeDominio, ErroDominio, falha, mensagensDeDominio, ok, somar } from "./comum";
 
 describe("comum", () => {
   it("deduplica pela chave, primeiro vence", () => {
@@ -50,7 +50,7 @@ describe("comum", () => {
     });
     it("mensagem registrada passa igual", () => {
       expect(new ErroDominio("Estado de estoque inconsistente.").message).toBe("Estado de estoque inconsistente.");
-      expect(MENSAGENS_DE_DOMINIO.has("Soma fora do limite seguro.")).toBe(true);
+      expect(ehMensagemDeDominio("Soma fora do limite seguro.")).toBe(true);
     });
     it("instância é congelada: reatribuir message lança TypeError e não muda", () => {
       const e = new ErroDominio("Soma fora do limite seguro.");
@@ -72,6 +72,19 @@ describe("comum", () => {
       const e = new ErroDominio("Soma fora do limite seguro.");
       const outro = new (e.constructor as typeof ErroDominio)("valor-secreto");
       expect(outro.message).toBe(GENERICA);
+    });
+    it("o conjunto é privado: mutar a cópia devolvida não reabre nada", () => {
+      const copia = mensagensDeDominio();
+      copia.push("valor-secreto");
+      copia.length = 0;
+      expect(ehMensagemDeDominio("valor-secreto")).toBe(false);
+      expect(ehMensagemDeDominio("Soma fora do limite seguro.")).toBe(true);
+      expect(mensagensDeDominio()).toContain("Soma fora do limite seguro.");
+      expect(mensagensDeDominio()).not.toContain("valor-secreto");
+      expect(new ErroDominio("valor-secreto").message).toBe("Erro de domínio.");
+    });
+    it("ehMensagemDeDominio recusa o que não é string registrada", () => {
+      for (const v of [undefined, null, 1, {}, ["Soma fora do limite seguro."], "soma fora do limite seguro."]) expect(ehMensagemDeDominio(v)).toBe(false);
     });
     it("continua sendo Error com nome ErroDominio", () => {
       const e = new ErroDominio("Soma fora do limite seguro.");

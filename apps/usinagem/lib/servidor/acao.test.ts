@@ -277,3 +277,38 @@ describe("log de ErroDominio só com mensagem do conjunto registrado", () => {
     expect(log).toHaveBeenCalledWith({ nome: "ErroDominio", mensagem: "Soma fora do limite seguro." });
   });
 });
+
+describe("registrarErro só loga nome e código com formato conhecido", () => {
+  const roda = (erro: unknown) =>
+    acao("processo.ver", esquema, async () => {
+      throw erro;
+    })({ n: 1 });
+
+  it("code fora do formato SQLSTATE não é logado; 23505 é", async () => {
+    await roda(Object.assign(new Error("x"), { code: "valor-secreto" }));
+    expect(logado()).not.toContain("valor-secreto");
+    log.mockClear();
+    await roda(Object.assign(new Error("x"), { code: "23505" }));
+    expect(log).toHaveBeenCalledWith({ nome: "Error", codigo: "23505" });
+  });
+  it("code do cause também precisa ser SQLSTATE", async () => {
+    await roda(Object.assign(new Error("x"), { cause: { code: "valor-secreto" } }));
+    expect(logado()).not.toContain("valor-secreto");
+  });
+  it("name fora de /^[A-Za-z]{1,40}$/ vira Error", async () => {
+    const e = new Error("x");
+    e.name = "valor secreto 123";
+    await roda(e);
+    expect(logado()).not.toContain("valor secreto");
+    expect(log.mock.calls[0][0]).toMatchObject({ nome: "Error" });
+    log.mockClear();
+    const longo = new Error("x");
+    longo.name = "A".repeat(41);
+    await roda(longo);
+    expect(log.mock.calls[0][0]).toMatchObject({ nome: "Error" });
+  });
+  it("name legítimo (TypeError, ErroDominio) é preservado", async () => {
+    await roda(new TypeError("x"));
+    expect(log.mock.calls[0][0]).toMatchObject({ nome: "TypeError" });
+  });
+});
