@@ -4,6 +4,11 @@ export type StatusMacro =
   | "cancelado" | "perdido" | "suspenso" | "fechado" | "nf_emitida"
   | "pronto_para_entrega" | "em_fabricacao" | "cotacao_enviada" | "cotacao_aberta";
 
+/**
+ * Contrato de entrada: `pedidosAtivos` conta só pedidos não cancelados e `itens` são só os itens
+ * desses pedidos ativos (o chamador exclui os cancelados). Um processo `contratado` cujo único
+ * pedido foi cancelado chega com `pedidosAtivos: 0` e `itens: []`.
+ */
 export type EntradaStatusMacro = {
   situacaoComercial: SituacaoComercial;
   estadoRevisaoVigente: EstadoRevisao | null;
@@ -33,11 +38,9 @@ function validar(e: EntradaStatusMacro): void {
     // saldoEntrega pode ser negativo (sobre-entrega); reserva e aceite sem NF não.
     if (!seguro(i.saldoEntrega) || !seguro(i.reservaFirmeAtiva) || i.reservaFirmeAtiva < 0 || !seguro(i.aceitoSemNf) || i.aceitoSemNf < 0) invalida();
   }
-  // Combinações impossíveis entre os eixos.
+  // Combinações que a spec proíbe: itens sem pedido ativo (contrato de entrada) e proposta enviada sem revisão (§5.1).
   const s = e.situacaoComercial;
   if (e.itens.length > 0 && e.pedidosAtivos === 0) invalida();
-  if (e.estadoRevisaoVigente === "substituida") invalida();
-  if ((s === "cotacao_aberta" || s === "cotacao_enviada") && e.pedidosAtivos > 0) invalida();
   if (s === "cotacao_enviada" && e.estadoRevisaoVigente === null) invalida();
 }
 
@@ -48,8 +51,8 @@ export function statusMacro(e: EntradaStatusMacro): StatusMacro {
   if (s === "cancelado" || s === "perdido" || s === "suspenso") return s;
   if (s === "fechado") return "fechado";
   if (e.pedidosAtivos > 0 && e.itens.length > 0) {
-    // saldo <= 0 cobre sobre-entrega: nada mais a entregar.
-    if (e.itens.every((i) => i.saldoEntrega <= 0 && i.aceitoSemNf === 0)) return "nf_emitida";
+    // Spec §5.2 regra 3: saldo zero em todos os itens. Sobre-entrega (negativo) não casa; a confirmar com o Admin.
+    if (e.itens.every((i) => i.saldoEntrega === 0 && i.aceitoSemNf === 0)) return "nf_emitida";
     const comSaldo = e.itens.filter((i) => i.saldoEntrega > 0);
     if (comSaldo.length > 0 && comSaldo.every((i) => i.reservaFirmeAtiva >= i.saldoEntrega)) return "pronto_para_entrega";
   }

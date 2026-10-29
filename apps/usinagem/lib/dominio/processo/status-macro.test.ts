@@ -27,8 +27,8 @@ describe("status macro (spec §5.2)", () => {
   it("saldo zero mas aceite sem NF não é NF emitida", () => {
     expect(statusMacro({ ...ped, itens: [item(0, 0, 5)] })).toBe("em_fabricacao");
   });
-  it("sobre-entrega (saldo negativo) sem NF pendente é NF emitida", () => {
-    expect(statusMacro({ ...ped, itens: [item(-2, 0, 0)] })).toBe("nf_emitida");
+  it("sobre-entrega (saldo -2) sem NF pendente é em fabricação (caracterização, spec §5.2 regra 3: saldo zero; a confirmar com o Admin)", () => {
+    expect(statusMacro({ ...ped, itens: [item(-2, 0, 0)] })).toBe("em_fabricacao");
   });
   it("sobre-entrega com aceite sem NF não é NF emitida", () => {
     expect(statusMacro({ ...ped, itens: [item(-2, 0, 1)] })).toBe("em_fabricacao");
@@ -118,15 +118,21 @@ describe("status macro: combinações inválidas dos eixos", () => {
     falha({ ...base, itens: [item(0, 0, 0)] });
     falha({ ...base, situacaoComercial: "cancelado", itens: [item(1, 0, 0)] });
   });
-  it("(b) revisão vigente substituída", () => {
-    falha({ ...base, estadoRevisaoVigente: "substituida" });
-    falha({ ...ped, estadoRevisaoVigente: "substituida", itens: [item(1, 0, 0)] });
-  });
-  it.each(["cotacao_aberta", "cotacao_enviada"] as const)("(c) %s com pedidosAtivos > 0", (s) => {
-    falha({ ...base, situacaoComercial: s, estadoRevisaoVigente: "enviada", pedidosAtivos: 1 });
-  });
   it("(d) cotacao_enviada sem revisão vigente", () => {
     falha({ ...base, situacaoComercial: "cotacao_enviada", estadoRevisaoVigente: null });
+  });
+  it("(b) vigente substituida sem pedido é cotação aberta (caracterização, spec não proíbe)", () => {
+    expect(statusMacro({ ...base, estadoRevisaoVigente: "substituida" })).toBe("cotacao_aberta");
+  });
+  it("(c) cotacao_aberta com pedido ativo é em fabricação (caracterização, spec não proíbe)", () => {
+    expect(statusMacro({ ...base, pedidosAtivos: 1 })).toBe("em_fabricacao");
+  });
+  it("(c) cotacao_enviada com revisão enviada e pedido ativo é em fabricação (caracterização)", () => {
+    expect(statusMacro({ ...base, situacaoComercial: "cotacao_enviada", estadoRevisaoVigente: "enviada", pedidosAtivos: 1 })).toBe("em_fabricacao");
+  });
+  it("contrato: contratado cujo único pedido foi cancelado chega sem pedidos e sem itens", () => {
+    expect(statusMacro({ ...base, situacaoComercial: "contratado", estadoRevisaoVigente: "enviada" })).toBe("cotacao_enviada");
+    expect(statusMacro({ ...base, situacaoComercial: "contratado", estadoRevisaoVigente: "aprovada" })).toBe("cotacao_aberta");
   });
   it("continuam válidos: pedido ativo sem itens, aprovado/contratado/parcial sem pedido, reaberto com pedido", () => {
     expect(statusMacro({ ...ped, itens: [] })).toBe("em_fabricacao");
