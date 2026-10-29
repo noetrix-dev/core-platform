@@ -32,7 +32,9 @@ describe("Cenário 1: pedido 20, entregas 5 + 5 + 10", () => {
     expect(posicaoEntrega(20, 20, ev)).toMatchObject({ saldo: 15, aceitoLiquido: 5 });
     ev.push(expedicao("r2", 5)); // expedido, ainda sem aceite
     expect(posicaoEntrega(20, 20, ev)).toMatchObject({ saldo: 15, aceitoLiquido: 5, expedido: 10 });
-    ev.push(aceite("a2", 5), expedicao("r3", 10));
+    ev.push(aceite("a2", 5));
+    expect(posicaoEntrega(20, 20, ev)).toMatchObject({ saldo: 10, aceitoLiquido: 10, expedido: 10 });
+    ev.push(expedicao("r3", 10)); // expedido, sem aceite novo: saldo segue 10
     expect(posicaoEntrega(20, 20, ev)).toMatchObject({ saldo: 10, aceitoLiquido: 10, expedido: 20 });
     ev.push(aceite("a2", 5)); // replay de a2
     expect(posicaoEntrega(20, 20, ev).saldo).toBe(10);
@@ -105,12 +107,14 @@ describe("Cenário 4: produção acima do pedido", () => {
     // livre = 35 - 15 = 20
     const demais = reservar(e, { id: "E2", loteId: "L1", tipo: "estrategica", clienteId: "C1", pedidoItemId: null, quantidade: 21 });
     expect(demais.ok).toBe(false);
+    expect(demais).toMatchObject({ erro: "Quantidade maior que o estoque livre do lote." });
+    expect(posicaoEstoque(e, "polia", "revA")).toMatchObject({ reservasEstrategicas: 15, livre: 20 });
     const exato = valor(reservar(e, { id: "E2", loteId: "L1", tipo: "estrategica", clienteId: "C1", pedidoItemId: null, quantidade: 20 }));
     expect(posicaoEstoque(exato, "polia", "revA")).toMatchObject({ reservasEstrategicas: 35, livre: 0 });
 
     const replay = expedir(e, { chave: "rem1", reservaId: "F1", quantidade: 5 });
     expect(replay.ok).toBe(true);
     expect(valor(replay)).toEqual(e);
-    expect(posicaoEstoque(valor(replay), "polia", "revA")).toMatchObject({ fisicoTotal: 35, livre: 20 });
+    expect(posicaoEstoque(valor(replay), "polia", "revA")).toMatchObject({ fisicoTotal: 35, reservasEstrategicas: 15, livre: 20 });
   });
 });
