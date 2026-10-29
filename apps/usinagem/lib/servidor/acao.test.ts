@@ -21,9 +21,12 @@ vi.mock("next/navigation", () => ({
 import { unstable_rethrow } from "next/navigation";
 import { ErroDominio } from "../dominio/comum";
 import { acao, acaoPublica, rota } from "./acao";
-import { ErroPermissao, requirePermissao } from "./sessao";
+import { ErroPermissao, requirePermissao, type SessaoAutorizada } from "./sessao";
+import type { Permissao } from "../dominio/permissoes/catalogo";
+import { serializarItemRevisao } from "../dominio/sigilo/serializar";
 
-const usuario = { id: "u1", nome: "Adm", perfil: "admin" as const };
+// Alteração de teste (só tipo): requirePermissao agora devolve SessaoAutorizada; os asserts continuam comparando o mesmo objeto.
+const usuario: SessaoAutorizada = { id: "u1", nome: "Adm", perfil: "admin", concedidas: [] };
 const esquema = z.object({ n: z.number() });
 const GENERICA = "Não foi possível concluir a operação.";
 const permissao = vi.mocked(requirePermissao);
@@ -209,5 +212,51 @@ describe("rota", () => {
         throw redir;
       })(req),
     ).rejects.toBe(redir);
+  });
+});
+
+describe("concedidas do banco chegam à fn", () => {
+  const compras = (concedidas: Permissao[]): SessaoAutorizada => ({ id: "u3", nome: "Compras", perfil: "compras_producao", concedidas });
+  const req = new Request("http://x.test/api");
+  const item = {
+    id: "i1", revisaoId: "r1", ordem: 1, descricao: "Polia", quantidade: 20, unidade: "pç",
+    revisaoTecnicaId: null, precoUnitarioCentavos: 10_000, custoEstimadoCentavos: 6_000,
+  };
+
+  it.each([[["custo.ver"]], [[]]] as [Permissao[]][])("acao: fn recebe exatamente as concedidas %j", async (concedidas) => {
+    permissao.mockResolvedValue(compras(concedidas));
+    const fn = vi.fn(async (_e: { n: number }, s: SessaoAutorizada) => s.concedidas);
+    const r = await acao("processo.ver", esquema, fn)({ n: 1 });
+    expect(fn).toHaveBeenCalledWith({ n: 1 }, compras(concedidas));
+    expect(r).toEqual({ ok: true, dados: concedidas });
+  });
+  it.each([[["custo.ver"]], [[]]] as [Permissao[]][])("rota: o handler recebe exatamente as concedidas %j", async (concedidas) => {
+    permissao.mockResolvedValue(compras(concedidas));
+    const handler = vi.fn(async (_r: Request, s: SessaoAutorizada) => Response.json(s.concedidas));
+    const res = await rota("processo.ver", handler)(req);
+    expect(handler).toHaveBeenCalledWith(req, compras(concedidas));
+    expect(await res.json()).toEqual(concedidas);
+  });
+  it("acaoPublica não recebe sessão", async () => {
+    const fn = vi.fn(async (e: { n: number }) => e.n);
+    await acaoPublica(esquema, fn)({ n: 3 });
+    expect(fn).toHaveBeenCalledWith({ n: 3 });
+  });
+  it("revogação: o sigilo da resposta usa as concedidas do banco, não a matriz padrão", async () => {
+    // Matriz padrão de compras_producao concede processo.ver e custo.ver; o Admin revogou custo.ver.
+    const lerItem = acao("processo.ver", esquema, async (_e, s) => serializarItemRevisao(item, s.perfil, s.concedidas));
+    permissao.mockResolvedValue(compras(["processo.ver"]));
+    const revogado = await lerItem({ n: 1 });
+    expect(revogado).toMatchObject({ ok: true, dados: { descricao: "Polia" } });
+    expect(JSON.stringify(revogado)).not.toContain("custoEstimadoCentavos");
+    expect(JSON.stringify(revogado)).not.toContain("6000");
+    // Sem a lista (comportamento antigo), a matriz padrão emitiria o custo.
+    expect(serializarItemRevisao(item, "compras_producao")).toMatchObject({ custoEstimadoCentavos: 6_000 });
+    // Sem nenhuma concessão: nem o item sai.
+    permissao.mockResolvedValue(compras([]));
+    expect(await lerItem({ n: 1 })).toEqual({ ok: true, dados: null });
+    // Com custo.ver concedido, o custo sai.
+    permissao.mockResolvedValue(compras(["processo.ver", "custo.ver"]));
+    expect(await lerItem({ n: 1 })).toMatchObject({ ok: true, dados: { custoEstimadoCentavos: 6_000 } });
   });
 });

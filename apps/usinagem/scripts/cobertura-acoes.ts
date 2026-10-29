@@ -78,10 +78,21 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
   }
   const constante = (a: ts.Expression) =>
     ts.isStringLiteral(a) || ts.isNoSubstitutionTemplateLiteral(a) || (ts.isIdentifier(a) && constantes.has(a.text));
+  // Único lugar onde a mensagem do ErroDominio pode ser variável: o parâmetro da própria somar(); os chamadores de somar() são checados abaixo.
+  const parametroDeSomar = (a: ts.Expression) => {
+    if (!ts.isIdentifier(a)) return false;
+    for (let p: ts.Node | undefined = a.parent; p; p = p.parent) {
+      if (ts.isFunctionDeclaration(p)) return p.name?.text === "somar" && p.parameters.some((x) => ts.isIdentifier(x.name) && x.name.text === a.text);
+    }
+    return false;
+  };
   const achaErro = (n: ts.Node) => {
     if (ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "ErroDominio") {
       const args = n.arguments ?? [];
-      if (args.length > 1 || (args.length === 1 && !constante(args[0]))) erros.push(`${caminho}: ErroDominio com mensagem não constante: ${linha(n)}`);
+      if (args.length > 1 || (args.length === 1 && !constante(args[0]) && !parametroDeSomar(args[0]))) erros.push(`${caminho}: ErroDominio com mensagem não constante: ${linha(n)}`);
+    }
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "somar") {
+      if (n.arguments.length !== 2 || !constante(n.arguments[1])) erros.push(`${caminho}: somar() sem mensagem constante: ${linha(n)}`);
     }
     ts.forEachChild(n, achaErro);
   };

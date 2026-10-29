@@ -6,6 +6,9 @@ import { seletorDevAtivo } from "../dominio/seguranca/dev";
 import { db } from "./db";
 import { perfilPermissoes } from "./db/schema";
 
+/** Sessão com as concedidas lidas de `perfil_permissoes`, as mesmas da decisão. Repasse-as ao sigilo e às regras de domínio. */
+export type SessaoAutorizada = UsuarioSessao & { concedidas: readonly Permissao[] };
+
 export class ErroPermissao extends Error {
   constructor(readonly status: 401 | 403) {
     super(status === 401 ? "Sessão ausente." : "Sem permissão para esta ação.");
@@ -23,7 +26,7 @@ export async function usuarioAtual(): Promise<UsuarioSessao | null> {
 }
 
 // Tabela perfil_permissoes vazia (seed não rodado) nega toda ação de não-admin: falha fechado.
-export async function requirePermissao(permissao: Permissao): Promise<UsuarioSessao> {
+export async function requirePermissao(permissao: Permissao): Promise<SessaoAutorizada> {
   const usuario = await usuarioAtual();
   const concedidas = usuario
     ? (await db().select({ p: perfilPermissoes.permissao }).from(perfilPermissoes).where(eq(perfilPermissoes.perfilId, usuario.perfil))).map((r) => r.p as Permissao)
@@ -31,5 +34,5 @@ export async function requirePermissao(permissao: Permissao): Promise<UsuarioSes
   const decisao = decidirAcesso(usuario, permissao, concedidas);
   if (decisao === "nao_autenticado") throw new ErroPermissao(401);
   if (decisao === "negado") throw new ErroPermissao(403);
-  return usuario!;
+  return { ...usuario!, concedidas };
 }

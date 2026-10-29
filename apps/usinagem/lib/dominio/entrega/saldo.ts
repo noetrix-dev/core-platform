@@ -1,4 +1,4 @@
-import { ehQuantidadeValida, ErroDominio, falha, ok, type Resultado } from "../comum";
+import { ehQuantidadeValida, ErroDominio, falha, ok, somar, type Resultado } from "../comum";
 
 export type EventoEntrega = { chave: string; tipo: "expedido" | "aceito" | "recusado" | "devolvido"; quantidade: number };
 export type SituacaoEntrega = "nao_programada" | "programada" | "parcialmente_entregue" | "entregue";
@@ -10,10 +10,10 @@ export type PosicaoEntrega = {
 export function posicaoEntrega(contratado: number, programado: number, eventos: EventoEntrega[]): PosicaoEntrega {
   const inteiroNaoNegativo = (n: number) => n === 0 || ehQuantidadeValida(n);
   if (!inteiroNaoNegativo(contratado) || !inteiroNaoNegativo(programado)) throw new ErroDominio("Posição de entrega inválida.");
-  const soma = { expedido: 0, aceito: 0, recusado: 0, devolvido: 0 };
+  const lista: Record<EventoEntrega["tipo"], number[]> = { expedido: [], aceito: [], recusado: [], devolvido: [] };
   const vistos = new Map<string, EventoEntrega>();
   for (const e of eventos) {
-    if (!Object.hasOwn(soma, e.tipo) || !ehQuantidadeValida(e.quantidade)) throw new ErroDominio("Evento de entrega inválido.");
+    if (!Object.hasOwn(lista, e.tipo) || !ehQuantidadeValida(e.quantidade)) throw new ErroDominio("Evento de entrega inválido.");
     const anterior = vistos.get(e.chave);
     if (anterior) {
       if (anterior.tipo !== e.tipo || anterior.quantidade !== e.quantidade) {
@@ -22,8 +22,12 @@ export function posicaoEntrega(contratado: number, programado: number, eventos: 
       continue;
     }
     vistos.set(e.chave, e);
-    soma[e.tipo] += e.quantidade;
+    lista[e.tipo].push(e.quantidade);
   }
+  const soma = {
+    expedido: somar(lista.expedido, "Evento de entrega inválido."), aceito: somar(lista.aceito, "Evento de entrega inválido."),
+    recusado: somar(lista.recusado, "Evento de entrega inválido."), devolvido: somar(lista.devolvido, "Evento de entrega inválido."),
+  };
   // total acumulado, não ordem dos eventos
   if (soma.devolvido > soma.aceito) throw new ErroDominio("Devolução maior que o aceito.");
   const aceitoLiquido = soma.aceito - soma.devolvido;

@@ -1,10 +1,9 @@
 import "server-only";
 import { unstable_rethrow } from "next/navigation";
 import type { ZodType } from "zod";
-import type { UsuarioSessao } from "../dominio/permissoes/acesso";
 import { ErroDominio } from "../dominio/comum";
 import type { Permissao } from "../dominio/permissoes/catalogo";
-import { ErroPermissao, requirePermissao } from "./sessao";
+import { ErroPermissao, requirePermissao, type SessaoAutorizada } from "./sessao";
 
 export type RespostaAcao<T> = { ok: true; dados: T } | { ok: false; erro: string };
 
@@ -38,9 +37,9 @@ async function executar<E, S>(esquema: ZodType<E>, entrada: unknown, fn: (e: E) 
 }
 
 /** Server Action com permissão obrigatória. Sem permissão declarada não existe ação (deny by default). */
-export function acao<E, S>(permissao: Permissao, esquema: ZodType<E>, fn: (entrada: E, usuario: UsuarioSessao) => Promise<S>) {
+export function acao<E, S>(permissao: Permissao, esquema: ZodType<E>, fn: (entrada: E, usuario: SessaoAutorizada) => Promise<S>) {
   return async (entrada: unknown): Promise<RespostaAcao<S>> => {
-    let usuario: UsuarioSessao;
+    let usuario: SessaoAutorizada;
     try {
       usuario = await requirePermissao(permissao);
     } catch (erro) {
@@ -59,7 +58,7 @@ export function acaoPublica<E, S>(esquema: ZodType<E>, fn: (entrada: E) => Promi
 }
 
 /** Route Handler com permissão obrigatória. */
-export function rota(permissao: Permissao, handler: (req: Request, usuario: UsuarioSessao) => Promise<Response>) {
+export function rota(permissao: Permissao, handler: (req: Request, usuario: SessaoAutorizada) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
     try {
       const usuario = await requirePermissao(permissao);

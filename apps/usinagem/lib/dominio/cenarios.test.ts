@@ -41,6 +41,17 @@ describe("Cenário 1: pedido 20, entregas 5 + 5 + 10", () => {
   });
 });
 
+describe("Cenário 1 (§10): demanda formalizada pelos três pedidos", () => {
+  it("vínculos 5 + 5 + 10 formalizam 20", () => {
+    const r = posicaoDemanda(20, [
+      { pedidoItemId: "p1", quantidade: 5 },
+      { pedidoItemId: "p2", quantidade: 5 },
+      { pedidoItemId: "p3", quantidade: 10 },
+    ]);
+    expect(r.formalizado).toBe(20);
+  });
+});
+
 describe("Cenário 2: pedido 20, entrega única de 20", () => {
   it("20 aceitas, saldo 0", () => {
     expect(posicaoEntrega(20, 20, [expedicao("r1", 20), aceite("a1", 20)])).toMatchObject({ saldo: 0, situacao: "entregue" });
@@ -57,6 +68,8 @@ describe("Cenário 3: demanda 20, pedido formal 5", () => {
       { pedidoItemId: "p2", quantidade: 5 },
     ]);
     expect(r).toMatchObject({ formalizado: 20, naoFormalizado: 0 });
+    // Objeto completo, calculado à mão: p2 repetido conta uma vez (5 + 5 + 10 = 20); demanda 20 - 20 = 0; nada acima.
+    expect(r).toEqual({ demanda: 20, formalizado: 20, naoFormalizado: 0, acimaDaDemanda: 0 });
   });
 
   it("borda: um quarto pedido de 5 acima dos 20 dá formalizado 25, previsão 0 e acimaDaDemanda 5", () => {
@@ -71,6 +84,7 @@ describe("Cenário 3: demanda 20, pedido formal 5", () => {
 });
 
 describe("Cenário 4: produção acima do pedido", () => {
+  // Receita não é saída de nenhuma função da 1B: "sem receita extra" é ausência, só se vê no financeiro (1C em diante).
   const produzir40 = (alocadoAoPedido: number) => {
     const e = valor(entradaProducao(vazio, { chave: "op1", lote, quantidade: 40 }));
     return valor(liberarLote(e, "L1", [{ reservaId: "F1", clienteId: "C1", pedidoItemId: "PI1", quantidade: alocadoAoPedido }]));

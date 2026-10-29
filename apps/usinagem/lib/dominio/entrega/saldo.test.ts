@@ -129,3 +129,12 @@ describe("fim do 1B: inteiro seguro", () => {
     expect(posicaoEntrega(20, 0, [ev("e1", "expedido", Number.MAX_SAFE_INTEGER)]).expedido).toBe(Number.MAX_SAFE_INTEGER);
   });
 });
+
+describe("revisão final: soma segura", () => {
+  it("dois aceites válidos cuja soma estoura lançam", () => {
+    expect(() => posicaoEntrega(20, 0, [ev("e1", "aceito", Number.MAX_SAFE_INTEGER), ev("e2", "aceito", 1)])).toThrow(new ErroDominio("Evento de entrega inválido."));
+  });
+  it("estourar em um tipo não afeta a validade de outro (expedido grande + aceito pequeno)", () => {
+    expect(posicaoEntrega(20, 0, [ev("e1", "expedido", Number.MAX_SAFE_INTEGER), ev("e2", "aceito", 1)]).aceitoLiquido).toBe(1);
+  });
+});

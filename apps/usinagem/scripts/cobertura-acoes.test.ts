@@ -200,4 +200,25 @@ describe("fim do 1B: cobertura", () => {
       expect(violacoes("app/x/page.tsx", "const f = (x: string) => new ErroDominio(`a ${x}`);")).toHaveLength(1);
     });
   });
+
+  describe("somar(valores, mensagem) exige mensagem constante", () => {
+    const v = (codigo: string) => violacoes("lib/dominio/x/x.ts", codigo);
+    it("literal e const de módulo passam", () => {
+      expect(v(`const t = somar(xs, "Estado inválido.");`)).toEqual([]);
+      expect(v(`const M = "Estado inválido.";\nconst t = somar(xs, M);`)).toEqual([]);
+    });
+    it("template com valor, concatenação e variável são violação", () => {
+      expect(v("const t = somar(xs, `Lote ${x}`);")).toHaveLength(1);
+      expect(v(`const t = somar(xs, "a" + x);`)).toHaveLength(1);
+      expect(v(`function f(m: string) { return somar(xs, m); }`)).toHaveLength(1);
+    });
+    it("somar sem segunda argumento é violação", () => {
+      expect(v(`const t = somar(xs);`)).toHaveLength(1);
+    });
+    it("dentro da própria somar, new ErroDominio(mensagem) com o parâmetro passa; em outra função não", () => {
+      expect(v(`export function somar(valores: readonly number[], mensagem: string) { throw new ErroDominio(mensagem); }`)).toEqual([]);
+      expect(v(`export function outra(valores: readonly number[], mensagem: string) { throw new ErroDominio(mensagem); }`)).toHaveLength(1);
+      expect(v(`export function somar(valores: readonly number[], mensagem: string) { throw new ErroDominio(outro); }`)).toHaveLength(1);
+    });
+  });
 });

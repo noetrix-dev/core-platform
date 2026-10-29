@@ -20,3 +20,13 @@ export const ehQuantidadeValida = (n: number): boolean => Number.isSafeInteger(n
 export class ErroDominio extends Error {
   override name = "ErroDominio";
 }
+
+/** Soma que falha alto se o acumulado sair de inteiro seguro (ou não for inteiro). `mensagem` deve ser constante: o scanner exige. */
+export function somar(valores: readonly number[], mensagem: string): number {
+  let total = 0;
+  for (const v of valores) {
+    total += v;
+    if (!Number.isSafeInteger(total)) throw new ErroDominio(mensagem);
+  }
+  return total;
+}

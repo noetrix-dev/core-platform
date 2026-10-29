@@ -1,4 +1,4 @@
-import { deduplicarPorChave, ehQuantidadeValida, ErroDominio, falha, ok, type Resultado } from "../comum";
+import { deduplicarPorChave, ehQuantidadeValida, ErroDominio, falha, ok, somar, type Resultado } from "../comum";
 
 export type SituacaoQualidade = "aguardando_inspecao" | "liberado" | "rejeitado" | "quarentena";
 export type Lote = { id: string; produtoId: string; revisaoTecnicaId: string; situacao: SituacaoQualidade };
@@ -58,18 +58,18 @@ export function validarEstado(e: EstadoEstoque): void {
   for (const l of e.lotes) {
     const fisico = fisicoDoLote(e, l.id);
     const ativas = reservadoNoLote(e, l.id);
-    if (!Number.isSafeInteger(fisico) || fisico < 0 || (l.situacao === "liberado" ? ativas > fisico : ativas > 0)) throw new ErroDominio(INCONSISTENTE);
+    if (fisico < 0 || (l.situacao === "liberado" ? ativas > fisico : ativas > 0)) throw new ErroDominio(INCONSISTENTE);
   }
 }
 
 const fisicoDoLote = (e: EstadoEstoque, loteId: string): number =>
-  deduplicarPorChave(e.movimentos).filter((m) => m.loteId === loteId).reduce((s, m) => s + m.quantidade, 0);
+  somar(deduplicarPorChave(e.movimentos).filter((m) => m.loteId === loteId).map((m) => m.quantidade), INCONSISTENTE);
 
 const elegivelDoLote = (e: EstadoEstoque, lote: Lote): number =>
   lote.situacao === "liberado" ? fisicoDoLote(e, lote.id) : 0;
 
 const reservadoNoLote = (e: EstadoEstoque, loteId: string): number =>
-  e.reservas.filter((r) => r.loteId === loteId && r.status === "ativa").reduce((s, r) => s + r.quantidade, 0);
+  somar(e.reservas.filter((r) => r.loteId === loteId && r.status === "ativa").map((r) => r.quantidade), INCONSISTENTE);
 
 const livreDoLote = (e: EstadoEstoque, lote: Lote): number => elegivelDoLote(e, lote) - reservadoNoLote(e, lote.id);
 
@@ -94,9 +94,9 @@ export function posicaoEstoque(
   const lotes = e.lotes.filter((l) => l.produtoId === produtoId && revisoes.has(l.revisaoTecnicaId));
   const ids = new Set(lotes.map((l) => l.id));
   const doGrupo = e.reservas.filter((r) => ids.has(r.loteId));
-  const soma = (filtro: (r: Reserva) => boolean) => doGrupo.filter(filtro).reduce((s, r) => s + r.quantidade, 0);
-  const fisicoTotal = lotes.reduce((s, l) => s + fisicoDoLote(e, l.id), 0);
-  const fisicoElegivel = lotes.reduce((s, l) => s + elegivelDoLote(e, l), 0);
+  const soma = (filtro: (r: Reserva) => boolean) => somar(doGrupo.filter(filtro).map((r) => r.quantidade), INCONSISTENTE);
+  const fisicoTotal = somar(lotes.map((l) => fisicoDoLote(e, l.id)), INCONSISTENTE);
+  const fisicoElegivel = somar(lotes.map((l) => elegivelDoLote(e, l)), INCONSISTENTE);
   const reservasFirmes = soma((r) => r.status === "ativa" && r.tipo === "firme");
   const reservasEstrategicas = soma((r) => r.status === "ativa" && r.tipo === "estrategica");
   // Bloqueios já estão fora do elegível: não subtrair de novo (spec §6.3).

@@ -389,3 +389,33 @@ describe("fim do 1B: físico do lote é inteiro seguro", () => {
     expect(() => reservar(e, estrategica(2 ** 53))).toThrow(INC);
   });
 });
+
+describe("revisão final: somas entre lotes", () => {
+  const INC = "Estado de estoque inconsistente.";
+  const MAX = Number.MAX_SAFE_INTEGER;
+  const L = (id: string, situacao: string) => ({ ...lote(id), situacao });
+  const M = (chave: string, loteId: string, quantidade: number) => ({ chave, loteId, tipo: "entrada_producao", quantidade });
+  const est = (lotes: object[], movimentos: object[], reservas: object[] = []) => ({ lotes, movimentos, reservas }) as unknown as EstadoEstoque;
+
+  it("dois lotes válidos de MAX_SAFE_INTEGER: o físico somado do grupo lança", () => {
+    const e = est([L("L1", "liberado"), L("L2", "liberado")], [M("a", "L1", MAX), M("b", "L2", MAX)]);
+    expect(() => pos(e)).toThrow(INC);
+  });
+  it("um lote liberado com MAX e outro aguardando com 1: fisicoTotal estoura e lança", () => {
+    const e = est([L("L1", "liberado"), L("L2", "aguardando_inspecao")], [M("a", "L1", MAX), M("b", "L2", 1)]);
+    expect(() => pos(e)).toThrow(INC);
+  });
+  it("reservas comprometidas em dois lotes bloqueados: deficitBloqueio estoura e lança", () => {
+    const R = (id: string, loteId: string) => ({ id, loteId, tipo: "firme", clienteId: "C", pedidoItemId: "PI", quantidade: MAX, status: "comprometida_bloqueio" });
+    const e = est(
+      [L("L1", "quarentena"), L("L2", "quarentena")],
+      [M("a", "L1", 1), M("b", "L2", 1)],
+      [R("R1", "L1"), R("R2", "L2")],
+    );
+    expect(() => pos(e)).toThrow(INC);
+  });
+  it("caracterização: um lote só com MAX continua válido", () => {
+    const e = est([L("L1", "liberado")], [M("a", "L1", MAX)]);
+    expect(pos(e).fisicoTotal).toBe(MAX);
+  });
+});

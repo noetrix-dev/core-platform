@@ -1,4 +1,4 @@
-import { ehQuantidadeValida, ErroDominio } from "../comum";
+import { ehQuantidadeValida, ErroDominio, somar } from "../comum";
 
 export type VinculoDemanda = { pedidoItemId: string; quantidade: number };
 
@@ -11,7 +11,7 @@ export function posicaoDemanda(demanda: number, vinculos: VinculoDemanda[]) {
     if (v.quantidade !== 0 && !ehQuantidadeValida(v.quantidade)) throw new ErroDominio("Vínculo de demanda inválido.");
   }
   for (const v of vinculos) porItem.set(v.pedidoItemId, v.quantidade);
-  const formalizado = [...porItem.values()].reduce((s, q) => s + q, 0);
+  const formalizado = somar([...porItem.values()], "Vínculo de demanda inválido.");
   return {
     demanda,
     formalizado,
