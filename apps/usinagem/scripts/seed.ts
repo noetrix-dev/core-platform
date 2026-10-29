@@ -1,6 +1,7 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
+import { MATRIZ_PADRAO, PERMISSOES, type Permissao } from "../lib/dominio/permissoes/catalogo";
 import { NOME_PERFIL, PERFIS, type Perfil } from "../lib/dominio/permissoes/perfis";
 
 // Todos os dados abaixo são FICTÍCIOS. Nenhum nome, CNPJ ou e-mail real.
@@ -45,6 +46,14 @@ const ITENS = [
 export async function semear(banco: NodePgDatabase<typeof schema>): Promise<void> {
   await banco.transaction(async (tx) => {
     await tx.insert(schema.perfis).values(PERFIS.map((id) => ({ id, nome: NOME_PERFIL[id] }))).onConflictDoNothing();
+    await tx
+      .insert(schema.permissoes)
+      .values((Object.keys(PERMISSOES) as Permissao[]).map((codigo) => ({ codigo, travadaAdmin: PERMISSOES[codigo] })))
+      .onConflictDoNothing();
+    await tx
+      .insert(schema.perfilPermissoes)
+      .values(Object.entries(MATRIZ_PADRAO).flatMap(([perfilId, lista]) => lista.map((permissao) => ({ perfilId, permissao }))))
+      .onConflictDoNothing();
     await tx
       .insert(schema.usuarios)
       // criado_por nulo só no Admin (bootstrap, spec §4); os demais são criados por ele. A FK NO ACTION é checada no fim do INSERT.
