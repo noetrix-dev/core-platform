@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ACOES_PUBLICAS, arquivosVerificados, violacoes } from "./cobertura-acoes";
 
@@ -116,5 +119,85 @@ describe("cobertura do wrapper de permissão", () => {
     expect(caminhos).toContain("next.config.ts");
     expect(caminhos.some((c) => c.startsWith("node_modules/") || c.startsWith(".next/") || c.startsWith("scripts/") || c.startsWith("drizzle/"))).toBe(false);
     expect(caminhos.some((c) => /\.test\.[cm]?[jt]sx?$/.test(c))).toBe(false);
+  });
+});
+
+describe("fim do 1B: cobertura", () => {
+  const CRU = `"use server";\nexport async function salvar() {}`;
+  const monta = (arquivos: Record<string, string>) => {
+    const raiz = mkdtempSync(join(tmpdir(), "cobertura-"));
+    for (const [c, codigo] of Object.entries(arquivos)) {
+      mkdirSync(dirname(join(raiz, c)), { recursive: true });
+      writeFileSync(join(raiz, c), codigo);
+    }
+    return raiz;
+  };
+
+  describe("IGNORADOS só no primeiro nível", () => {
+    it("scripts, drizzle e .vitest aninhados são varridos; na raiz seguem ignorados", () => {
+      const raiz = monta({
+        "app/(admin)/scripts/actions.ts": CRU,
+        "lib/drizzle/acoes.ts": CRU,
+        "app/.vitest/a.ts": CRU,
+        "scripts/x.ts": CRU,
+        "drizzle/y.ts": CRU,
+        ".vitest/z.ts": CRU,
+        "node_modules/m/i.ts": CRU,
+        "app/ok.ts": "export const a = 1;",
+      });
+      try {
+        const achados = arquivosVerificados(raiz);
+        const caminhos = achados.map((a) => a.caminho).sort();
+        expect(caminhos).toEqual(["app/(admin)/scripts/actions.ts", "app/.vitest/a.ts", "app/ok.ts", "lib/drizzle/acoes.ts"].sort());
+        const comViolacao = achados.filter((a) => violacoes(a.caminho, a.codigo).length > 0).map((a) => a.caminho).sort();
+        expect(comViolacao).toEqual(["app/(admin)/scripts/actions.ts", "app/.vitest/a.ts", "lib/drizzle/acoes.ts"].sort());
+      } finally {
+        rmSync(raiz, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("diretiva lida pelo valor decodificado", () => {
+    it('"use\\x20server" no topo com export cru é violação', () => {
+      expect(violacoes("app/x/actions.ts", `"use\\x20server";\nexport async function salvar() {}`)).toHaveLength(1);
+      expect(violacoes("app/x/actions.ts", `'use\\u0020server';\nexport const salvar = async () => {};`)).toHaveLength(1);
+    });
+    it('"use\\x20server" inline é violação', () => {
+      expect(violacoes("app/x/page.tsx", `export default function P() { async function f() { "use\\x20server"; } }`)).toHaveLength(1);
+    });
+  });
+
+  describe("new ErroDominio só com mensagem constante", () => {
+    const v = (codigo: string) => violacoes("lib/dominio/x/x.ts", codigo);
+    it("literal passa", () => {
+      expect(v(`throw new ErroDominio("Estado inválido.");`)).toEqual([]);
+    });
+    it("template sem substituição passa", () => {
+      expect(v("throw new ErroDominio(`Estado inválido.`);")).toEqual([]);
+    });
+    it("const de módulo inicializada com literal passa", () => {
+      expect(v(`const INCONSISTENTE = "Estado inconsistente.";\nfunction f() { throw new ErroDominio(INCONSISTENTE); }`)).toEqual([]);
+    });
+    it("template com ${v} é violação", () => {
+      expect(v("function f(x: string) { throw new ErroDominio(`Lote ${x} inválido.`); }")).toHaveLength(1);
+    });
+    it("concatenação é violação", () => {
+      expect(v(`function f(x: string) { throw new ErroDominio("Lote " + x); }`)).toHaveLength(1);
+    });
+    it("variável, parâmetro, let e const não literal são violação", () => {
+      expect(v(`function f(m: string) { throw new ErroDominio(m); }`)).toHaveLength(1);
+      expect(v(`let M = "a";\nthrow new ErroDominio(M);`)).toHaveLength(1);
+      expect(v(`const M = g();\nthrow new ErroDominio(M);`)).toHaveLength(1);
+      expect(v(`const M = "a" + b;\nthrow new ErroDominio(M);`)).toHaveLength(1);
+    });
+    it("const declarada dentro de função não conta como de módulo", () => {
+      expect(v(`function f() { const M = "a"; throw new ErroDominio(M); }`)).toHaveLength(1);
+    });
+    it("segundo argumento (cause) é violação", () => {
+      expect(v(`throw new ErroDominio("a", { cause: e });`)).toHaveLength(1);
+    });
+    it("vale em qualquer arquivo varrido, não só em lib/dominio", () => {
+      expect(violacoes("app/x/page.tsx", "const f = (x: string) => new ErroDominio(`a ${x}`);")).toHaveLength(1);
+    });
   });
 });

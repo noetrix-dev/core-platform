@@ -348,3 +348,44 @@ describe("fix round 1: bloqueio encadeado", () => {
     expect(pos(e).deficitBloqueio).toBe(25);
   });
 });
+
+describe("fim do 1B: físico do lote é inteiro seguro", () => {
+  const INC = "Estado de estoque inconsistente.";
+  const est = (lotes: object[], movimentos: object[]) => ({ lotes, movimentos, reservas: [] }) as unknown as EstadoEstoque;
+  const L = (o: object = {}) => ({ ...lote("L1"), ...o });
+  const M = (chave: string, quantidade: number) => ({ chave, loteId: "L1", tipo: "entrada_producao", quantidade });
+  const MAX = Number.MAX_SAFE_INTEGER;
+  const alloc = (quantidade: number) => [{ reservaId: "R1", clienteId: "C", pedidoItemId: "PI", quantidade }];
+  const estrategica = (quantidade: number) => ({ id: "E2", loteId: "L1", tipo: "estrategica" as const, clienteId: "C", pedidoItemId: null, quantidade });
+
+  it("dois movimentos de 2 ** 53 - 1 no mesmo lote: posicaoEstoque lança", () => {
+    expect(() => pos(est([L()], [M("a", MAX), M("b", MAX)]))).toThrow(INC);
+  });
+  it("físico exatamente MAX_SAFE_INTEGER é aceito; MAX + 1 lança", () => {
+    expect(pos(est([L()], [M("a", MAX - 1), M("b", 1)])).fisicoTotal).toBe(MAX);
+    expect(() => pos(est([L()], [M("a", MAX), M("b", 1)]))).toThrow(INC);
+  });
+  it("físico não seguro em outro lote não passa só porque o lote consultado é pequeno", () => {
+    const outro = { ...lote("L2"), produtoId: "outro" };
+    const mov2 = (chave: string, q: number) => ({ chave, loteId: "L2", tipo: "entrada_producao", quantidade: q });
+    expect(() => pos(est([L(), outro], [M("a", 5), mov2("b", MAX), mov2("c", MAX)]))).toThrow(INC);
+  });
+  it("liberarLote: 2 ** 53 é recusado pela guarda (mensagem própria), não pela comparação com o lote", () => {
+    const e0 = valor(entradaProducao(vazio, { chave: "op1", lote: lote("L1"), quantidade: 10 }));
+    const r = liberarLote(e0, "L1", alloc(2 ** 53));
+    expect(r).toEqual({ ok: false, erro: "Quantidade de alocação inválida." });
+  });
+  it("reservar: 2 ** 53 é recusado pela guarda (mensagem própria), não pelo livre do lote", () => {
+    let e = valor(entradaProducao(vazio, { chave: "op1", lote: lote("L1"), quantidade: 10 }));
+    e = valor(liberarLote(e, "L1", []));
+    expect(reservar(e, estrategica(2 ** 53))).toEqual({ ok: false, erro: "Quantidade de reserva inválida." });
+  });
+  it("liberarLote: o estado que permitiria alocar 2 ** 53 (físico 2 ** 53) lança antes de chegar na guarda", () => {
+    const e = est([L()], [M("a", MAX), M("b", 1)]);
+    expect(() => liberarLote(e, "L1", alloc(2 ** 53))).toThrow(INC);
+  });
+  it("reservar: o estado que permitiria reservar 2 ** 53 (lote liberado, físico 2 ** 53) lança antes de chegar na guarda", () => {
+    const e = est([L({ situacao: "liberado" })], [M("a", MAX), M("b", 1)]);
+    expect(() => reservar(e, estrategica(2 ** 53))).toThrow(INC);
+  });
+});

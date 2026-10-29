@@ -14,7 +14,7 @@ export function deduplicarPorChave<T extends { chave: string }>(itens: T[]): T[]
   return itens.filter((i) => (vistas.has(i.chave) ? false : (vistas.add(i.chave), true)));
 }
 
-export const ehQuantidadeValida = (n: number): boolean => Number.isInteger(n) && n > 0;
+export const ehQuantidadeValida = (n: number): boolean => Number.isSafeInteger(n) && n > 0;
 
 /** Dado corrompido ou estado impossível. Só a mensagem destes erros é segura para log: nunca carrega valor de linha. */
 export class ErroDominio extends Error {

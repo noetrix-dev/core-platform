@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ErroDominio } from "../comum";
 import { posicaoEntrega, validarAceite, type EventoEntrega } from "./saldo";
 
 const ev = (chave: string, tipo: EventoEntrega["tipo"], quantidade: number): EventoEntrega => ({ chave, tipo, quantidade });
@@ -117,5 +118,14 @@ describe("saldo de entrega: dado corrompido falha alto", () => {
   it("over-delivery: saldo negativo visível e situação entregue (caracterização)", () => {
     const p = posicaoEntrega(10, 10, [ev("a1", "aceito", 12)]);
     expect([p.saldo, p.situacao]).toEqual([-2, "entregue"]);
+  });
+});
+
+describe("fim do 1B: inteiro seguro", () => {
+  it("evento com 2 ** 53 lança a mensagem genérica", () => {
+    expect(() => posicaoEntrega(20, 0, [ev("e1", "aceito", 2 ** 53)])).toThrow(new ErroDominio("Evento de entrega inválido."));
+  });
+  it("evento com MAX_SAFE_INTEGER é aceito", () => {
+    expect(posicaoEntrega(20, 0, [ev("e1", "expedido", Number.MAX_SAFE_INTEGER)]).expedido).toBe(Number.MAX_SAFE_INTEGER);
   });
 });

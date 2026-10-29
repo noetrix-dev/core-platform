@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ErroDominio } from "../comum";
 import { posicaoDemanda } from "./demanda";
 
 describe("demanda e pedido formal", () => {
@@ -67,5 +68,14 @@ describe("demanda: dado corrompido falha alto", () => {
     ]);
     expect(r.formalizado).toBe(3);
     expect(posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: 0 }]).formalizado).toBe(0);
+  });
+});
+
+describe("fim do 1B: inteiro seguro", () => {
+  it("vínculo com 2 ** 53 lança a mensagem genérica", () => {
+    expect(() => posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: 2 ** 53 }])).toThrow(new ErroDominio("Vínculo de demanda inválido."));
+  });
+  it("vínculo com MAX_SAFE_INTEGER é aceito", () => {
+    expect(posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: Number.MAX_SAFE_INTEGER }]).formalizado).toBe(Number.MAX_SAFE_INTEGER);
   });
 });

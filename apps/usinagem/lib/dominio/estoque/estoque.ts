@@ -1,4 +1,4 @@
-import { deduplicarPorChave, ErroDominio, falha, ok, type Resultado } from "../comum";
+import { deduplicarPorChave, ehQuantidadeValida, ErroDominio, falha, ok, type Resultado } from "../comum";
 
 export type SituacaoQualidade = "aguardando_inspecao" | "liberado" | "rejeitado" | "quarentena";
 export type Lote = { id: string; produtoId: string; revisaoTecnicaId: string; situacao: SituacaoQualidade };
@@ -16,8 +16,6 @@ export type PosicaoEstoque = {
   livre: number; deficitBloqueio: number;
 };
 
-/** Local: ehQuantidadeValida de comum.ts ainda aceita inteiro não seguro (corrigir no fim do 1B). */
-const ehQtd = (n: number): boolean => Number.isSafeInteger(n) && n > 0;
 const INCONSISTENTE = "Estado de estoque inconsistente.";
 const SITUACOES = { aguardando_inspecao: 1, liberado: 1, rejeitado: 1, quarentena: 1 };
 
@@ -60,7 +58,7 @@ export function validarEstado(e: EstadoEstoque): void {
   for (const l of e.lotes) {
     const fisico = fisicoDoLote(e, l.id);
     const ativas = reservadoNoLote(e, l.id);
-    if (fisico < 0 || (l.situacao === "liberado" ? ativas > fisico : ativas > 0)) throw new ErroDominio(INCONSISTENTE);
+    if (!Number.isSafeInteger(fisico) || fisico < 0 || (l.situacao === "liberado" ? ativas > fisico : ativas > 0)) throw new ErroDominio(INCONSISTENTE);
   }
 }
 
@@ -124,7 +122,7 @@ export function entradaProducao(
     const igual = antes.tipo === "entrada_producao" && antes.loteId === lote.id && antes.quantidade === quantidade;
     return igual ? ok(e) : falha(CHAVE_USADA);
   }
-  if (!ehQtd(quantidade)) return falha("Quantidade de entrada inválida.");
+  if (!ehQuantidadeValida(quantidade)) return falha("Quantidade de entrada inválida.");
   if (e.lotes.some((l) => l.id === lote.id)) return falha("Lote já existe.");
   return ok({
     ...e,
@@ -143,7 +141,7 @@ export function liberarLote(
   const lote = e.lotes.find((l) => l.id === loteId);
   if (!lote) return falha("Lote não encontrado.");
   if (lote.situacao !== "aguardando_inspecao") return falha("Lote não está aguardando inspeção.");
-  if (alocacoes.some((a) => !ehQtd(a.quantidade))) return falha("Quantidade de alocação inválida.");
+  if (alocacoes.some((a) => !ehQuantidadeValida(a.quantidade))) return falha("Quantidade de alocação inválida.");
   if (alocacoes.some((a) => !a.pedidoItemId)) return falha(SEM_PEDIDO);
   const ids = alocacoes.map((a) => a.reservaId);
   if (new Set(ids).size !== ids.length || ids.some((id) => e.reservas.some((r) => r.id === id))) return falha(ID_USADO);
@@ -196,7 +194,7 @@ export function reliberarLote(e: EstadoEstoque, loteId: string): Resultado<Estad
 
 export function reservar(e: EstadoEstoque, nova: Omit<Reserva, "status">): Resultado<EstadoEstoque> {
   validarEstado(e);
-  if (!ehQtd(nova.quantidade)) return falha("Quantidade de reserva inválida.");
+  if (!ehQuantidadeValida(nova.quantidade)) return falha("Quantidade de reserva inválida.");
   if (e.reservas.some((r) => r.id === nova.id)) return falha(ID_USADO);
   if (nova.tipo === "firme" && !nova.pedidoItemId) return falha(SEM_PEDIDO);
   if (nova.tipo === "estrategica" && nova.pedidoItemId) return falha("Reserva estratégica não tem pedido formal.");
@@ -218,7 +216,7 @@ export function converterEmFirme(
   validarEstado(e);
   const r = e.reservas.find((x) => x.id === reservaId);
   if (!r || r.tipo !== "estrategica" || r.status !== "ativa") return falha("Reserva estratégica ativa não encontrada.");
-  if (!ehQtd(quantidade) || quantidade > r.quantidade) return falha("Quantidade maior que a reserva estratégica.");
+  if (!ehQuantidadeValida(quantidade) || quantidade > r.quantidade) return falha("Quantidade maior que a reserva estratégica.");
   if (!pedidoItemId) return falha(SEM_PEDIDO);
   if (e.reservas.some((x) => x.id === novaReservaId)) return falha(ID_USADO);
   return ok({
@@ -243,7 +241,7 @@ export function expedir(
     return igual ? ok(e) : falha(CHAVE_USADA);
   }
   if (!r || r.tipo !== "firme" || r.status !== "ativa") return falha("Reserva firme ativa não encontrada.");
-  if (!ehQtd(quantidade) || quantidade > r.quantidade) return falha("Quantidade maior que a reserva firme.");
+  if (!ehQuantidadeValida(quantidade) || quantidade > r.quantidade) return falha("Quantidade maior que a reserva firme.");
   return ok({
     ...e,
     movimentos: [...e.movimentos, { chave, loteId: r.loteId, tipo: "saida_expedicao", quantidade: -quantidade }],

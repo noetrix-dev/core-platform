@@ -56,7 +56,8 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
     if (!ehDiretiva(s)) break;
     prologo.add(s);
   }
-  const texto = (n: ts.Node) => (ehDiretiva(n as ts.Statement) ? (n as ts.ExpressionStatement).expression.getText(sf).slice(1, -1) : undefined);
+  // Valor decodificado: "use\x20server" também é a diretiva.
+  const texto = (n: ts.Node) => (ehDiretiva(n as ts.Statement) ? ((n as ts.ExpressionStatement).expression as ts.StringLiteral).text : undefined);
   const topo = [...prologo].some((s) => texto(s) === "use server");
 
   const visitar = (n: ts.Node) => {
@@ -66,6 +67,25 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
     ts.forEachChild(n, visitar);
   };
   visitar(sf);
+
+  // new ErroDominio(x): só mensagem constante. Mensagem montada em runtime pode carregar valor de linha para o log.
+  const constantes = new Set<string>();
+  for (const s of sf.statements) {
+    if (!ts.isVariableStatement(s) || !(s.declarationList.flags & ts.NodeFlags.Const)) continue;
+    for (const d of s.declarationList.declarations) {
+      if (ts.isIdentifier(d.name) && d.initializer && (ts.isStringLiteral(d.initializer) || ts.isNoSubstitutionTemplateLiteral(d.initializer))) constantes.add(d.name.text);
+    }
+  }
+  const constante = (a: ts.Expression) =>
+    ts.isStringLiteral(a) || ts.isNoSubstitutionTemplateLiteral(a) || (ts.isIdentifier(a) && constantes.has(a.text));
+  const achaErro = (n: ts.Node) => {
+    if (ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "ErroDominio") {
+      const args = n.arguments ?? [];
+      if (args.length > 1 || (args.length === 1 && !constante(args[0]))) erros.push(`${caminho}: ErroDominio com mensagem não constante: ${linha(n)}`);
+    }
+    ts.forEachChild(n, achaErro);
+  };
+  achaErro(sf);
 
   const rota = ehRota(caminho);
   if (topo || rota) {
@@ -102,22 +122,24 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
   return erros;
 }
 
-const IGNORADOS = new Set(["node_modules", ".next", ".git", ".vitest", "drizzle", "scripts"]);
+// Em qualquer profundidade (dependências e build) e só na raiz do app (tooling próprio; `app/x/scripts` é código do app).
+const IGNORADOS_SEMPRE = new Set(["node_modules", ".next", ".git"]);
+const IGNORADOS_NA_RAIZ = new Set([".vitest", "drizzle", "scripts"]);
 const EXTENSAO = /\.[cm]?[jt]sx?$/;
 const TESTE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 
 export function arquivosVerificados(raiz = process.cwd()): { caminho: string; codigo: string }[] {
   const achados: { caminho: string; codigo: string }[] = [];
-  const andar = (dir: string) => {
+  const andar = (dir: string, naRaiz: boolean) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
       if (e.isDirectory()) {
-        if (!IGNORADOS.has(e.name)) andar(abs);
+        if (!IGNORADOS_SEMPRE.has(e.name) && !(naRaiz && IGNORADOS_NA_RAIZ.has(e.name))) andar(abs, false);
       } else if (EXTENSAO.test(e.name) && !TESTE.test(e.name)) {
         achados.push({ caminho: relative(raiz, abs), codigo: readFileSync(abs, "utf8") });
       }
     }
   };
-  andar(raiz);
+  andar(raiz, true);
   return achados;
 }
