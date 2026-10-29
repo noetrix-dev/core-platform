@@ -391,7 +391,7 @@ describe("fim do 1B: físico do lote é inteiro seguro", () => {
 });
 
 describe("revisão final: somas entre lotes", () => {
-  const INC = "Estado de estoque inconsistente.";
+  const SOMA = "Soma fora do limite seguro.";
   const MAX = Number.MAX_SAFE_INTEGER;
   const L = (id: string, situacao: string) => ({ ...lote(id), situacao });
   const M = (chave: string, loteId: string, quantidade: number) => ({ chave, loteId, tipo: "entrada_producao", quantidade });
@@ -399,11 +399,11 @@ describe("revisão final: somas entre lotes", () => {
 
   it("dois lotes válidos de MAX_SAFE_INTEGER: o físico somado do grupo lança", () => {
     const e = est([L("L1", "liberado"), L("L2", "liberado")], [M("a", "L1", MAX), M("b", "L2", MAX)]);
-    expect(() => pos(e)).toThrow(INC);
+    expect(() => pos(e)).toThrow(SOMA);
   });
   it("um lote liberado com MAX e outro aguardando com 1: fisicoTotal estoura e lança", () => {
     const e = est([L("L1", "liberado"), L("L2", "aguardando_inspecao")], [M("a", "L1", MAX), M("b", "L2", 1)]);
-    expect(() => pos(e)).toThrow(INC);
+    expect(() => pos(e)).toThrow(SOMA);
   });
   it("reservas comprometidas em dois lotes bloqueados: deficitBloqueio estoura e lança", () => {
     const R = (id: string, loteId: string) => ({ id, loteId, tipo: "firme", clienteId: "C", pedidoItemId: "PI", quantidade: MAX, status: "comprometida_bloqueio" });
@@ -412,7 +412,7 @@ describe("revisão final: somas entre lotes", () => {
       [M("a", "L1", 1), M("b", "L2", 1)],
       [R("R1", "L1"), R("R2", "L2")],
     );
-    expect(() => pos(e)).toThrow(INC);
+    expect(() => pos(e)).toThrow(SOMA);
   });
   it("caracterização: um lote só com MAX continua válido", () => {
     const e = est([L("L1", "liberado")], [M("a", "L1", MAX)]);

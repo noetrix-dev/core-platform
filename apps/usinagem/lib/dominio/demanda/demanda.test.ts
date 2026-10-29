@@ -84,6 +84,6 @@ describe("revisão final: soma segura", () => {
   it("dois vínculos válidos cuja soma estoura lançam", () => {
     expect(() =>
       posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: Number.MAX_SAFE_INTEGER }, { pedidoItemId: "p2", quantidade: 1 }]),
-    ).toThrow(new ErroDominio("Vínculo de demanda inválido."));
+    ).toThrow(new ErroDominio("Soma fora do limite seguro."));
   });
 });

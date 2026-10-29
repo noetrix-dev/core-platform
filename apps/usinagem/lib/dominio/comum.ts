@@ -21,12 +21,14 @@ export class ErroDominio extends Error {
   override name = "ErroDominio";
 }
 
-/** Soma que falha alto se o acumulado sair de inteiro seguro (ou não for inteiro). `mensagem` deve ser constante: o scanner exige. */
-export function somar(valores: readonly number[], mensagem: string): number {
+const SOMA_FORA_DO_LIMITE = "Soma fora do limite seguro.";
+
+/** Soma que falha alto se o acumulado sair de inteiro seguro (ou não for inteiro). Mensagem fixa: nunca leva valor. */
+export function somar(valores: readonly number[]): number {
   let total = 0;
   for (const v of valores) {
     total += v;
-    if (!Number.isSafeInteger(total)) throw new ErroDominio(mensagem);
+    if (!Number.isSafeInteger(total)) throw new ErroDominio(SOMA_FORA_DO_LIMITE);
   }
   return total;
 }

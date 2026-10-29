@@ -25,8 +25,8 @@ export function posicaoEntrega(contratado: number, programado: number, eventos: 
     lista[e.tipo].push(e.quantidade);
   }
   const soma = {
-    expedido: somar(lista.expedido, "Evento de entrega inválido."), aceito: somar(lista.aceito, "Evento de entrega inválido."),
-    recusado: somar(lista.recusado, "Evento de entrega inválido."), devolvido: somar(lista.devolvido, "Evento de entrega inválido."),
+    expedido: somar(lista.expedido), aceito: somar(lista.aceito),
+    recusado: somar(lista.recusado), devolvido: somar(lista.devolvido),
   };
   // total acumulado, não ordem dos eventos
   if (soma.devolvido > soma.aceito) throw new ErroDominio("Devolução maior que o aceito.");
