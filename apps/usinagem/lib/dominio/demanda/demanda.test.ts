@@ -19,9 +19,9 @@ describe("demanda e pedido formal", () => {
   it("registrar o mesmo item de pedido de novo não duplica (último valor vale, como aditivo)", () => {
     const r = posicaoDemanda(20, [
       { pedidoItemId: "p1", quantidade: 5 },
-      { pedidoItemId: "p1", quantidade: 5 },
+      { pedidoItemId: "p1", quantidade: 7 },
     ]);
-    expect(r.formalizado).toBe(5);
+    expect(r.formalizado).toBe(7);
   });
   it("pedido acima da demanda fica visível", () => {
     expect(posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: 25 }]).acimaDaDemanda).toBe(5);
@@ -46,5 +46,26 @@ describe("demanda e pedido formal", () => {
   it("demanda zero com pedido: tudo acima da demanda", () => {
     const r = posicaoDemanda(0, [{ pedidoItemId: "p1", quantidade: 3 }]);
     expect([r.naoFormalizado, r.acimaDaDemanda]).toEqual([0, 3]);
+  });
+});
+
+describe("demanda: dado corrompido falha alto", () => {
+  it("vínculo negativo lança", () => {
+    expect(() => posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: -5 }])).toThrow("Vínculo de demanda inválido.");
+  });
+  it("vínculo fracionado lança", () => {
+    expect(() => posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: 2.5 }])).toThrow("Vínculo de demanda inválido.");
+  });
+  it("demanda negativa lança", () => {
+    expect(() => posicaoDemanda(-1, [])).toThrow("Posição de demanda inválida.");
+  });
+  it("vínculo zero é válido: aditivo que cancela o item, último valor vale", () => {
+    const r = posicaoDemanda(20, [
+      { pedidoItemId: "p1", quantidade: 5 },
+      { pedidoItemId: "p1", quantidade: 0 },
+      { pedidoItemId: "p2", quantidade: 3 },
+    ]);
+    expect(r.formalizado).toBe(3);
+    expect(posicaoDemanda(20, [{ pedidoItemId: "p1", quantidade: 0 }]).formalizado).toBe(0);
   });
 });
