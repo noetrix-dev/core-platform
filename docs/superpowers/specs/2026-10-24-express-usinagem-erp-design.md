@@ -477,7 +477,14 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 |---|---|
 | A auditoria aceita `criado_em` informado no INSERT: a aplicação pode gravar evento com data retroativa. Fechar com INSERT só nas colunas permitidas ou com trigger `BEFORE INSERT` forçando `now()`. | PR 2 |
 | Requisito: `movimentos_estoque` guarda `reserva_id` (NOT NULL quando `tipo = saida_expedicao`) e o replay de `expedir` compara esse campo. Hoje o movimento não guarda a reserva, então um replay com outra reserva do mesmo lote e a mesma quantidade passa como idêntico e não baixa nada. | PR 2 |
-| Borda do status macro: o erro de `statusMacro` (entrada inválida) é capturado por linha do painel, que mostra "status indisponível" e registra log sem o valor recebido, sem derrubar o painel inteiro. | Task 9 da 1B (wrapper) e PR 2 |
+| Borda do status macro: o erro de `statusMacro` (entrada inválida) é capturado por linha do painel, que mostra "status indisponível" e registra log sem o valor recebido, sem derrubar o painel inteiro. | PR 2 (a Task 9 da 1B entregou só a captura genérica por ação) |
+| Log de `ErroDominio` sem identificador do registro: a captura grava nome, mensagem e código, mas não qual linha estava corrompida. Aceitar um `registroId` opcional no erro e gravá-lo no log. | PR 2 |
+| Origem de `reservaFirmeAtiva` por item de pedido para o status macro: criar um helper que some reservas `firme` e `ativa` do item (decidido: `comprometida_bloqueio` não conta), para o chamador não reinventar o filtro. | PR 2 |
+| `aceitoSemNf` não tem produtor na 1B. Até o PR da NF, o chamador do painel passa 0 explicitamente. | PR 2 e PR da NF |
+| Justificativa de auditoria é texto livre: avaliar limite de tamanho e se ela pode carregar dado sigiloso. | PR 2 |
+| `ProgramacaoEntrega.versao` é versão de negócio, não lock otimista. Não reaproveitar como controle de concorrência. | PR 2 |
+| O seed não revoga concessão que saiu da matriz padrão (`onConflictDoNothing`): depois do bootstrap o banco é a fonte da verdade. Documentar no procedimento de seed. | PR 2 |
+| `ItemRevisao`, `Usuario` e `Cliente` nos contratos sem `criadoEm`/`criadoPor`: conferir contra as exceções da §4 quando as telas usarem esses tipos. | PR 2 |
 | Plano 1D: import duplicado de `index` no Step 3 e falta do `BETTER_AUTH_SECRET` descartável no workflow. | PR 1D (registrado no plano) |
 | `.env.local` único entrega ao `next dev` a URL da role de migração e a senha do superusuário. Separar as senhas de banco (compose e migração) das variáveis do app. | Trilha de infraestrutura |
 | Imagem `postgres:16-alpine` fixada por digest; gatilho `push` em `main`; aprovação obrigatória de workflows de colaboradores externos. | Depois do primeiro PR (plano 1A, Task 5) |
@@ -566,3 +573,4 @@ Integração com o sistema fiscal, portal de cliente, multiempresa, conciliaçã
 15. Após o pedido, um aditivo gera nova revisão comercial enviada com pedido ativo? (Hoje o status macro aceita cotação aberta ou enviada com pedido ativo.)
 16. Um lote aguardando inspeção pode ir para quarentena e depois ser reliberado? Hoje esse caminho libera o lote sem passar pela alocação da qualidade.
 17. Entrega acima do contratado (`producao_excedente.autorizar`) deve aparecer como NF emitida ou como exceção? Hoje, com saldo negativo e toda NF registrada, a regra "saldo zero" não casa e o processo aparece como em fabricação.
+18. Item de pedido zerado por aditivo (contratado líquido 0, nada entregue): entra no status macro ou é excluído? Hoje ele conta como saldo zero e, se todos os itens estiverem assim, o processo aparece como NF emitida.
