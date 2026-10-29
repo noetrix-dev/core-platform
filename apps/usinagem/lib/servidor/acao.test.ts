@@ -260,3 +260,20 @@ describe("concedidas do banco chegam à fn", () => {
     expect(await lerItem({ n: 1 })).toMatchObject({ ok: true, dados: { custoEstimadoCentavos: 6_000 } });
   });
 });
+
+describe("log de ErroDominio só com mensagem do conjunto registrado", () => {
+  it("instância com message fora do conjunto (forjada) não vai ao log", async () => {
+    const forjado = Object.assign(Object.create(ErroDominio.prototype), { message: "valor-secreto 123", name: "ErroDominio" });
+    await acao("processo.ver", esquema, async () => {
+      throw forjado;
+    })({ n: 1 });
+    expect(logado()).not.toContain("valor-secreto");
+    expect(log).toHaveBeenCalledWith({ nome: "ErroDominio" });
+  });
+  it("mensagem registrada continua sendo logada", async () => {
+    await acao("processo.ver", esquema, async () => {
+      throw new ErroDominio("Soma fora do limite seguro.");
+    })({ n: 1 });
+    expect(log).toHaveBeenCalledWith({ nome: "ErroDominio", mensagem: "Soma fora do limite seguro." });
+  });
+});

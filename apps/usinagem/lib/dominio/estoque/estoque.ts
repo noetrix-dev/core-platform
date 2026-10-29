@@ -63,7 +63,12 @@ export function validarEstado(e: EstadoEstoque): void {
 }
 
 const fisicoDoLote = (e: EstadoEstoque, loteId: string): number =>
-  deduplicarPorChave(e.movimentos).filter((m) => m.loteId === loteId).reduce((s, m) => s + m.quantidade, 0);
+  deduplicarPorChave(e.movimentos).filter((m) => m.loteId === loteId).reduce((s, m) => {
+    // Cada soma parcial precisa ser inteiro seguro: MAX, 2, -MAX dá total 2 mas perde precisão no meio.
+    const parcial = s + m.quantidade;
+    if (!Number.isSafeInteger(parcial)) throw new ErroDominio(INCONSISTENTE);
+    return parcial;
+  }, 0);
 
 const elegivelDoLote = (e: EstadoEstoque, lote: Lote): number =>
   lote.situacao === "liberado" ? fisicoDoLote(e, lote.id) : 0;

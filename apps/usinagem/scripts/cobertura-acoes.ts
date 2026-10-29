@@ -157,6 +157,29 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
 }
 
 // Em qualquer profundidade (dependências e build) e só na raiz do app (tooling próprio; `app/x/scripts` é código do app).
+/** Mensagens literais (ou const de módulo literal) de `new ErroDominio(...)`; o que não é constante o scanner já recusa. */
+export function mensagensDeErroDominio(codigo: string): string[] {
+  const sf = ts.createSourceFile("x.ts", codigo, ts.ScriptTarget.Latest, true);
+  const consts = new Map<string, string>();
+  for (const s of sf.statements) {
+    if (!ts.isVariableStatement(s)) continue;
+    for (const d of s.declarationList.declarations) {
+      if (ts.isIdentifier(d.name) && d.initializer && ts.isStringLiteralLike(d.initializer)) consts.set(d.name.text, d.initializer.text);
+    }
+  }
+  const msgs: string[] = [];
+  const achar = (n: ts.Node) => {
+    if (ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "ErroDominio" && n.arguments?.length === 1) {
+      const a = n.arguments[0];
+      if (ts.isStringLiteralLike(a)) msgs.push(a.text);
+      else if (ts.isIdentifier(a) && consts.has(a.text)) msgs.push(consts.get(a.text)!);
+    }
+    ts.forEachChild(n, achar);
+  };
+  achar(sf);
+  return msgs;
+}
+
 const IGNORADOS_SEMPRE = new Set(["node_modules", ".next", ".git"]);
 const IGNORADOS_NA_RAIZ = new Set([".vitest", "drizzle", "scripts"]);
 const EXTENSAO = /\.[cm]?[jt]sx?$/;

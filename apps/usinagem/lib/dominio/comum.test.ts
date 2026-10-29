@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deduplicarPorChave, ehQuantidadeValida, ErroDominio, falha, ok, somar } from "./comum";
+import { deduplicarPorChave, ehQuantidadeValida, ErroDominio, falha, MENSAGENS_DE_DOMINIO, ok, somar } from "./comum";
 
 describe("comum", () => {
   it("deduplica pela chave, primeiro vence", () => {
@@ -28,7 +28,7 @@ describe("comum", () => {
     expect(somar([Number.MAX_SAFE_INTEGER, -1])).toBe(Number.MAX_SAFE_INTEGER - 1);
     expect(somar([Number.MAX_SAFE_INTEGER])).toBe(Number.MAX_SAFE_INTEGER);
   });
-  it("somar: estouro do inteiro seguro lança ErroDominio com a mensagem dada", () => {
+  it("somar: estouro do inteiro seguro lança ErroDominio com a mensagem fixa", () => {
     expect(() => somar([Number.MAX_SAFE_INTEGER, 1])).toThrow(new ErroDominio("Soma fora do limite seguro."));
     expect(() => somar([Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER])).toThrow("Soma fora do limite seguro.");
     expect(() => somar([-Number.MAX_SAFE_INTEGER, -1])).toThrow("Soma fora do limite seguro.");
@@ -40,5 +40,43 @@ describe("comum", () => {
   it("Resultado", () => {
     expect(ok(1)).toEqual({ ok: true, valor: 1 });
     expect(falha("x")).toEqual({ ok: false, erro: "x" });
+  });
+
+  describe("ErroDominio fecha a mensagem em runtime", () => {
+    const GENERICA = "Erro de domínio.";
+    it("mensagem fora do conjunto vira a genérica (valor nunca entra)", () => {
+      expect(new ErroDominio("valor-secreto 123").message).toBe(GENERICA);
+      expect(new ErroDominio("").message).toBe(GENERICA);
+    });
+    it("mensagem registrada passa igual", () => {
+      expect(new ErroDominio("Estado de estoque inconsistente.").message).toBe("Estado de estoque inconsistente.");
+      expect(MENSAGENS_DE_DOMINIO.has("Soma fora do limite seguro.")).toBe(true);
+    });
+    it("instância é congelada: reatribuir message lança TypeError e não muda", () => {
+      const e = new ErroDominio("Soma fora do limite seguro.");
+      expect(Object.isFrozen(e)).toBe(true);
+      expect(() => {
+        e.message = "x";
+      }).toThrow(TypeError);
+      expect(e.message).toBe("Soma fora do limite seguro.");
+    });
+    it("Object.assign e concatenação no message lançam", () => {
+      const e = new ErroDominio("Soma fora do limite seguro.");
+      expect(() => Object.assign(e, { message: "x" })).toThrow(TypeError);
+      expect(() => {
+        e.message += "valor";
+      }).toThrow(TypeError);
+      expect(e.message).toBe("Soma fora do limite seguro.");
+    });
+    it("construtor obtido da instância também sanitiza", () => {
+      const e = new ErroDominio("Soma fora do limite seguro.");
+      const outro = new (e.constructor as typeof ErroDominio)("valor-secreto");
+      expect(outro.message).toBe(GENERICA);
+    });
+    it("continua sendo Error com nome ErroDominio", () => {
+      const e = new ErroDominio("Soma fora do limite seguro.");
+      expect(e).toBeInstanceOf(Error);
+      expect(e.name).toBe("ErroDominio");
+    });
   });
 });

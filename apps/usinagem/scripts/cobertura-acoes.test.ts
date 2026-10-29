@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ACOES_PUBLICAS, arquivosVerificados, violacoes } from "./cobertura-acoes";
+import { MENSAGENS_DE_DOMINIO } from "../lib/dominio/comum";
+import { ACOES_PUBLICAS, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
 
 const IMP = `import { acao, acaoPublica } from "@/lib/servidor/acao";\n`;
 const IMP_ROTA = `import { rota } from "@/lib/servidor/acao";\n`;
@@ -231,5 +232,21 @@ describe("fim do 1B: cobertura", () => {
     it("somar não tem regra especial: somar local com mensagem variável não abre exceção", () => {
       expect(v(`${IMP}export function somar(v: number[], mensagem: string) { throw new ErroDominio(mensagem); }`)).toHaveLength(1);
     });
+  });
+});
+
+describe("consistência das mensagens de ErroDominio", () => {
+  it("mensagensDeErroDominio lê literais e consts de módulo, ignora o resto", () => {
+    const codigo = `const M = "b";\nnew ErroDominio("a"); new ErroDominio(M); new ErroDominio(x); new ErroDominio(`+"`c`"+`);`;
+    expect(mensagensDeErroDominio(codigo).sort()).toEqual(["a", "b", "c"]);
+  });
+  it("toda mensagem lançada no app (domínio e comum incluídos) está no conjunto registrado", () => {
+    const lancadas = arquivosVerificados().flatMap((a) => mensagensDeErroDominio(a.codigo));
+    expect(lancadas.length).toBeGreaterThanOrEqual(10);
+    expect(lancadas.filter((m) => !MENSAGENS_DE_DOMINIO.has(m))).toEqual([]);
+  });
+  it("o conjunto não tem entrada que nenhum código lance (sem lixo), exceto a genérica", () => {
+    const lancadas = new Set(arquivosVerificados().flatMap((a) => mensagensDeErroDominio(a.codigo)));
+    expect([...MENSAGENS_DE_DOMINIO].filter((m) => !lancadas.has(m) && m !== "Erro de domínio.")).toEqual([]);
   });
 });

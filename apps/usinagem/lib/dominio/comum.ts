@@ -16,9 +16,33 @@ export function deduplicarPorChave<T extends { chave: string }>(itens: T[]): T[]
 
 export const ehQuantidadeValida = (n: number): boolean => Number.isSafeInteger(n) && n > 0;
 
-/** Dado corrompido ou estado impossível. Só a mensagem destes erros é segura para log: nunca carrega valor de linha. */
+/**
+ * Toda mensagem de ErroDominio, uma a uma, como literal. Mensagem fora daqui vira a genérica: valor de linha nunca entra.
+ * O teste de consistência (scripts/cobertura-acoes.test.ts) prova que tudo que o código lança está aqui.
+ */
+export const MENSAGENS_DE_DOMINIO = new Set<string>([
+  "Posição de demanda inválida.",
+  "Vínculo de demanda inválido.",
+  "Posição de entrega inválida.",
+  "Evento de entrega inválido.",
+  "Evento de entrega repetido com conteúdo diferente.",
+  "Devolução maior que o aceito.",
+  "Estado de estoque inconsistente.",
+  "Movimento de estoque inválido.",
+  "Movimento de estoque repetido com conteúdo diferente.",
+  "Reserva de estoque inválida.",
+  "Entrada de status inválida.",
+  "Soma fora do limite seguro.",
+  "Erro de domínio.",
+]);
+
+/** Dado corrompido ou estado impossível. A mensagem é fechada em runtime e a instância é congelada: nada a altera depois. */
 export class ErroDominio extends Error {
   override name = "ErroDominio";
+  constructor(mensagem: string) {
+    super(MENSAGENS_DE_DOMINIO.has(mensagem) ? mensagem : "Erro de domínio.");
+    Object.freeze(this);
+  }
 }
 
 const SOMA_FORA_DO_LIMITE = "Soma fora do limite seguro.";

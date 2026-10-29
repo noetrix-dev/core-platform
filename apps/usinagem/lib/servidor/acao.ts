@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_rethrow } from "next/navigation";
 import type { ZodType } from "zod";
-import { ErroDominio } from "../dominio/comum";
+import { ErroDominio, MENSAGENS_DE_DOMINIO } from "../dominio/comum";
 import type { Permissao } from "../dominio/permissoes/catalogo";
 import { ErroPermissao, requirePermissao, type SessaoAutorizada } from "./sessao";
 
@@ -20,7 +20,8 @@ function codigoDe(erro: Error): string | undefined {
 
 function registrarErro(erro: unknown): void {
   if (!(erro instanceof Error)) return console.error({ nome: typeof erro });
-  const seguro = erro instanceof ErroDominio || erro instanceof ErroPermissao;
+  // Redundante com o construtor de ErroDominio, de propósito: defesa em profundidade.
+  const seguro = (erro instanceof ErroDominio && MENSAGENS_DE_DOMINIO.has(erro.message)) || erro instanceof ErroPermissao;
   console.error({ nome: erro.name, ...(seguro ? { mensagem: erro.message } : {}), codigo: codigoDe(erro) });
 }
 

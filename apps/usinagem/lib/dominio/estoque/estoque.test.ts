@@ -419,3 +419,17 @@ describe("revisão final: somas entre lotes", () => {
     expect(pos(e).fisicoTotal).toBe(MAX);
   });
 });
+
+describe("revisão final: soma parcial por lote", () => {
+  const INC = "Estado de estoque inconsistente.";
+  const MAX = Number.MAX_SAFE_INTEGER;
+  const M = (chave: string, quantidade: number) => ({ chave, loteId: "L1", tipo: "ajuste", quantidade });
+  const est = (movimentos: object[]) => ({ lotes: [lote("L1")], movimentos, reservas: [] }) as unknown as EstadoEstoque;
+
+  it("MAX_SAFE_INTEGER, 2, -MAX_SAFE_INTEGER no mesmo lote: o parcial estoura e lança, mesmo com total 2", () => {
+    expect(() => pos(est([M("a", MAX), M("b", 2), M("c", -MAX)]))).toThrow(INC);
+  });
+  it("caracterização: a mesma soma em ordem que não estoura segue válida", () => {
+    expect(pos(est([M("a", MAX), M("c", -MAX), M("b", 2)])).fisicoTotal).toBe(2);
+  });
+});
