@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Resultado } from "../comum";
 import {
   bloquearLote, converterEmFirme, entradaProducao, expedir, liberarLote, posicaoEstoque, reliberarLote, reservar,
-  type EstadoEstoque, type Lote,
+  validarEstado, type EstadoEstoque, type Lote,
 } from "./estoque";
 
 const vazio: EstadoEstoque = { lotes: [], movimentos: [], reservas: [] };
@@ -211,5 +211,140 @@ describe("estado corrompido falha alto", () => {
   });
   it.each(operacoes)("%s lança com reserva corrompida", (_n, op) => {
     expect(() => op(com([mov()], [res({ quantidade: -1 })]))).toThrow("Reserva de estoque inválida.");
+  });
+});
+
+describe("fix round 1: replay com conteúdo diferente", () => {
+  const dois = () => {
+    let e = valor(entradaProducao(vazio, { chave: "op1", lote: lote("L1"), quantidade: 10 }));
+    e = valor(entradaProducao(e, { chave: "op2", lote: lote("L2"), quantidade: 10 }));
+    e = valor(liberarLote(e, "L1", [{ reservaId: "F1", clienteId: "C1", pedidoItemId: "PI1", quantidade: 10 }]));
+    e = valor(liberarLote(e, "L2", [{ reservaId: "F2", clienteId: "C1", pedidoItemId: "PI2", quantidade: 10 }]));
+    return valor(expedir(e, { chave: "rem1", reservaId: "F1", quantidade: 5 }));
+  };
+  const MSG = "Chave já usada com conteúdo diferente.";
+  const erro = <T>(r: Resultado<T>) => (r.ok ? "" : r.erro);
+
+  it("replay idêntico devolve a mesma referência (expedir e entrada)", () => {
+    const e = dois();
+    expect(valor(expedir(e, { chave: "rem1", reservaId: "F1", quantidade: 5 }))).toBe(e);
+    expect(valor(entradaProducao(e, { chave: "op1", lote: lote("L1"), quantidade: 10 }))).toBe(e);
+  });
+  it("replay de expedir com outra quantidade falha", () => {
+    expect(erro(expedir(dois(), { chave: "rem1", reservaId: "F1", quantidade: 4 }))).toBe(MSG);
+  });
+  it("replay de expedir com outra reserva em outro lote falha", () => {
+    expect(erro(expedir(dois(), { chave: "rem1", reservaId: "F2", quantidade: 5 }))).toBe(MSG);
+  });
+  it("chave de entrada reutilizada em expedir falha, e o contrário", () => {
+    const e = dois();
+    expect(erro(expedir(e, { chave: "op1", reservaId: "F2", quantidade: 10 }))).toBe(MSG);
+    expect(erro(entradaProducao(e, { chave: "rem1", lote: lote("L3"), quantidade: 5 }))).toBe(MSG);
+  });
+  it("replay de entrada com outra quantidade ou outro lote falha", () => {
+    const e = dois();
+    expect(erro(entradaProducao(e, { chave: "op1", lote: lote("L1"), quantidade: 11 }))).toBe(MSG);
+    expect(erro(entradaProducao(e, { chave: "op1", lote: lote("L9"), quantidade: 10 }))).toBe(MSG);
+  });
+});
+
+describe("fix round 1: inteiro seguro nos pedidos", () => {
+  it("entradaProducao com 2 ** 53 falha e o estado segue utilizável", () => {
+    const r = entradaProducao(vazio, { chave: "op1", lote: lote("L1"), quantidade: 2 ** 53 });
+    expect(r.ok).toBe(false);
+    expect(() => pos(vazio)).not.toThrow();
+  });
+  it("alocação, reserva, conversão e expedição com 2 ** 53 falham", () => {
+    const e0 = valor(entradaProducao(vazio, { chave: "op1", lote: lote("L1"), quantidade: 10 }));
+    expect(liberarLote(e0, "L1", [{ reservaId: "R1", clienteId: "C", pedidoItemId: "PI", quantidade: 2 ** 53 }]).ok).toBe(false);
+    let e = valor(liberarLote(e0, "L1", [{ reservaId: "F1", clienteId: "C", pedidoItemId: "PI", quantidade: 2 }]));
+    e = valor(reservar(e, { id: "E1", loteId: "L1", tipo: "estrategica", clienteId: "C", pedidoItemId: null, quantidade: 2 }));
+    expect(reservar(e, { id: "E2", loteId: "L1", tipo: "estrategica", clienteId: "C", pedidoItemId: null, quantidade: 2 ** 53 }).ok).toBe(false);
+    expect(converterEmFirme(e, { reservaId: "E1", novaReservaId: "F9", pedidoItemId: "PI", quantidade: 2 ** 53 }).ok).toBe(false);
+    expect(expedir(e, { chave: "rem", reservaId: "F1", quantidade: 2 ** 53 }).ok).toBe(false);
+    expect(() => pos(e)).not.toThrow();
+  });
+});
+
+describe("fix round 1: invariantes de validarEstado", () => {
+  const INC = "Estado de estoque inconsistente.";
+  const est = (lotes: object[], movimentos: object[], reservas: object[] = []) =>
+    ({ lotes, movimentos, reservas }) as unknown as EstadoEstoque;
+  const L = (o: object = {}) => ({ ...lote("L1"), situacao: "liberado", ...o });
+  const M = (o: object = {}) => ({ chave: "m1", loteId: "L1", tipo: "entrada_producao", quantidade: 5, ...o });
+  const R = (o: object = {}) => ({ id: "R1", loteId: "L1", tipo: "firme", clienteId: "C", pedidoItemId: "PI", quantidade: 1, status: "ativa", ...o });
+
+  it("estado consistente passa", () => {
+    expect(() => validarEstado(est([L()], [M()], [R()]))).not.toThrow();
+  });
+  it("físico negativo no lote", () => {
+    expect(() => validarEstado(est([L()], [M(), M({ chave: "m2", tipo: "saida_expedicao", quantidade: -6 })]))).toThrow(INC);
+  });
+  it("reservas ativas somam mais que o físico do lote liberado", () => {
+    expect(() => validarEstado(est([L()], [M()], [R({ quantidade: 3 }), R({ id: "R2", quantidade: 3 })]))).toThrow(INC);
+  });
+  it("reserva ativa em lote que não está liberado", () => {
+    for (const situacao of ["aguardando_inspecao", "quarentena", "rejeitado"]) {
+      expect(() => validarEstado(est([L({ situacao })], [M()], [R()]))).toThrow(INC);
+    }
+  });
+  it("movimento ou reserva com loteId inexistente", () => {
+    expect(() => validarEstado(est([L()], [M({ loteId: "LX" })]))).toThrow(INC);
+    expect(() => validarEstado(est([L()], [M()], [R({ loteId: "LX", status: "consumida" })]))).toThrow(INC);
+  });
+  it("situação de lote fora da união e lote.id duplicado", () => {
+    expect(() => validarEstado(est([L({ situacao: "toString" })], []))).toThrow(INC);
+    expect(() => validarEstado(est([L({ situacao: "x" })], []))).toThrow(INC);
+    expect(() => validarEstado(est([L(), L()], []))).toThrow(INC);
+  });
+  it("dois registros de reserva com o mesmo id", () => {
+    expect(() => validarEstado(est([L()], [M()], [R(), R()]))).toThrow(INC);
+  });
+});
+
+describe("fix round 1: ids de reserva únicos e pedido formal", () => {
+  const MSG = "Identificador de reserva já usado.";
+  const erro = <T>(r: Resultado<T>) => (r.ok ? "" : r.erro);
+  const base = () => {
+    let e = valor(entradaProducao(vazio, { chave: "op1", lote: lote("L1"), quantidade: 20 }));
+    e = valor(entradaProducao(e, { chave: "op2", lote: lote("L2"), quantidade: 20 }));
+    e = valor(liberarLote(e, "L1", [{ reservaId: "F1", clienteId: "C", pedidoItemId: "PI1", quantidade: 5 }]));
+    return valor(reservar(e, { id: "E1", loteId: "L1", tipo: "estrategica", clienteId: "C", pedidoItemId: null, quantidade: 5 }));
+  };
+  it("reservar com id existente falha", () => {
+    expect(erro(reservar(base(), { id: "F1", loteId: "L1", tipo: "estrategica", clienteId: "C", pedidoItemId: null, quantidade: 1 }))).toBe(MSG);
+  });
+  it("liberarLote com id existente falha; duplicata dentro das alocações também", () => {
+    const a = { clienteId: "C", pedidoItemId: "PI", quantidade: 1 };
+    expect(erro(liberarLote(base(), "L2", [{ reservaId: "F1", ...a }]))).toBe(MSG);
+    expect(erro(liberarLote(base(), "L2", [{ reservaId: "N", ...a }, { reservaId: "N", ...a }]))).toBe(MSG);
+  });
+  it("converterEmFirme com novaReservaId existente falha", () => {
+    expect(erro(converterEmFirme(base(), { reservaId: "E1", novaReservaId: "F1", pedidoItemId: "PI", quantidade: 1 }))).toBe(MSG);
+    expect(erro(converterEmFirme(base(), { reservaId: "E1", novaReservaId: "E1", pedidoItemId: "PI", quantidade: 1 }))).toBe(MSG);
+  });
+  it("alocação e conversão sem pedidoItemId falham", () => {
+    const m = "Reserva firme exige item de pedido formal.";
+    expect(erro(liberarLote(base(), "L2", [{ reservaId: "N", clienteId: "C", pedidoItemId: "", quantidade: 1 }]))).toBe(m);
+    expect(erro(converterEmFirme(base(), { reservaId: "E1", novaReservaId: "N", pedidoItemId: "", quantidade: 1 }))).toBe(m);
+  });
+});
+
+describe("fix round 1: bloqueio encadeado", () => {
+  const base = () => {
+    let e = valor(entradaProducao(vazio, { chave: "op1", lote: lote("L1"), quantidade: 40 }));
+    e = valor(liberarLote(e, "L1", [{ reservaId: "F1", clienteId: "C1", pedidoItemId: "PI1", quantidade: 20 }]));
+    return valor(reservar(e, { id: "E1", loteId: "L1", tipo: "estrategica", clienteId: "C2", pedidoItemId: null, quantidade: 5 }));
+  };
+  it("quarentena seguida de rejeitado mantém comprometidas e o déficit", () => {
+    const e = valor(bloquearLote(valor(bloquearLote(base(), "L1", "quarentena")), "L1", "rejeitado"));
+    expect(e.reservas.map((r) => r.status)).toEqual(["comprometida_bloqueio", "comprometida_bloqueio"]);
+    expect(pos(e).deficitBloqueio).toBe(25);
+  });
+  it("quarentena sobre quarentena é ok e não muda as reservas", () => {
+    const q = valor(bloquearLote(base(), "L1", "quarentena"));
+    const e = valor(bloquearLote(q, "L1", "quarentena"));
+    expect(e.reservas).toEqual(q.reservas);
+    expect(pos(e).deficitBloqueio).toBe(25);
   });
 });
