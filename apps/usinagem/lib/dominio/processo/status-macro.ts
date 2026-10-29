@@ -34,11 +34,13 @@ function validar(e: EntradaStatusMacro): void {
   if (typeof e.situacaoComercial !== "string" || !Object.hasOwn(SITUACOES, e.situacaoComercial)) invalida();
   if (e.estadoRevisaoVigente !== null && (typeof e.estadoRevisaoVigente !== "string" || !Object.hasOwn(ESTADOS, e.estadoRevisaoVigente))) invalida();
   if (!seguro(e.pedidosAtivos) || e.pedidosAtivos < 0) invalida();
+  if (!Array.isArray(e.itens)) invalida();
   for (const i of e.itens) {
+    if (typeof i !== "object" || i === null) invalida();
     // saldoEntrega pode ser negativo (sobre-entrega); reserva e aceite sem NF não.
     if (!seguro(i.saldoEntrega) || !seguro(i.reservaFirmeAtiva) || i.reservaFirmeAtiva < 0 || !seguro(i.aceitoSemNf) || i.aceitoSemNf < 0) invalida();
   }
-  // Combinações que a spec proíbe: itens sem pedido ativo (contrato de entrada) e proposta enviada sem revisão (§5.1).
+  // (a) itens sem pedido ativo viola o contrato de entrada; (d) proposta enviada sem revisão viola a spec §5.1.
   const s = e.situacaoComercial;
   if (e.itens.length > 0 && e.pedidosAtivos === 0) invalida();
   if (s === "cotacao_enviada" && e.estadoRevisaoVigente === null) invalida();

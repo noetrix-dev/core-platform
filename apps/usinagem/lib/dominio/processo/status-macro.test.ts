@@ -142,3 +142,65 @@ describe("status macro: combinações inválidas dos eixos", () => {
     expect(statusMacro({ ...base, situacaoComercial: "reaberto", pedidosAtivos: 2, itens: [item(1, 0, 0)] })).toBe("em_fabricacao");
   });
 });
+
+describe("status macro: lista de itens malformada lança o erro genérico, nunca TypeError", () => {
+  const casos: [string, unknown][] = [
+    ["itens null", null], ["itens undefined", undefined], ["itens objeto", {}], ["itens string", "abc"],
+    ["item null", [null]], ["item sem campos", [{}]], ["item número", [3]], ["item string", ["x"]],
+  ];
+  it.each(casos)("%s", (_nome, itens) => {
+    const e = { ...ped, itens } as unknown as EntradaStatusMacro;
+    expect(() => statusMacro(e)).toThrow("Entrada de status inválida.");
+    expect(() => statusMacro(e)).not.toThrow(TypeError);
+  });
+});
+
+// Tabelas escritas à mão a partir da spec §5.2 (regras 1, 2, 3, 4, 5); nunca copiadas da saída.
+describe("pares 1-2: situações terminais cruzadas com pedidos e itens", () => {
+  const terminais = ["cancelado", "perdido", "suspenso", "fechado"] as const;
+  const arranjos: [string, number, { saldoEntrega: number; reservaFirmeAtiva: number; aceitoSemNf: number }[]][] = [
+    ["0 pedidos, sem itens", 0, []],
+    ["1 pedido, sem itens", 1, []],
+    ["1 pedido, item entregue", 1, [item(0, 0, 0)]],
+    ["1 pedido, item com saldo coberto", 1, [item(5, 5, 0)]],
+  ];
+  const linhas = terminais.flatMap((s) => arranjos.map(([nome, p, itens]) => [s, nome, p, itens] as const));
+  it.each(linhas)("%s com %s é o próprio %s", (s, _nome, p, itens) => {
+    expect(statusMacro({ ...base, situacaoComercial: s, pedidosAtivos: p, itens: [...itens] })).toBe(s);
+  });
+});
+
+describe("pares 3-4: NF emitida, pronto para entrega e em fabricação por saldo, reserva e aceite", () => {
+  type Linha = [string, { saldoEntrega: number; reservaFirmeAtiva: number; aceitoSemNf: number }[], string];
+  const linhas: Linha[] = [
+    // 1 item: saldo -2
+    ["saldo -2 reserva 0 aceite 0", [item(-2, 0, 0)], "em_fabricacao"],
+    ["saldo -2 reserva 0 aceite 3", [item(-2, 0, 3)], "em_fabricacao"],
+    ["saldo -2 reserva 5 aceite 0", [item(-2, 5, 0)], "em_fabricacao"],
+    ["saldo -2 reserva 5 aceite 3", [item(-2, 5, 3)], "em_fabricacao"],
+    // 1 item: saldo 0
+    ["saldo 0 reserva 0 aceite 0", [item(0, 0, 0)], "nf_emitida"],
+    ["saldo 0 reserva 0 aceite 3", [item(0, 0, 3)], "em_fabricacao"],
+    ["saldo 0 reserva 5 aceite 0", [item(0, 5, 0)], "nf_emitida"],
+    ["saldo 0 reserva 5 aceite 3", [item(0, 5, 3)], "em_fabricacao"],
+    // 1 item: saldo 5
+    ["saldo 5 reserva 0 aceite 0", [item(5, 0, 0)], "em_fabricacao"],
+    ["saldo 5 reserva 0 aceite 3", [item(5, 0, 3)], "em_fabricacao"],
+    ["saldo 5 reserva 5 aceite 0", [item(5, 5, 0)], "pronto_para_entrega"],
+    ["saldo 5 reserva 5 aceite 3", [item(5, 5, 3)], "pronto_para_entrega"],
+    // 2 itens: um sem saldo (0 ou -2) e outro com saldo 5
+    ["[0,0,0] + [5,0,0]", [item(0, 0, 0), item(5, 0, 0)], "em_fabricacao"],
+    ["[0,0,0] + [5,5,0]", [item(0, 0, 0), item(5, 5, 0)], "pronto_para_entrega"],
+    ["[0,5,3] + [5,0,3]", [item(0, 5, 3), item(5, 0, 3)], "em_fabricacao"],
+    ["[0,5,3] + [5,5,3]", [item(0, 5, 3), item(5, 5, 3)], "pronto_para_entrega"],
+    ["[-2,0,0] + [5,0,0]", [item(-2, 0, 0), item(5, 0, 0)], "em_fabricacao"],
+    ["[-2,0,0] + [5,5,0]", [item(-2, 0, 0), item(5, 5, 0)], "pronto_para_entrega"],
+    ["[-2,5,3] + [5,0,3]", [item(-2, 5, 3), item(5, 0, 3)], "em_fabricacao"],
+    ["[-2,5,3] + [5,5,3]", [item(-2, 5, 3), item(5, 5, 3)], "pronto_para_entrega"],
+    ["[5,0,0] + [0,0,0] (ordem invertida)", [item(5, 0, 0), item(0, 0, 0)], "em_fabricacao"],
+    ["[5,5,0] + [-2,0,0] (ordem invertida)", [item(5, 5, 0), item(-2, 0, 0)], "pronto_para_entrega"],
+  ];
+  it.each(linhas)("%s", (_nome, itens, esperado) => {
+    expect(statusMacro({ ...ped, itens })).toBe(esperado);
+  });
+});
