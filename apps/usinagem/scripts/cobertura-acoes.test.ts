@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ehMensagemDeDominio, mensagensDeDominio } from "../lib/dominio/comum";
-import { ACOES_PUBLICAS, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
+import { ACOES_PUBLICAS, arquivosQueChamamPode, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
 
 const IMP = `import { acao, acaoPublica } from "@/lib/servidor/acao";\n`;
 const IMP_ROTA = `import { rota } from "@/lib/servidor/acao";\n`;
@@ -263,5 +263,35 @@ describe("o conjunto de mensagens de domínio não vaza", () => {
     const comum = readFileSync(join(process.cwd(), "lib/dominio/comum.ts"), "utf8");
     expect(comum).toMatch(new RegExp(`^const ${NOME} = new Set`, "m"));
     expect(comum).not.toMatch(new RegExp(`export\\s+(?:const|let|var)\\s+${NOME}|export\\s*\\{[^}]*${NOME}`));
+  });
+});
+
+describe("pode( só é chamado onde está previsto", () => {
+  // Cada arquivo que decide permissão chama pode() com as concedidas do banco; arquivo novo exige revisão aqui.
+  const PODE_PERMITIDO: string[] = [
+    "lib/dominio/permissoes/acesso.ts", // acesso: decidirAcesso repassa as concedidas do banco
+    "lib/dominio/processo/regras.ts", // regras de processo: as 5 regras exigem concedidas
+    "lib/dominio/sigilo/campos.ts", // sigilo: leitura de contexto e de campo por categoria
+    "lib/dominio/sigilo/serializar.ts", // sigilo: serialização, auditoria e exportação
+  ];
+
+  it("o conjunto de arquivos que chamam pode() é exatamente PODE_PERMITIDO", () => {
+    expect(arquivosQueChamamPode()).toEqual([...PODE_PERMITIDO].sort());
+  });
+
+  it("detecta alias e namespace, e ignora função local de mesmo nome", () => {
+    const raiz = mkdtempSync(join(tmpdir(), "pode-"));
+    try {
+      const w = (n: string, c: string) => writeFileSync(join(raiz, n), c);
+      w("alias.ts", `import { pode as p } from "./catalogo";\np(1);\n`);
+      w("ns.ts", `import * as c from "@/lib/dominio/permissoes/catalogo";\nc.pode(1);\n`);
+      w("direto.ts", `import { pode } from "../permissoes/catalogo";\npode(1);\n`);
+      w("local.ts", `function pode(x: number) { return x; }\npode(1);\n`);
+      w("so-import.ts", `import { pode } from "./catalogo";\nexport const f = pode;\n`);
+      w("x.test.ts", `import { pode } from "./catalogo";\npode(1);\n`);
+      expect(arquivosQueChamamPode(raiz)).toEqual(["alias.ts", "direto.ts", "ns.ts"]);
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
   });
 });

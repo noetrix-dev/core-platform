@@ -9,7 +9,7 @@ export function validarCancelamento(
   perfil: Perfil,
   v: VinculosOperacionais,
   motivo: string,
-  concedidas?: readonly Permissao[],
+  concedidas: readonly Permissao[],
 ): Resultado<true> {
   if (!pode(perfil, "processo.cancelar", concedidas)) return falha("Sem permissão para cancelar processo.");
   if (!motivo.trim()) return falha("Informe o motivo do cancelamento.");
@@ -33,8 +33,8 @@ export const conciliado = (c: Conciliacao): boolean =>
 export function validarFechamento(
   perfil: Perfil,
   c: Conciliacao,
-  justificativa?: string,
-  concedidas?: readonly Permissao[],
+  justificativa: string | undefined,
+  concedidas: readonly Permissao[],
 ): Resultado<true> {
   if (!pode(perfil, "processo.fechar", concedidas)) return falha("Sem permissão para fechar processo.");
   if (conciliado(c)) return ok(true);
@@ -43,7 +43,7 @@ export function validarFechamento(
   return ok(true);
 }
 
-export function validarReabertura(perfil: Perfil, motivo: string, concedidas?: readonly Permissao[]): Resultado<true> {
+export function validarReabertura(perfil: Perfil, motivo: string, concedidas: readonly Permissao[]): Resultado<true> {
   if (!pode(perfil, "processo.reabrir", concedidas)) return falha("Só o Admin reabre processo.");
   if (!motivo.trim()) return falha("Informe o motivo da reabertura.");
   return ok(true);
@@ -55,7 +55,7 @@ export function validarProposta(
   perfil: Perfil,
   acao: "proposta.gerar_pdf" | "proposta.enviar",
   estado: EstadoRevisao,
-  concedidas?: readonly Permissao[],
+  concedidas: readonly Permissao[],
 ): Resultado<true> {
   if (!pode(perfil, acao, concedidas)) return falha("Sem permissão para esta ação na proposta.");
   if (!ESTADOS_COM_PRECO.includes(estado)) return falha("Preço pendente: o Admin precisa definir o preço antes.");
@@ -65,7 +65,7 @@ export function validarProposta(
 export function validarPrecificacao(
   perfil: Perfil,
   itens: { precoUnitarioCentavos: number | null }[],
-  concedidas?: readonly Permissao[],
+  concedidas: readonly Permissao[],
 ): Resultado<true> {
   if (!pode(perfil, "preco.definir", concedidas)) return falha("Só o Admin define preço.");
   const invalido = itens.some(

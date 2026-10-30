@@ -200,3 +200,36 @@ export function arquivosVerificados(raiz = process.cwd()): { caminho: string; co
   andar(raiz, true);
   return achados;
 }
+
+const MODULO_CATALOGO = "lib/dominio/permissoes/catalogo";
+const ehModuloCatalogo = (spec: string) => spec === `@/${MODULO_CATALOGO}` || ((spec.startsWith("./") || spec.startsWith("../")) && /(^|\/)catalogo$/.test(spec));
+
+/** Arquivos (fora de testes) que chamam `pode` importado do catálogo, inclusive por alias (`pode as p`) ou namespace (`ns.pode(`). */
+export function arquivosQueChamamPode(raiz = process.cwd()): string[] {
+  return arquivosVerificados(raiz)
+    .filter(({ caminho, codigo }) => {
+      const sf = ts.createSourceFile(caminho, codigo, ts.ScriptTarget.Latest, true);
+      const nomes = new Set<string>();
+      const espacos = new Set<string>();
+      for (const s of sf.statements) {
+        if (!ts.isImportDeclaration(s) || !ts.isStringLiteral(s.moduleSpecifier) || !ehModuloCatalogo(s.moduleSpecifier.text)) continue;
+        const b = s.importClause?.namedBindings;
+        if (s.importClause?.isTypeOnly || !b) continue;
+        if (ts.isNamespaceImport(b)) espacos.add(b.name.text);
+        else for (const e of b.elements) if (!e.isTypeOnly && (e.propertyName ?? e.name).text === "pode") nomes.add(e.name.text);
+      }
+      let chama = false;
+      const achar = (n: ts.Node) => {
+        if (ts.isCallExpression(n)) {
+          const f = n.expression;
+          if (ts.isIdentifier(f) && nomes.has(f.text)) chama = true;
+          if (ts.isPropertyAccessExpression(f) && f.name.text === "pode" && ts.isIdentifier(f.expression) && espacos.has(f.expression.text)) chama = true;
+        }
+        ts.forEachChild(n, achar);
+      };
+      achar(sf);
+      return chama;
+    })
+    .map((a) => a.caminho)
+    .sort();
+}

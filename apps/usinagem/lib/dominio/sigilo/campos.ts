@@ -22,8 +22,8 @@ export const PERMISSAO_DE_LEITURA: Record<Contexto, Permissao> = {
   titulo_pagar: "titulo_pagar.operar", titulo_receber: "titulo_receber.operar",
 };
 
-/** `concedidas` (de `perfil_permissoes`) é repassada a todo `pode`; sem ela vale a matriz padrão. */
-export const podeLerContexto = (perfil: Perfil, contexto: Contexto, concedidas?: readonly Permissao[]) =>
+/** `concedidas` (de `perfil_permissoes`) é obrigatória e repassada a todo `pode`: não há matriz padrão implícita. */
+export const podeLerContexto = (perfil: Perfil, contexto: Contexto, concedidas: readonly Permissao[]) =>
   pode(perfil, PERMISSAO_DE_LEITURA[contexto], concedidas);
 
 /** Entidade da auditoria → contexto. Entidade fora do mapa: antes/depois só para o Admin. */
@@ -34,7 +34,7 @@ export const CONTEXTO_DA_ENTIDADE: Record<string, Contexto> = {
   titulos_receber: "titulo_receber",
 };
 
-export function podeVerCampo(perfil: Perfil, contexto: Contexto, campo: string, concedidas?: readonly Permissao[]): boolean {
+export function podeVerCampo(perfil: Perfil, contexto: Contexto, campo: string, concedidas: readonly Permissao[]): boolean {
   if (!podeLerContexto(perfil, contexto, concedidas)) return false;
   if (!Object.hasOwn(CAMPOS[contexto], campo)) return false;
   if (perfil === "admin") return true;

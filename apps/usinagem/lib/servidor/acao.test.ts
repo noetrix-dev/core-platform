@@ -22,7 +22,7 @@ import { unstable_rethrow } from "next/navigation";
 import { ErroDominio } from "../dominio/comum";
 import { acao, acaoPublica, rota } from "./acao";
 import { ErroPermissao, requirePermissao, type SessaoAutorizada } from "./sessao";
-import type { Permissao } from "../dominio/permissoes/catalogo";
+import { MATRIZ_PADRAO, type Permissao } from "../dominio/permissoes/catalogo";
 import { serializarItemRevisao } from "../dominio/sigilo/serializar";
 
 // Alteração de teste (só tipo): requirePermissao agora devolve SessaoAutorizada; os asserts continuam comparando o mesmo objeto.
@@ -271,7 +271,7 @@ describe("concedidas do banco chegam à fn", () => {
     expect(JSON.stringify(revogado)).not.toContain("custoEstimadoCentavos");
     expect(JSON.stringify(revogado)).not.toContain("6000");
     // Sem a lista (comportamento antigo), a matriz padrão emitiria o custo.
-    expect(serializarItemRevisao(item, "compras_producao")).toMatchObject({ custoEstimadoCentavos: 6_000 });
+    expect(serializarItemRevisao(item, "compras_producao", MATRIZ_PADRAO.compras_producao)).toMatchObject({ custoEstimadoCentavos: 6_000 });
     // Sem nenhuma concessão: nem o item sai.
     permissao.mockResolvedValue(compras([]));
     expect(await lerItem({ n: 1 })).toEqual({ ok: true, dados: null });
