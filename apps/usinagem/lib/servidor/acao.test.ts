@@ -139,6 +139,17 @@ describe("acao", () => {
     expect(log).toHaveBeenCalledTimes(1);
     expect(logado()).not.toContain("valor-secreto");
   });
+  it("exceção dentro de refine do esquema, com sessão permitida, vira genérica e o log não leva o valor", async () => {
+    const comRefine = z.string().refine(() => {
+      throw new Error('invalid input syntax for type uuid: "valor-secreto"');
+    });
+    const fn = vi.fn();
+    const r = await acao("processo.ver", comRefine, fn)("x");
+    expect(r).toEqual({ ok: false, erro: GENERICA });
+    expect(fn).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(logado()).not.toContain("valor-secreto");
+  });
   it("redirect vindo de requirePermissao é relançado", async () => {
     const redir = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/x;307;" });
     permissao.mockRejectedValue(redir);
@@ -162,6 +173,15 @@ describe("acaoPublica", () => {
   });
   it("sucesso devolve os dados", async () => {
     expect(await acaoPublica(esquema, async (e) => e.n)({ n: 7 })).toEqual({ ok: true, dados: 7 });
+  });
+  it("exceção dentro de transform do esquema vira resposta genérica, logada sem valor", async () => {
+    const comTransform = z.string().transform(() => {
+      throw new Error('invalid input syntax for type uuid: "valor-secreto"');
+    });
+    const r = await acaoPublica(comTransform, async () => 1)("x");
+    expect(r).toEqual({ ok: false, erro: GENERICA });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(logado()).not.toContain("valor-secreto");
   });
 });
 

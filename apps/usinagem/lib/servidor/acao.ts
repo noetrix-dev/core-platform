@@ -29,9 +29,10 @@ function registrarErro(erro: unknown): void {
 }
 
 async function executar<E, S>(esquema: ZodType<E>, entrada: unknown, fn: (e: E) => Promise<S>): Promise<RespostaAcao<S>> {
-  const valida = esquema.safeParse(entrada);
-  if (!valida.success) return { ok: false, erro: "Dados inválidos." };
   try {
+    // Dentro do try: refine/transform podem lançar com valor da entrada na mensagem.
+    const valida = esquema.safeParse(entrada);
+    if (!valida.success) return { ok: false, erro: "Dados inválidos." };
     return { ok: true, dados: await fn(valida.data) };
   } catch (erro) {
     unstable_rethrow(erro);
