@@ -496,6 +496,18 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | Check pendente com filtro de `paths`: se o workflow `usinagem` virar check obrigatório, um PR que não toca os `paths` fica esperando para sempre. Resolver com job "noop" ou gatilho sem `paths` antes de ligar a proteção de branch. | Antes de tornar o check obrigatório |
 | `estrutura.test.ts`: comparar `conrelid::regclass::text` depende de o `search_path` incluir `public`. Com nome qualificado, o teste de FK append-only passaria sem checar nada. Trocar por `conrelid = any($1::regclass[])`. | Próximo commit que mexer no teste |
 | `estrutura.test.ts`: o `fks.find` pega só a primeira FK em `criado_por` por tabela. Com mais de uma FK nessa coluna, as demais não seriam conferidas. Conferir todas, por exemplo com `filter` e `every`. | Próximo commit que mexer no teste |
+| Troca de senha pelo próprio usuário e recuperação self-service de senha. Até lá, a redefinição é feita pelo script de operação (`usuario:redefinir-senha`), que apaga as sessões do alvo. | Depois do 1D, antes de cliente real |
+
+### 9.3 Checklist de entrada em produção
+
+Nada vai para produção com cliente real enquanto um item abaixo estiver aberto.
+
+- [ ] Remover o seletor de perfil de dev: arquivos `*.dev.ts(x)`, `lib/servidor/sessao-dev.ts` e `COOKIE_USUARIO_DEV`. Até a remoção, `NODE_ENV === "production"` desliga o seletor e o cookie, seja qual for o valor de qualquer outra variável, e um teste prova isso (1D).
+- [ ] Rate limit de login em memória só vale para uma instância. Com mais de uma instância ou réplica, trocar para `storage: "database"` antes de subir.
+- [ ] Header de IP confiável: definir `AUTH_IP_HEADER` com o header que o proxy reverso grava (por exemplo `x-real-ip`) e documentar no procedimento do proxy que ele sobrescreve esse header vindo do cliente. Sem a variável, o IP do cliente não é confiado.
+- [ ] Tela de gestão de usuários (perfil, ativo, redefinição de senha) entregue pela 1C, com `acaoSensivel("usuarios.gerenciar")`.
+- [ ] Troca de senha pelo próprio usuário e recuperação de senha (§9.2).
+- [ ] `BETTER_AUTH_SECRET` próprio de produção, com 32 ou mais caracteres, e `BETTER_AUTH_URL` em `https` (cookies `Secure`).
 
 ## 10. Testes de aceite
 
