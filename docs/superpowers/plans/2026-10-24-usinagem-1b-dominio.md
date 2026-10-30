@@ -19,7 +19,37 @@
 - Um script de cobertura recusa Server Action ou Route Handler fora do wrapper.
 - Dentro de `lib/dominio`, imports são relativos, porque o Vitest não resolve o alias `@/`.
 
-**Tech Stack:** TypeScript estrito, Vitest 5.0.5, Zod 4.6.7, Next 16.3.4 (`cookies()` assíncrono, `unstable_rethrow`, `server-only`).
+**Executado (1B inteira, de `6f4a75d` a `b46892a`; a fonte de verdade é o código commitado, não os blocos de código abaixo).** Decisões que valem sobre o texto do plano:
+- **Zod:** 4.6.5 com `--save-exact` (não 4.6.7).
+- **`concedidas`:** toda função de domínio que chama `pode()` recebe `concedidas?` como último parâmetro. O wrapper entrega à `fn` uma `SessaoAutorizada` com as concedidas lidas do banco.
+- **Sigilo:** é allowlist por contexto e falha fechado (Task 3).
+- **Dado do banco corrompido falha alto:** lança `ErroDominio` com mensagem fixa, sem valor (Tasks 5 a 7). Pedido inválido do usuário recebe `Resultado` de falha. Quantidades e somas são inteiros seguros (`ehQuantidadeValida`, `somar`).
+- **`ErroDominio`:** só aceita mensagens de uma lista privada em `comum.ts`. Mensagem fora da lista vira "Erro de domínio.", e a instância é congelada.
+- **Log do wrapper:** grava só nome (identificador), mensagem de domínio e SQLSTATE. Nunca grava `detail`, `stack`, params nem a entrada.
+- **Estoque:** `validarEstado` única no início de toda operação. Invariantes de físico e reservas, ids únicos, replay por chave comparando conteúdo.
+- **Status macro:** valida os eixos. Lança só para itens sem pedido ativo (contrato de entrada) e para cotação enviada sem revisão (§5.1).
+- **Script de cobertura:** feito por AST do TypeScript sobre a raiz do app, com `ACOES_PUBLICAS`.
+- **`pnpm db:seed`:** roda o humano.
+
+Commits por task:
+
+| Task | Commits |
+|---|---|
+| 1 | `84ab12f` |
+| 2 | `45912bf`, `3063997` |
+| 3 | até `9e7eaa3` |
+| 4 | até `29975b3` |
+| 5 | `2fbae26`, `2133c1c` |
+| 6 | `a5b744f`, `3a11b5e` |
+| 7 | `1291430`, `4c0c471`, `75b7d18` |
+| 8 | `c179580`, `8f7d94f` |
+| 9 | `723a6b0`, `34ad6c6` |
+| Checklist de fim | `89f2432` |
+| Revisão final | `7c9c8bb`, `b467282`, `4465e4d`, `b46892a` |
+
+Os adiados estão na spec §9.2 e §12.
+
+**Tech Stack:** TypeScript estrito, Vitest 5.0.5, Zod 4.6.5 (executado; o plano dizia 4.6.7), Next 16.3.4 (`cookies()` assíncrono, `unstable_rethrow`, `server-only`).
 
 **Spec:** `docs/superpowers/specs/2026-10-24-express-usinagem-erp-design.md` (§4 a §8, §10)
 

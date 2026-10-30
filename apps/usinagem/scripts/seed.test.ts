@@ -34,6 +34,14 @@ describe.skipIf(!temBanco)("seed fictício e role da aplicação", () => {
     expect(doSeed.every((x) => x.ficticio)).toBe(true);
     const [s] = await banco.select().from(schema.sequenciasNumeracao).where(eq(schema.sequenciasNumeracao.nome, "processo"));
     expect(s.proximo).toBeGreaterThan(9003);
+    const [perm] = await banco.select({ n: count() }).from(schema.permissoes);
+    expect(perm.n).toBe(54);
+    const travadasConcedidas = await banco
+      .select()
+      .from(schema.perfilPermissoes)
+      .innerJoin(schema.permissoes, eq(schema.perfilPermissoes.permissao, schema.permissoes.codigo))
+      .where(eq(schema.permissoes.travadaAdmin, true));
+    expect(travadasConcedidas).toEqual([]);
   });
 
   it("usinagem_migracao é dona de todas as tabelas; usinagem_app de nenhuma", async () => {
