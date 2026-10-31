@@ -21,6 +21,14 @@ const SEM_CRIADO_POR = ["perfis", "permissoes", "perfil_permissoes", "eventos_au
 const TABELAS_BETTER_AUTH = ["sessoes", "contas", "verificacoes"];
 const CRIADO_POR_OBRIGATORIO = ["processos", "revisoes_comerciais"];
 
+// Append-only: EXISTENTES precisam existir (to_regclass nulo reprova); FUTURAS toleram nulo até a tabela nascer.
+// Quando uma FUTURA for criada, mover para EXISTENTES no mesmo PR.
+const APPEND_ONLY_EXISTENTES = ["eventos_auditoria"];
+const APPEND_ONLY_FUTURAS = [
+  "movimentos_estoque", // passa para EXISTENTES no PR 5
+  "baixas", // passa para EXISTENTES no PR 3 (fiscal e financeiro)
+];
+
 const temBanco = bancoDisponivel();
 
 describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
@@ -84,6 +92,18 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
     }
   });
 
+  it("append-only: EXISTENTES mais FUTURAS é exatamente TABELAS_APPEND_ONLY", () => {
+    expect([...APPEND_ONLY_EXISTENTES, ...APPEND_ONLY_FUTURAS].sort()).toEqual([...TABELAS_APPEND_ONLY].sort());
+  });
+
+  it("append-only: toda tabela EXISTENTE existe no banco", async () => {
+    const { rows } = await banco.$client.query<{ t: string; existe: boolean }>(
+      `select t, to_regclass(t) is not null as existe from unnest($1::text[]) t`,
+      [APPEND_ONLY_EXISTENTES],
+    );
+    expect(rows.filter((r) => !r.existe).map((r) => r.t)).toEqual([]);
+  });
+
   it("tabela append-only não tem FK com CASCADE, SET NULL ou SET DEFAULT", async () => {
     const { rows } = await banco.$client.query<{ tabela: string; restricao: string }>(
       `select c.conrelid::regclass::text as tabela, c.conname as restricao
@@ -91,7 +111,7 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
         where c.contype = 'f'
           and c.conrelid = any(array(select to_regclass(n)::oid from unnest($1::text[]) n where to_regclass(n) is not null))
           and (c.confdeltype in ('c', 'n', 'd') or c.confupdtype in ('c', 'n', 'd'))`,
-      [[...TABELAS_APPEND_ONLY]],
+      [[...APPEND_ONLY_EXISTENTES, ...APPEND_ONLY_FUTURAS]], // FUTURAS só entram quando existirem (to_regclass)
     );
     expect(rows).toEqual([]);
   });
@@ -110,6 +130,7 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
           and c.conrelid = any($1::regclass[])`,
       [["sessoes", "contas"]],
     );
+    expect(rows.length, "FKs usuario_id em sessoes e contas").toBe(2); // anti-vácuo
     expect(rows.map((r) => r.tabela).sort()).toEqual(["contas", "sessoes"]);
     expect(rows.every((r) => r.del === "a")).toBe(true);
   });
