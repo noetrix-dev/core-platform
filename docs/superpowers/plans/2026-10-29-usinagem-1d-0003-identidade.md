@@ -623,6 +623,11 @@ Testes:
 9. **origem:** um `POST /sign-in/email` com `Origin: https://atacante.invalid` é recusado.
 10. **balde "desconhecido"** (ajuste do humano, 2026-11-01): requisições sem IP confiável, com header ausente ou inválido, caem num balde único compartilhado, `chaveDeLimite` da Task 4. Esse balde também limita: depois de 5 tentativas em 60 s em `/sign-in/email`, a 6ª recebe a resposta do rate limit. Se o Step 1 mostrar que o rate limit do Better Auth pula a contagem sem IP, implementar o limite próprio por IP em memória no `hooks.before` com `chaveDeLimite`, e este teste prova esse limite.
 11. **header de IP obrigatório em produção** (ajuste do humano, 2026-11-01): com `NODE_ENV = "production"` e `AUTH_IP_HEADER` ausente ou vazio, `criarAuth` lança `Error("AUTH_IP_HEADER ausente em produção.")` e não inicializa. Com `NODE_ENV = "production"` e o header definido, inicializa. Fora de produção, a ausência é aceita. Mutação: remover a checagem faz o teste cair.
+12. **inicialização preguiçosa** (ajuste do humano, 2026-11-01): `criarAuth` e as checagens de `BETTER_AUTH_SECRET` e `AUTH_IP_HEADER` só rodam na primeira requisição, pela chamada de `auth()`, e nunca no import de módulo. Testes:
+    - importar `auth.ts` e `app/api/auth/[...all]/route.ts` com `NODE_ENV = "production"` e sem as duas variáveis não lança;
+    - a primeira chamada de `auth()` lança.
+
+    O relatório traz `pnpm build` passando sem `BETTER_AUTH_SECRET` e sem `AUTH_IP_HEADER` no ambiente (`env -u BETTER_AUTH_SECRET -u AUTH_IP_HEADER pnpm build`). O `.env.local` não é lido pelo agente. Se o build carregá-lo, o relatório registra como a ausência foi garantida, por exemplo com `BETTER_AUTH_SECRET=` vazio no comando, sem imprimir valor.
 
 - [ ] **Step 3: RED literal**
 
