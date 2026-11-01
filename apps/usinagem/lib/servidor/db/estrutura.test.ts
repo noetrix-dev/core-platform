@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { drizzle } from "drizzle-orm/node-postgres";
+import type { Pool, PoolClient } from "pg";
 import * as schema from "./schema";
 import { TABELAS_APPEND_ONLY } from "./append-only";
 import { bancoDisponivel } from "./teste-banco";
@@ -36,6 +37,31 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
   afterAll(async () => {
     await banco?.$client.end();
   });
+
+  // Helpers parametrizados pela lista de tabelas e pela conexão (testáveis com temp tables).
+  const fksComAcaoReferencial = async (tabelas: string[], q: Pool | PoolClient = banco.$client) =>
+    (
+      await q.query<{ tabela: string; restricao: string }>(
+        `select c.conrelid::regclass::text as tabela, c.conname as restricao
+           from pg_constraint c
+          where c.contype = 'f'
+            and c.conrelid = any(array(select to_regclass(n)::oid from unnest($1::text[]) n where to_regclass(n) is not null))
+            and (c.confdeltype in ('c', 'n', 'd') or c.confupdtype in ('c', 'n', 'd'))`,
+        [tabelas],
+      )
+    ).rows;
+
+  const fksUsuarioId = async (tabelas: string[], q: Pool | PoolClient = banco.$client) =>
+    (
+      await q.query<{ tabela: string; del: string }>(
+        `select c.conrelid::regclass::text as tabela, c.confdeltype as del
+           from pg_constraint c
+           join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+          where c.contype = 'f' and a.attname = 'usuario_id'
+            and c.conrelid = any($1::regclass[])`,
+        [tabelas],
+      )
+    ).rows;
 
   const colunas = async (tabelas: string[], nomes: string[]) =>
     (
@@ -105,14 +131,8 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
   });
 
   it("tabela append-only não tem FK com CASCADE, SET NULL ou SET DEFAULT", async () => {
-    const { rows } = await banco.$client.query<{ tabela: string; restricao: string }>(
-      `select c.conrelid::regclass::text as tabela, c.conname as restricao
-         from pg_constraint c
-        where c.contype = 'f'
-          and c.conrelid = any(array(select to_regclass(n)::oid from unnest($1::text[]) n where to_regclass(n) is not null))
-          and (c.confdeltype in ('c', 'n', 'd') or c.confupdtype in ('c', 'n', 'd'))`,
-      [[...APPEND_ONLY_EXISTENTES, ...APPEND_ONLY_FUTURAS]], // FUTURAS só entram quando existirem (to_regclass)
-    );
+    // FUTURAS só entram quando existirem (to_regclass)
+    const rows = await fksComAcaoReferencial([...APPEND_ONLY_EXISTENTES, ...APPEND_ONLY_FUTURAS]);
     expect(rows).toEqual([]);
   });
 
@@ -122,16 +142,33 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
   });
 
   it("FK de sessoes e contas para usuarios é NO ACTION (usuário nunca é apagado)", async () => {
-    const { rows } = await banco.$client.query<{ tabela: string; del: string }>(
-      `select c.conrelid::regclass::text as tabela, c.confdeltype as del
-         from pg_constraint c
-         join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
-        where c.contype = 'f' and a.attname = 'usuario_id'
-          and c.conrelid = any($1::regclass[])`,
-      [["sessoes", "contas"]],
-    );
+    const rows = await fksUsuarioId(["sessoes", "contas"]);
     expect(rows.length, "FKs usuario_id em sessoes e contas").toBe(2); // anti-vácuo
     expect(rows.map((r) => r.tabela).sort()).toEqual(["contas", "sessoes"]);
     expect(rows.every((r) => r.del === "a")).toBe(true);
+  });
+
+  it("os helpers de FK detectam CASCADE e SET NULL", async () => {
+    const cli = await banco.$client.connect(); // mesma conexão: temp tables só existem nela
+    try {
+      await cli.query("begin");
+      await cli.query("create temp table pai_t (id uuid primary key)");
+      await cli.query("create temp table filho_cascade (id uuid primary key, usuario_id uuid references pai_t(id) on delete cascade)");
+      await cli.query("create temp table filho_setnull (id uuid primary key, usuario_id uuid references pai_t(id) on delete set null)");
+      await cli.query("create temp table filho_ok (id uuid primary key, usuario_id uuid references pai_t(id))");
+
+      const acusadas = await fksComAcaoReferencial(["filho_cascade", "filho_setnull", "filho_ok"], cli);
+      expect(acusadas.map((r) => r.tabela).sort()).toEqual(["filho_cascade", "filho_setnull"]);
+
+      const cascade = await fksUsuarioId(["filho_cascade"], cli);
+      expect(cascade.map((r) => r.del)).toEqual(["c"]);
+      expect(cascade.every((r) => r.del === "a")).toBe(false);
+
+      const ok = await fksUsuarioId(["filho_ok"], cli);
+      expect(ok.map((r) => r.del)).toEqual(["a"]);
+    } finally {
+      await cli.query("rollback");
+      cli.release();
+    }
   });
 });
