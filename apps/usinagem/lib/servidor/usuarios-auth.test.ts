@@ -7,10 +7,12 @@ import { bancoDisponivel } from "./db/teste-banco";
 import { urlLocal } from "./db/url-local";
 import { criarUsuarioComSenha, desbloquearUsuario, operadorValido, redefinirSenha } from "./usuarios-auth";
 import { criarAuth } from "./auth-config";
+import { ehMensagemDeDominio, ErroDominio } from "../dominio/comum";
 import type { Perfil } from "../dominio/permissoes/perfis";
 import { main } from "../../scripts/desbloquear-usuario";
 import { main as criarPorScript } from "../../scripts/criar-usuario";
 import { main as redefinirPorScript } from "../../scripts/redefinir-senha";
+import { mensagemDeErro, MSG_DUPLICADO, MSG_PERFIL } from "../../scripts/operacao";
 
 const temBanco = bancoDisponivel();
 
@@ -169,21 +171,41 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
   });
 
   it.each([
-    ["perfil fora de PERFIS", { perfil: "visitante" as Perfil }, "Perfil inválido."],
+    ["perfil que nunca existiu", { perfil: "visitante" as Perfil }, "Perfil inexistente."],
     ["e-mail inválido", { email: "nao-e-email" }, "E-mail inválido."],
     ["nome vazio", { nome: "   " }, "Nome inválido."],
   ])("%s é recusado sem gravar", async (_n, o, msg) => {
     const hash = vi.fn(async () => "a:b");
     const d = dados(o);
-    await expect(criarUsuarioComSenha(banco, hash, d)).rejects.toThrow(msg);
+    const erro = await criarUsuarioComSenha(banco, hash, d).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroDominio);
+    expect((erro as Error).message).toBe(msg);
+    expect(ehMensagemDeDominio(msg)).toBe(true);
     expect(hash).not.toHaveBeenCalled();
     if (d.email.includes("@")) expect(await usuariosCom(d.email)).toHaveLength(0);
+  });
+
+  it("segunda barreira: INSERT direto pulando a validação recebe 23503/23505 do Postgres e a frase da classe", async () => {
+    const erroDe = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => e as Error & { cause?: { code?: string } });
+    const perfil = await erroDe(banco.insert(schema.usuarios).values({ nome: "[FICTÍCIO] X", email: novoEmail(), perfilId: "visitante", ficticio: true }));
+    expect(perfil?.cause?.code).toBe("23503");
+    expect(mensagemDeErro(perfil)).toBe(MSG_PERFIL);
+    const d = dados();
+    await criarUsuarioComSenha(banco, async () => "a:b", d);
+    const duplicado = await erroDe(banco.insert(schema.usuarios).values({ nome: "[FICTÍCIO] X", email: d.email, perfilId: "tecnico", ficticio: true }));
+    expect(duplicado?.cause?.code).toBe("23505");
+    expect(mensagemDeErro(duplicado)).toBe(MSG_DUPLICADO);
   });
 
   it("e-mail duplicado em outra caixa é recusado, sem usuário nem conta órfã", async () => {
     const d = dados();
     const id = await criarUsuarioComSenha(banco, hashReal, d);
-    await expect(criarUsuarioComSenha(banco, hashReal, dados({ email: ` ${d.email.toUpperCase()}` }))).rejects.toThrow("E-mail já cadastrado.");
+    for (const email of [d.email, ` ${d.email.toUpperCase()}`, d.email.replace(/^t/, "T")]) {
+      const erro = await criarUsuarioComSenha(banco, hashReal, dados({ email })).catch((e: unknown) => e);
+      expect(erro).toBeInstanceOf(ErroDominio);
+      expect((erro as Error).message).toBe("E-mail já cadastrado.");
+    }
+    expect(ehMensagemDeDominio("E-mail já cadastrado.")).toBe(true);
     expect((await usuariosCom(d.email)).map((u) => u.id)).toEqual([id]);
     expect(await contasDe(id)).toHaveLength(1);
     expect(await eventos(id, "usuario_criado")).toHaveLength(1);
@@ -194,6 +216,36 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     // NUL em text: o Postgres recusa o INSERT de contas, depois do INSERT de usuarios.
     await expect(criarUsuarioComSenha(banco, async () => "a\u0000b", d)).rejects.toThrow();
     expect(await usuariosCom(d.email)).toHaveLength(0);
+  });
+
+  it("falha ao gravar a auditoria desfaz usuário e conta (transação)", async () => {
+    // Stub: o banco real, mas o INSERT em eventos_auditoria lança (dentro ou fora da transação).
+    const envolver = <T extends object>(alvo: T): T =>
+      new Proxy(alvo, {
+        get(o, k) {
+          if (k === "insert")
+            return (t: unknown) => {
+              if (t === schema.eventosAuditoria) throw new Error("falha simulada na auditoria");
+              return (o as unknown as typeof banco).insert(t as typeof schema.usuarios);
+            };
+          if (k === "transaction")
+            return (f: (tx: typeof banco) => unknown) => (o as unknown as typeof banco).transaction((tx) => f(envolver(tx) as unknown as typeof banco) as Promise<unknown>);
+          const v = Reflect.get(o, k);
+          return typeof v === "function" ? v.bind(o) : v;
+        },
+      });
+    const d = dados();
+    await expect(criarUsuarioComSenha(envolver(banco), hashReal, d)).rejects.toThrow("falha simulada na auditoria");
+    expect(await usuariosCom(d.email)).toHaveLength(0);
+    expect(await banco.select().from(schema.contas).where(sql`${schema.contas.userId} in (select id from usuarios where email = ${d.email})`)).toHaveLength(0);
+  });
+
+  it("e-mail com espaços e maiúsculas é gravado normalizado em usuarios e na auditoria", async () => {
+    const local = `Fulano-${randomUUID()}`;
+    const id = await criarUsuarioComSenha(banco, hashReal, dados({ email: `  ${local}@Ficticio.INVALID ` }));
+    const esperado = `${local.toLowerCase()}@ficticio.invalid`;
+    expect((await banco.select().from(schema.usuarios).where(eq(schema.usuarios.id, id)))[0].email).toBe(esperado);
+    expect((await eventos(id, "usuario_criado"))[0].depois).toMatchObject({ email: esperado });
   });
 
   it("script usuario:criar: ida e volta com o login do Better Auth; saída sem a senha", async () => {
@@ -214,12 +266,18 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
   it("redefinir: troca o hash, derruba as sessões, senha antiga falha e a nova entra; auditoria sem senhas", async () => {
     const d = dados();
     const id = await criarUsuarioComSenha(banco, hashReal, d);
+    const outro = dados();
+    const idOutro = await criarUsuarioComSenha(banco, hashReal, outro);
+    const sessaoOutro = cookieDe((await entrar(outro.email, SENHA)).headers);
     const antiga = await entrar(d.email, SENHA);
     const cookie = cookieDe(antiga.headers);
     expect(await novoAuth().api.getSession({ headers: new Headers({ cookie }) })).not.toBeNull();
     expect(await redefinirSenha(banco, hashReal, { email: ` ${d.email.toUpperCase()} `, novaSenha: NOVA, operador: "operador_teste" })).toBe(true);
     expect(await banco.select().from(schema.sessoes).where(eq(schema.sessoes.userId, id))).toHaveLength(0);
     expect(await novoAuth().api.getSession({ headers: new Headers({ cookie }) })).toBeNull();
+    // Só as sessões do alvo: a do outro usuário sobrevive.
+    expect(await banco.select().from(schema.sessoes).where(eq(schema.sessoes.userId, idOutro))).toHaveLength(1);
+    expect(await novoAuth().api.getSession({ headers: new Headers({ cookie: sessaoOutro }) })).not.toBeNull();
     await expect(entrar(d.email, SENHA)).rejects.toMatchObject({ statusCode: 401 });
     expect((await entrar(d.email, NOVA)).response.token).toBeTruthy();
     const [ev] = await eventos(id, "senha_redefinida");
@@ -253,12 +311,17 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     expect(await conta()).toBe(n);
   });
 
-  it("redefinir: usuário sem conta credential ganha uma e entra com a nova senha", async () => {
+  it("redefinir: usuário sem conta credential é recusado com mensagem fixa, sem gravar nem apagar sessões", async () => {
     const email = novoEmail();
     const [u] = await banco.insert(schema.usuarios).values({ nome: "[FICTÍCIO] Sem conta", email, perfilId: "tecnico", ficticio: true }).returning({ id: schema.usuarios.id });
-    expect(await redefinirSenha(banco, hashReal, { email, novaSenha: NOVA, operador: null })).toBe(true);
-    expect(await contasDe(u.id)).toHaveLength(1);
-    expect((await entrar(email, NOVA)).response.token).toBeTruthy();
+    await banco.insert(schema.sessoes).values({ token: randomUUID(), userId: u.id, expiresAt: new Date(Date.now() + 60_000) });
+    const erro = await redefinirSenha(banco, hashReal, { email, novaSenha: NOVA, operador: null }).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroDominio);
+    expect((erro as Error).message).toBe("Usuário sem senha cadastrada.");
+    expect(ehMensagemDeDominio("Usuário sem senha cadastrada.")).toBe(true);
+    expect(await contasDe(u.id)).toHaveLength(0);
+    expect(await banco.select().from(schema.sessoes).where(eq(schema.sessoes.userId, u.id))).toHaveLength(1);
+    expect(await eventos(u.id, "senha_redefinida")).toHaveLength(0);
   });
 
   it("script usuario:redefinir-senha: mensagens fixas, saída sem a senha", async () => {

@@ -1,7 +1,6 @@
 import type { Perfil } from "../lib/dominio/permissoes/perfis";
-import { criarAuth } from "../lib/servidor/auth-config";
 import { criarUsuarioComSenha } from "../lib/servidor/usuarios-auth";
-import { type Banco, comRoleDaAplicacao, lerSenha, operadorAtual, rodarSeDireto } from "./operacao";
+import { type Banco, comRoleDaAplicacao, hashDoBetterAuth, lerSenha, operadorAtual, rodarSeDireto } from "./operacao";
 
 type Deps = {
   banco: Banco;
@@ -40,7 +39,7 @@ rodarSeDireto(import.meta.url, async (banco) => {
   return main(process.argv.slice(2), {
     banco,
     // Preguiçoso: argumentos e role são checados antes de exigir a configuração do Better Auth.
-    hash: async (senha) => (await criarAuth({ banco }).$context).password.hash(senha),
+    hash: hashDoBetterAuth(banco),
     senha: () => lerSenha(process.stdin, process.stderr),
     operador: operadorAtual(),
     log: console.log,

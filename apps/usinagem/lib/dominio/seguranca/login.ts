@@ -49,8 +49,8 @@ export function registroLogin(d: { email: unknown; sucesso: boolean; bloqueado?:
   };
 }
 
-/** Conta unidades UTF-16 (`length`), igual ao Better Auth. */
-export const senhaValida = (s: unknown): boolean => typeof s === "string" && s.length >= SENHA_MIN && s.length <= SENHA_MAX;
+/** Conta unidades UTF-16 (`length`), igual ao Better Auth. Caractere de controle (\n, \r, \t, NUL) recusa: não se digita no campo de senha. */
+export const senhaValida = (s: unknown): boolean => typeof s === "string" && s.length >= SENHA_MIN && s.length <= SENHA_MAX && !/\p{Cc}/u.test(s);
 
 /** Sem sessão Better Auth (null) conta como velha: o seletor de dev nunca faz ação sensível. */
 export const exigeReautenticacao = (sessaoCriadaEm: Date | null, agora: Date): boolean =>

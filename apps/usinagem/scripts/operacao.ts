@@ -7,13 +7,51 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { ErroDominio } from "../lib/dominio/comum";
 import * as schema from "../lib/servidor/db/schema";
 import { urlLocal } from "../lib/servidor/db/url-local";
+import { criarAuth } from "../lib/servidor/auth-config";
 import { operadorValido } from "../lib/servidor/usuarios-auth";
 
 // Base comum dos scripts de operação (usuario:*). Mensagens fixas: nunca ecoam argumento, senha nem erro do pg.
 export type Banco = NodePgDatabase<typeof schema>;
 export const ROLE_APP = "usinagem_app";
 export const MSG_ROLE = "Recusado: o script só roda com a role da aplicação.";
-export const MSG_FALHA = "Falha ao acessar o banco ou a configuração.";
+export const MSG_CONEXAO = "Banco indisponível: conexão recusada ou interrompida.";
+export const MSG_CONFIG = "Configuração ausente ou inválida: confira DATABASE_URL e BETTER_AUTH_SECRET.";
+export const MSG_DUPLICADO = "E-mail já cadastrado.";
+export const MSG_PERFIL = "Perfil inexistente.";
+export const MSG_FALHA = "Falha inesperada na operação.";
+
+/** Configuração ausente ou inválida (URL do banco, segredo do Better Auth). Sem mensagem: quem imprime é mensagemDeErro. */
+export class ErroConfiguracao extends Error {}
+
+const CONEXAO = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EHOSTUNREACH", "ENOTFOUND", "EAI_AGAIN", "57P03"]);
+
+/** Uma frase fixa por classe, pelo código (do erro ou do `cause` que o drizzle embrulha). Nunca o texto do pg, que traz query e parâmetros. */
+export function mensagemDeErro(e: unknown): string {
+  if (e instanceof ErroDominio) return e.message;
+  if (e instanceof ErroConfiguracao) return MSG_CONFIG;
+  const pg = (e as { cause?: unknown } | null)?.cause ?? e;
+  const { code, constraint } = (typeof pg === "object" && pg !== null ? pg : {}) as { code?: unknown; constraint?: unknown };
+  if (typeof code !== "string") return MSG_FALHA;
+  if (CONEXAO.has(code) || code.startsWith("08")) return MSG_CONEXAO;
+  // 28: autenticação recusada (usuário/senha da URL); 3D000: banco inexistente na URL.
+  if (code.startsWith("28") || code === "3D000") return MSG_CONFIG;
+  if (code === "23505") return MSG_DUPLICADO;
+  if (code === "23503" && constraint === "usuarios_perfil_id_perfis_id_fk") return MSG_PERFIL;
+  return MSG_FALHA;
+}
+
+/** Hash do contexto do Better Auth (o mesmo que o login verifica), criado só quando a senha já foi lida. */
+export const hashDoBetterAuth =
+  (banco: Banco) =>
+  async (senha: string): Promise<string> => {
+    let auth: ReturnType<typeof criarAuth>;
+    try {
+      auth = criarAuth({ banco });
+    } catch {
+      throw new ErroConfiguracao();
+    }
+    return (await auth.$context).password.hash(senha);
+  };
 
 /** `import.meta.url` vem codificado (espaço = %20, acento em UTF-8): compara com a URL do argv[1], nunca com `file://` + caminho cru. */
 export const ehExecucaoDireta = (importMetaUrl: string, argv1: string | undefined): boolean =>
@@ -29,7 +67,7 @@ export async function comRoleDaAplicacao(banco: Banco, erro: (m: string) => void
     }
     return await fn();
   } catch (e) {
-    erro(e instanceof ErroDominio ? e.message : MSG_FALHA);
+    erro(mensagemDeErro(e));
     return 1;
   }
 }
@@ -42,7 +80,8 @@ export async function lerSenha(entrada: NodeJS.ReadableStream & { isTTY?: boolea
   if (!entrada.isTTY) {
     let texto = "";
     for await (const c of entrada) texto += String(c);
-    return texto.replace(/\r?\n$/, "");
+    // Sem trim: espaços são da senha. Só um terminador final sai (\r\n, \n ou \r).
+    return texto.replace(/(?:\r\n|\n|\r)$/, "");
   }
   const mudo = new Writable({ write: (_c, _e, cb) => cb() });
   const rl = createInterface({ input: entrada, output: mudo, terminal: true });
@@ -82,13 +121,13 @@ export function rodarSeDireto(importMetaUrl: string, executar: (banco: Banco) =>
     }
   })();
   if (!banco) {
-    console.error(MSG_FALHA);
+    console.error(MSG_CONFIG);
     process.exitCode = 1;
     return;
   }
   executar(banco)
-    .catch(() => {
-      console.error(MSG_FALHA);
+    .catch((e: unknown) => {
+      console.error(mensagemDeErro(e));
       return 1;
     })
     .then((codigo) => {

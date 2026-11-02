@@ -44,11 +44,11 @@ export async function criarUsuarioComSenha(
   if (!email) throw new ErroDominio("E-mail inválido.");
   const nome = d.nome.trim();
   if (!nome) throw new ErroDominio("Nome inválido.");
-  if (!(PERFIS as readonly string[]).includes(d.perfil)) throw new ErroDominio("Perfil inválido.");
+  if (!(PERFIS as readonly string[]).includes(d.perfil)) throw new ErroDominio("Perfil inexistente.");
   const senhaHash = await hash(d.senha);
   return banco.transaction(async (tx) => {
     const [perfil] = await tx.select({ id: schema.perfis.id }).from(schema.perfis).where(eq(schema.perfis.id, d.perfil));
-    if (!perfil) throw new ErroDominio("Perfil inválido.");
+    if (!perfil) throw new ErroDominio("Perfil inexistente.");
     // ponytail: pré-checagem fora de trava; numa corrida o unique de usuarios.email recusa e a transação desfaz tudo.
     const [existente] = await tx.select({ id: schema.usuarios.id }).from(schema.usuarios).where(eq(schema.usuarios.email, email));
     if (existente) throw new ErroDominio("E-mail já cadastrado.");
@@ -71,7 +71,7 @@ export async function criarUsuarioComSenha(
 }
 
 /**
- * Troca o hash da conta `credential` (cria a conta se faltar) e apaga todas as sessões do usuário, na mesma transação.
+ * Troca o hash da conta `credential` (recusa se faltar) e apaga todas as sessões do usuário, na mesma transação.
  * E-mail inválido ou desconhecido devolve false sem gravar nada. Auditoria `senha_redefinida` sem senha, sem autor.
  */
 export async function redefinirSenha(banco: Banco, hash: Hash, d: { email: string; novaSenha: string; operador: string | null }): Promise<boolean> {
@@ -87,7 +87,8 @@ export async function redefinirSenha(banco: Banco, hash: Hash, d: { email: strin
       .set({ password: senhaHash, updatedAt: new Date() })
       .where(and(eq(schema.contas.userId, u.id), eq(schema.contas.providerId, "credential")))
       .returning({ id: schema.contas.id });
-    if (atualizadas.length === 0) await tx.insert(schema.contas).values({ providerId: "credential", accountId: u.id, userId: u.id, password: senhaHash });
+    // Sem conta credential: recusa. Lançar desfaz a transação (o UPDATE não tocou nada; as sessões ainda não foram apagadas).
+    if (atualizadas.length === 0) throw new ErroDominio("Usuário sem senha cadastrada.");
     await tx.delete(schema.sessoes).where(eq(schema.sessoes.userId, u.id));
     await tx.insert(schema.eventosAuditoria).values({
       autorId: null,

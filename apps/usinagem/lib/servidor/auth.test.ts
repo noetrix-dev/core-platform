@@ -193,10 +193,12 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     const senhaErrada = await tentar({ email: ativo.email, password: "senha-errada-de-teste-999" });
     const inexistente = await tentar({ email: `teste-${randomUUID()}@ficticio.invalid`, password: "senha-errada-de-teste-999" });
     const inativoCerta = await tentar({ email: inativo.email, password: SENHA });
+    // Senha com caractere de controle (recusada por senhaValida na criação): o login dá o mesmo 401 genérico.
+    const comControle = await tentar({ email: ativo.email, password: "senha-com\ncontrole\t\r-99" });
 
     expect(senhaErrada.status).toBe(401);
     expect(JSON.parse(senhaErrada.corpo)).toEqual(ERRO_GENERICO);
-    for (const outro of [inexistente, inativoCerta]) {
+    for (const outro of [inexistente, inativoCerta, comControle]) {
       expect({ status: outro.status, corpo: outro.corpo, cookies: outro.cookies }).toEqual({
         status: senhaErrada.status,
         corpo: senhaErrada.corpo,
@@ -208,6 +210,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     expect(senhaErrada).toMatchObject({ verify: 1, hash: 0 });
     expect(inexistente).toMatchObject({ verify: 0, hash: 1 });
     expect(inativoCerta).toMatchObject({ verify: 1, hash: 0 });
+    expect(comControle).toMatchObject({ verify: 1, hash: 0 });
   });
 
   it("5. inativo com a senha certa não recebe sessão e sai com o erro da senha errada", async () => {

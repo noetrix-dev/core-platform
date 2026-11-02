@@ -150,7 +150,19 @@ describe("e-mail na auditoria nunca é o texto bruto", () => {
 });
 
 describe("política de senha", () => {
-  it.each([["x".repeat(11), false], ["x".repeat(12), true], ["x".repeat(128), true], ["x".repeat(129), false], [12, false]])(
+  it.each([
+    ["x".repeat(11), false],
+    ["x".repeat(12), true],
+    ["x".repeat(128), true],
+    ["x".repeat(129), false],
+    [12, false],
+    // Caractere de controle (\n, \r, \t, NUL) não é digitável no campo de senha: recusado.
+    ["x".repeat(12) + "\n", false],
+    ["x".repeat(12) + "\r", false],
+    ["x".repeat(6) + "\t" + "x".repeat(6), false],
+    ["x".repeat(12) + "\u0000", false],
+    ["  senha com espaço  ", true],
+  ])(
     "%#", (s, ok) => expect(senhaValida(s)).toBe(ok),
   );
 });

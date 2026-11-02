@@ -36,7 +36,8 @@ const MENSAGENS_DE_DOMINIO = new Set<string>([
   "Senha fora da política.",
   "E-mail inválido.",
   "Nome inválido.",
-  "Perfil inválido.",
+  "Perfil inexistente.",
+  "Usuário sem senha cadastrada.",
   "E-mail já cadastrado.",
   "Erro de domínio.",
 ]);
