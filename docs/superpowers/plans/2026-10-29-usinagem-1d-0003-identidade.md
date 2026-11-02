@@ -1063,6 +1063,12 @@ Mocks de `./auth` e `next/headers`, como em `sessao-dev.test.ts`. Testes:
 - **Scripts, num commit separado desta task:** `entrada.setEncoding("utf8")` na leitura por pipe, e o validador de e-mail do login (`z.email()` com a mesma normalização) nos scripts, no lugar de `emailParaAuditoria`.
 - **SQL destrutivo** só em transação revertida, inclusive nas mutações.
 
+**Mais dois acréscimos do responsável humano (2026-11-02):**
+1. **Login não mexe em `contas.atualizado_em`.** Teste: um login normal deixa `contas.atualizado_em` igual, e a sessão recém-criada é aceita na leitura. Só a redefinição de senha move esse campo. Mutação: fazer o login atualizar `contas.atualizado_em`, o que tem que derrubar o teste.
+2. **Nenhuma autorização usa `/api/auth/get-session`.** Toda decisão de acesso passa por `usuarioAtual` e `requirePermissao`. Implementar as duas proteções:
+   - **(a) Hook.** O `hooks.after` de `/get-session` devolve sessão nula quando a sessão é obsoleta, isto é, quando o `createdAt` dela é anterior ao `atualizado_em` da conta `credential`. Também devolve nula quando o usuário está inativo. Teste com RED e mutação que remove o hook.
+   - **(b) Scanner.** Uma regra em `scripts/cobertura-acoes.ts` só permite `auth().api.getSession`, `api.getSession` e `useSession` em `lib/servidor/sessao.ts`. Qualquer outro arquivo varrido que os use é violação. Teste com um arquivo fictício fora da lista e mutação que desliga a regra.
+
 ### Task 10: Alteração de usuário com o último Admin travado
 
 **Files:**
