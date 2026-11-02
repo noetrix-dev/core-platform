@@ -33,6 +33,11 @@ const MENSAGENS_DE_DOMINIO = new Set<string>([
   "Reserva de estoque inválida.",
   "Entrada de status inválida.",
   "Soma fora do limite seguro.",
+  "Senha fora da política.",
+  "E-mail inválido.",
+  "Nome inválido.",
+  "Perfil inválido.",
+  "E-mail já cadastrado.",
   "Erro de domínio.",
 ]);
 
