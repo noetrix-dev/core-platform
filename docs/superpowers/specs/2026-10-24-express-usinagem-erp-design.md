@@ -497,6 +497,8 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | `estrutura.test.ts`: comparar `conrelid::regclass::text` depende de o `search_path` incluir `public`. Com nome qualificado, o teste de FK append-only passaria sem checar nada. Trocar por `conrelid = any($1::regclass[])`. | Próximo commit que mexer no teste |
 | `estrutura.test.ts`: o `fks.find` pega só a primeira FK em `criado_por` por tabela. Com mais de uma FK nessa coluna, as demais não seriam conferidas. Conferir todas, por exemplo com `filter` e `every`. | Próximo commit que mexer no teste |
 | Troca de senha pelo próprio usuário e recuperação self-service de senha. Até lá, a redefinição é feita pelo script de operação (`usuario:redefinir-senha`), que apaga as sessões do alvo. | Depois do 1D, antes de cliente real |
+| Login sem `Origin`, sem `Referer` e sem cookie não passa pela checagem de origem do Better Auth (`origin-check.mjs:133-148`). Não é CSRF, porque navegador envia `Origin` em POST cross-site, mas cliente fora de navegador entra sem checagem de origem. Avaliar exigir `Origin` em `/sign-in/email` no `hooks.before`. | PR 2 |
+| Testes com Postgres deixam no banco local, a cada execução, usuários fictícios (`@ficticio.invalid`) com contas, sessões e linhas de auditoria append-only, que a role da aplicação não pode apagar. Nenhuma suíte depende de contagem global. Criar um procedimento de limpeza do banco de teste (recriar o banco local, ou rodar como dona fora do app) antes que o volume atrapalhe. | Trilha de infraestrutura |
 
 ### 9.3 Checklist de entrada em produção
 
