@@ -91,6 +91,13 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
       // Defesa em profundidade: o filtro de rota (Task 8) é a primeira barreira.
       before: createAuthMiddleware(async (ctx) => {
         if (!(CAMINHOS_AUTH_PERMITIDOS as readonly string[]).includes(ctx.path)) throw new APIError("NOT_FOUND");
+        if (ctx.path === "/sign-in/email" && ctx.body && typeof ctx.body === "object") {
+          // O destino pós-login é do app (destinoSeguro), nunca do corpo: auth.api sem request não valida callbackURL.
+          // Mutação em vez de `{ context: { body } }`: o merge do dispatch (defu) manteria a chave original.
+          const corpo = ctx.body as Record<string, unknown>;
+          delete corpo.callbackURL;
+          delete corpo.errorCallbackURL;
+        }
       }),
       after: createAuthMiddleware(async (ctx) => {
         if (ctx.path !== "/sign-in/email") return;

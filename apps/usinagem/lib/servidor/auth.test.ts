@@ -284,6 +284,34 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     }
   });
 
+  it("8c. callbackURL do login é descartado: auth.api, externo e relativo, não devolve destino", async () => {
+    for (const callbackURL of ["https://atacante.invalid/x", "/painel"]) {
+      const u = await criarUsuario();
+      const r = await auth.api.signInEmail({ body: { email: u.email, password: SENHA, callbackURL }, returnHeaders: true });
+      expect({ callbackURL, url: r.response.url, redirect: r.response.redirect, location: r.headers.get("location") }).toEqual({
+        callbackURL,
+        url: undefined,
+        redirect: false,
+        location: null,
+      });
+    }
+  });
+
+  it("8d. callbackURL via HTTP: externo cai no 403 do Better Auth antes do hook; relativo é descartado", async () => {
+    const u = await criarUsuario();
+    const externo = await entrar({ email: u.email, password: SENHA, callbackURL: "https://atacante.invalid/x" }, { [HEADER_IP]: ipUnico(), origin: BASE });
+    expect(externo.status).toBe(403);
+    const corpoExterno = await externo.text();
+    expect(JSON.parse(corpoExterno).code).toBe("INVALID_CALLBACK_URL");
+    expect(corpoExterno).not.toContain("atacante");
+    expect(externo.headers.get("location")).toBeNull();
+
+    const relativo = await entrar({ email: u.email, password: SENHA, callbackURL: "/painel" }, { [HEADER_IP]: ipUnico(), origin: BASE });
+    expect(relativo.status).toBe(200);
+    const corpo = await relativo.json();
+    expect({ url: corpo.url, redirect: corpo.redirect, location: relativo.headers.get("location") }).toEqual({ url: undefined, redirect: false, location: null });
+  });
+
   it("9. origem: Origin estranha é recusada e a do próprio app passa", async () => {
     const u = await criarUsuario();
     const atacante = await entrar({ email: u.email, password: SENHA }, { [HEADER_IP]: ipUnico(), origin: "https://atacante.invalid" });
