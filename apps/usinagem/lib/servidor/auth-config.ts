@@ -79,7 +79,10 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
           // Usuário inativo nunca recebe sessão. A senha já foi verificada pelo Better Auth (custo igual).
           before: async (sessao) => {
             const [u] = await banco.select({ ativo: schema.usuarios.ativo }).from(schema.usuarios).where(eq(schema.usuarios.id, sessao.userId));
-            return u?.ativo ? { data: sessao } : false;
+            if (!u?.ativo) return false;
+            // rememberMe: false faria a sessão valer 24 h (internal-adapter.mjs:199); o teto absoluto é 12 h.
+            const teto = Date.now() + DOZE_HORAS_S * 1000;
+            return { data: { ...sessao, expiresAt: new Date(Math.min(new Date(sessao.expiresAt).getTime(), teto)) } };
           },
         },
       },

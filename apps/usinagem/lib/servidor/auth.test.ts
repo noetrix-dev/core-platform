@@ -187,7 +187,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
       verify.mockClear();
       hash.mockClear();
       const r = await entrar(corpo);
-      return { status: r.status, corpo: await r.text(), verify: verify.mock.calls.length, hash: hash.mock.calls.length };
+      return { status: r.status, corpo: await r.text(), cookies: r.headers.getSetCookie(), verify: verify.mock.calls.length, hash: hash.mock.calls.length };
     };
     const senhaErrada = await tentar({ email: ativo.email, password: "senha-errada-de-teste-999" });
     const inexistente = await tentar({ email: `teste-${randomUUID()}@ficticio.invalid`, password: "senha-errada-de-teste-999" });
@@ -196,8 +196,13 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     expect(senhaErrada.status).toBe(401);
     expect(JSON.parse(senhaErrada.corpo)).toEqual(ERRO_GENERICO);
     for (const outro of [inexistente, inativoCerta]) {
-      expect({ status: outro.status, corpo: outro.corpo }).toEqual({ status: senhaErrada.status, corpo: senhaErrada.corpo });
+      expect({ status: outro.status, corpo: outro.corpo, cookies: outro.cookies }).toEqual({
+        status: senhaErrada.status,
+        corpo: senhaErrada.corpo,
+        cookies: senhaErrada.cookies,
+      });
     }
+    expect(senhaErrada.cookies.some((c) => c.includes("session_token"))).toBe(false);
     // Uma derivação scrypt por tentativa: o Better Auth faz hash da senha recebida quando o usuário não existe.
     expect(senhaErrada).toMatchObject({ verify: 1, hash: 0 });
     expect(inexistente).toMatchObject({ verify: 0, hash: 1 });
@@ -256,6 +261,27 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     // updateAge de 1 h: sem a trava, o getSession de 2 h acima renovaria. A trava é a única coisa que impede.
     expect(options.session?.updateAge).toBe(60 * 60);
     expect(options.session?.disableSessionRefresh).toBe(true);
+  });
+
+  it("8b. rememberMe (false, true ou ausente) não muda a expiração de 12 h no servidor", async () => {
+    for (const rememberMe of [false, true, undefined]) {
+      const u = await criarUsuario();
+      const r = await entrar({ email: u.email, password: SENHA, ...(rememberMe === undefined ? {} : { rememberMe }) });
+      expect(r.status).toBe(200);
+      const [s] = await sessoesDe(u.id);
+      const duracaoMs = s.expiresAt.getTime() - s.createdAt.getTime();
+      expect(duracaoMs, `rememberMe=${rememberMe}`).toBeGreaterThanOrEqual(DOZE_HORAS_MS - 5000);
+      expect(duracaoMs, `rememberMe=${rememberMe}`).toBeLessThanOrEqual(DOZE_HORAS_MS + 5000);
+      const cookies = r.headers.getSetCookie();
+      const sessao = cookies.find((c) => c.startsWith("__Secure-usinagem.session_token="));
+      // rememberMe false: cookie de sessão do navegador (sem Max-Age) mais o cookie dont_remember; quem vale é o expiresAt do servidor.
+      // Max-Age vem de sessionConfig.expiresIn, constante (cookies/index.mjs:126): valor exato, sem tolerância.
+      expect({ rememberMe, maxAge: /Max-Age=(\d+)/i.exec(sessao ?? "")?.[1], dontRemember: cookies.some((c) => c.startsWith("__Secure-usinagem.dont_remember=")) }).toEqual({
+        rememberMe,
+        maxAge: rememberMe === false ? undefined : "43200",
+        dontRemember: rememberMe === false,
+      });
+    }
   });
 
   it("9. origem: Origin estranha é recusada e a do próprio app passa", async () => {
