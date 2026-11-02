@@ -2,8 +2,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import ts from "typescript";
 
-/** Rotas que não passam pelo wrapper, com motivo. O 1D acrescenta a do Better Auth. */
-export const ROTAS_ISENTAS: readonly string[] = [];
+/** Rotas que não passam pelo wrapper, com motivo. Caminho exato; cada entrada é revisada. */
+export const ROTAS_ISENTAS: readonly string[] = [
+  // Endpoint do próprio Better Auth: é ele que cria a sessão, então não há sessão para rota() checar. A barreira é a
+  // allowlist de caminhos (filtrarCaminhoAuth, só sign-in/email, sign-out e get-session) mais o hooks.before do auth-config.
+  "app/api/auth/[...all]/route.ts",
+];
 /** Arquivos autorizados a usar acaoPublica (ação sem sessão por natureza, ex.: login). Cada entrada é revisada. */
 export const ACOES_PUBLICAS: readonly string[] = [];
 

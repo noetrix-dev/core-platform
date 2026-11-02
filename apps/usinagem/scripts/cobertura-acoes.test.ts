@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ehMensagemDeDominio, mensagensDeDominio } from "../lib/dominio/comum";
-import { ACOES_PUBLICAS, arquivosQueChamamPode, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
+import { ACOES_PUBLICAS, ROTAS_ISENTAS, arquivosQueChamamPode, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
 
 const IMP = `import { acao, acaoPublica } from "@/lib/servidor/acao";\n`;
 const IMP_ROTA = `import { rota } from "@/lib/servidor/acao";\n`;
@@ -45,6 +45,21 @@ describe("cobertura do wrapper de permissão", () => {
   it("route.ts recusa export default e re-export", () => {
     expect(violacoes("app/api/x/route.ts", `${IMP_ROTA}export default rota("processo.ver", async () => new Response())`)).toHaveLength(1);
     expect(violacoes("app/api/x/route.ts", `export { GET } from "./outro";`)).toHaveLength(1);
+  });
+  describe("ROTAS_ISENTAS", () => {
+    const CRU = `export const GET = (req: Request) => fazer(req);\nexport const POST = (req: Request) => fazer(req);`;
+    it("é exatamente a rota do Better Auth", () => {
+      expect(ROTAS_ISENTAS).toEqual(["app/api/auth/[...all]/route.ts"]);
+    });
+    it("a rota isenta aceita handler cru", () => {
+      expect(violacoes("app/api/auth/[...all]/route.ts", CRU)).toEqual([]);
+    });
+    it.each(["app/api/x/route.ts", "app/api/auth/route.ts", "app/api/auth/[...outro]/route.ts", "app/api/auth/[...all]/route.js", "x/app/api/auth/[...all]/route.ts"])(
+      "outra route.ts com handler cru continua violação: %s",
+      (caminho) => {
+        expect(violacoes(caminho, CRU)).toHaveLength(2);
+      },
+    );
   });
   it("route.ts só com configuração de segmento passa", () => {
     expect(violacoes("app/api/x/route.ts", `export const dynamic = "force-dynamic";`)).toEqual([]);
