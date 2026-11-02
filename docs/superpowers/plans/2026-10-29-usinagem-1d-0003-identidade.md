@@ -1069,6 +1069,14 @@ Mocks de `./auth` e `next/headers`, como em `sessao-dev.test.ts`. Testes:
    - **(a) Hook.** O `hooks.after` de `/get-session` devolve sessão nula quando a sessão é obsoleta, isto é, quando o `createdAt` dela é anterior ao `atualizado_em` da conta `credential`. Também devolve nula quando o usuário está inativo. Teste com RED e mutação que remove o hook.
    - **(b) Scanner.** Uma regra em `scripts/cobertura-acoes.ts` só permite `auth().api.getSession`, `api.getSession` e `useSession` em `lib/servidor/sessao.ts`. Qualquer outro arquivo varrido que os use é violação. Teste com um arquivo fictício fora da lista e mutação que desliga a regra.
 
+     A regra varre o identificador `getSession` (e `useSession`) em QUALQUER forma fora de `lib/servidor/sessao.ts`, não só a forma com ponto:
+     - acesso por propriedade (`x.getSession`, `x["getSession"]`);
+     - desestruturação (`const { getSession } = auth().api`, `const { getSession: g } = ...`);
+     - import nomeado com ou sem alias (`import { useSession as u }`);
+     - referência solta.
+
+     Há um caso de teste para a desestruturação e outro para o alias. A mutação que reduz a regra à forma com ponto precisa derrubar esses testes.
+
 ### Task 10: Alteração de usuário com o último Admin travado
 
 **Files:**
