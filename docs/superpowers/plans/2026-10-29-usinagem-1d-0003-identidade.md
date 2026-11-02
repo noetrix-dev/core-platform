@@ -1046,6 +1046,23 @@ Mocks de `./auth` e `next/headers`, como em `sessao-dev.test.ts`. Testes:
 - ação sensível sem login recente é recusada sem executar;
 - o seletor de dev nunca passa em ação sensível.
 
+**Acréscimo do responsável humano (2026-11-02): corrida entre login concorrente e redefinição de senha.** Classificado como Important e bloqueio de produção (spec §9.3).
+- **O problema.** Um login que já leu o hash antigo termina o scrypt e grava a sessão depois do DELETE e do commit da redefinição.
+- **Por que rejeitar `createdAt` anterior ao `atualizado_em` não basta sozinho.** A sessão da corrida nasce depois do commit, então o `createdAt` padrão dela seria posterior ao `atualizado_em`.
+- **O que implementar:**
+  1. No `hooks.before` de `/sign-in/email`, carimbar o início da requisição de login (relógio do host do app) no contexto da requisição, antes de o Better Auth ler o hash. Usar o mesmo mecanismo por requisição da Task 6 (`WeakMap` ou `WeakSet` com `ctx.context`).
+  2. No `databaseHooks.session.create.before`, usar esse instante como `createdAt` da sessão. O teto de 12 h continua contado a partir da criação real.
+  3. Na leitura da sessão desta task (`usuarioAtual` e `requirePermissao`), rejeitar sessão com `createdAt` anterior ao `atualizado_em` da conta `credential` do usuário, como 401.
+  4. `redefinirSenha` grava `contas.atualizado_em` na mesma transação do UPDATE do hash, com o relógio do host do app (`new Date()`), não o `now()` do banco, para comparar com o carimbo do mesmo relógio.
+- **Teste que force o intercalamento,** com RED antes do código:
+  1. um `verify` atrasado (spy que segura a promessa até um sinal);
+  2. com o login parado ali, `redefinirSenha` roda e faz commit;
+  3. o login é liberado e grava a sessão;
+  4. a leitura dessa sessão é recusada.
+- **Mutações:** remover o carimbo, fazendo o `createdAt` voltar ao padrão; remover a checagem na leitura. As duas precisam derrubar o teste.
+- **Scripts, num commit separado desta task:** `entrada.setEncoding("utf8")` na leitura por pipe, e o validador de e-mail do login (`z.email()` com a mesma normalização) nos scripts, no lugar de `emailParaAuditoria`.
+- **SQL destrutivo** só em transação revertida, inclusive nas mutações.
+
 ### Task 10: Alteração de usuário com o último Admin travado
 
 **Files:**
