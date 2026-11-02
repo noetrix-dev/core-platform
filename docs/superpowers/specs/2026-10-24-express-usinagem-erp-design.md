@@ -510,7 +510,9 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | A consulta de contagem de falhas por e-mail (`eventos_auditoria` com `operacao` e `depois->>'email'`) roda em todo login e não tem índice. Criar índice funcional, por exemplo `(operacao, (depois->>'email'), criado_em)`, numa migration gerada pelo responsável humano. | Antes da entrada em produção (§9.3) |
 | Diferença de relógio entre app e banco no bloqueio: `agora` vem do relógio do app e `criado_em` do relógio do banco. Banco adiantado em d estende o bloqueio em d; atrasado, encurta em d. Usar `now()` do banco na consulta, ou garantir NTP nos dois hosts. | Antes da entrada em produção (§9.3) |
 | Autor da auditoria nos scripts de operação (`usuario:criar`, `usuario:redefinir-senha`, `usuario:desbloquear`): `autor_id` nulo (não existe usuário de sistema), `justificativa` com o nome do script e `depois.operador` com o usuário do sistema operacional que rodou o script (só se casar com um nome de usuário POSIX válido; senão nulo). Nunca grava senha, e-mail digitado inválido nem variável de ambiente. | 1D, Task 7 |
-| Script `usuario:desbloquear`: a guarda `import.meta.url === file://${process.argv[1]}` não casa se o caminho tiver caractere codificado em URL (espaço, acento), e o script sai com código 0 sem fazer nada; trocar por `pathToFileURL(process.argv[1]).href`. Com o banco fora do ar, a rejeição não tratada imprime o stack do `pg` (sem senha), fora do padrão de mensagens fixas. | Próximo commit que mexer nos scripts de operação (Task 7) |
+| Script `usuario:desbloquear`: a guarda `import.meta.url === file://${process.argv[1]}` não casa se o caminho tiver caractere codificado em URL (espaço, acento), e o script sai com código 0 sem fazer nada; trocar por `pathToFileURL(process.argv[1]).href`. Com o banco fora do ar, a rejeição não tratada imprime o stack do `pg` (sem senha), fora do padrão de mensagens fixas. | Corrigido na Task 7 (`1232aab`, `ee292b6`) |
+| Regra de SQL destrutivo em testes e mutações: DELETE, UPDATE ou TRUNCATE só rodam dentro de transação revertida (`BEGIN ... ROLLBACK`) ou num banco de testes separado; nunca no banco local compartilhado. Incidente que motivou a regra: na Task 7 do 1D, uma mutação de prova (DELETE de `sessoes` sem `WHERE`) rodou contra o Postgres local e apagou todas as sessões, porque teste e desenvolvimento usam o mesmo banco. | Vale a partir do 1D (Task 7) |
+| Banco de testes separado: criar `usinagem_test` (mesmas roles e migrations) e apontar o Vitest para ele, deixando o banco local de desenvolvimento fora do alcance dos testes. A criação do banco e das roles é infraestrutura feita pelo responsável humano. | Antes da entrada em produção (§9.3) |
 | `databaseHooks.session.create.before` usa `if (ctx && bloqueados.has(ctx.context))`: se uma versão futura do Better Auth chamar o hook sem `ctx`, o bloqueio falha aberto. Os testes 11, 13 e 15 da `auth.test.ts` são a guarda; manter ao atualizar o Better Auth. | Qualquer atualização do Better Auth |
 
 ### 9.3 Checklist de entrada em produção
@@ -528,6 +530,7 @@ Nada vai para produção com cliente real enquanto um item abaixo estiver aberto
 - [ ] Fechar a corrida no limiar do bloqueio por e-mail com advisory lock por e-mail (`pg_advisory_xact_lock(hashtext(email))`) ou gravando a tentativa no `hooks.before` (§9.2).
 - [ ] Índice funcional para a contagem de falhas por e-mail em `eventos_auditoria` (§9.2).
 - [ ] Relógio de app e banco sincronizados (NTP), ou contagem do bloqueio com `now()` do banco (§9.2).
+- [ ] Banco de testes separado (`usinagem_test`) com o Vitest apontado para ele; o banco de desenvolvimento fora do alcance dos testes (§9.2).
 
 ## 10. Testes de aceite
 
