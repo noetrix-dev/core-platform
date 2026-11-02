@@ -521,6 +521,11 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | No mapeamento de erros dos scripts, o 23505 não confere a constraint (o 23503 confere): qualquer violação de unicidade vira "E-mail já cadastrado.". Hoje só existe a do e-mail; conferir `constraint` quando surgir outra. | Próximo commit que mexer nos scripts de operação |
 | O teste de TTY usa um `PassThrough` com `isTTY` e não prova a supressão do eco num terminal real (depende do `setRawMode` do readline). Validar manualmente ao rodar `usuario:criar` num terminal real. | Validação manual do responsável humano (1D) |
 | O script valida o e-mail com `emailParaAuditoria`, que pode aceitar formato que o `z.email()` do login recusa (por exemplo sem TLD): a conta é criada mas nunca entra. Alinhar com o mesmo validador do login. | Próximo commit que mexer nos scripts de operação |
+| `proxy.ts` deixa fora do gate, também em produção, as árvores `/entrar/**`, `/dev/**` e `/api/auth/**`. Toda página criada sob elas tem de se proteger sozinha: a página de `/dev` responde `notFound()` fora de development e só existe com `pageExtensions` do gate; nada de conteúdo protegido sob `/entrar`. | 1D, Task 12, e qualquer rota nova sob essas árvores |
+| `getSessionCookie` também aceita a variante `usinagem-session_token` (com hífen, `cookies/index.mjs:217`), sem teste. Inofensivo, porque o proxy é só otimista, mas vale um caso de teste. | Próximo commit que mexer em `proxy.ts` |
+| Uma rota `/api/*` futura sem sessão recebe 307 para `/entrar` (o 307 preserva o método, então um POST vira POST em `/entrar`) em vez de 401. Excluir `/api/` do redirecionamento do proxy, ou responder 401 nas rotas de API, quando surgir a primeira. | Primeira rota de API (PR 2) |
+| A segunda barreira da allowlist (`hooks.before` em `auth-config.ts`) confere só o caminho, não o método; a primeira (`filtrarCaminhoAuth`) confere os dois. Se o filtro regredir no método, o Better Auth ainda recusa com METHOD_NOT_ALLOWED. | Defesa em profundidade aceita |
+| `app/api/auth/[...all]/route.ts` usa imports relativos (o Vitest deste app não resolve o alias `@/`). O teste do matcher do `proxy.ts` usa `getMiddlewareMatchers`, interno do Next (falha visível no import em upgrade). | Qualquer upgrade do Next ou do Vitest |
 
 ### 9.3 Checklist de entrada em produção
 
