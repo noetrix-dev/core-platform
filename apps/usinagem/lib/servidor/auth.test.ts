@@ -5,8 +5,9 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./db/schema";
 import { bancoDisponivel } from "./db/teste-banco";
 import { urlLocal } from "./db/url-local";
-import { MENSAGEM_LOGIN_FALHOU } from "../dominio/seguranca/login";
+import { JANELA_FALHAS_MS, MENSAGEM_LOGIN_FALHOU } from "../dominio/seguranca/login";
 import { CAMINHOS_AUTH_PERMITIDOS, criarAuth, type Auth } from "./auth-config";
+import { desbloquearUsuario } from "./usuarios-auth";
 
 // auth.ts importa ./db; aqui o banco é um mock do drizzle (nenhuma query roda nos testes de import).
 const h = vi.hoisted(() => ({ db: vi.fn() }));
@@ -348,6 +349,165 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     const corpo = { email: `teste-${randomUUID()}@ficticio.invalid`, password: "senha-errada-de-teste-999" };
     for (let i = 0; i < 5; i++) expect((await entrar(corpo, { [HEADER_IP]: ipUnico(), "x-forwarded-for": ipUnico() })).status).toBe(401);
     expect((await entrar(corpo, { [HEADER_IP]: ipUnico(), "x-forwarded-for": ipUnico() })).status).toBe(429);
+  });
+
+  // Falhas inseridas direto na auditoria, a mais recente em `ultima`, uma por segundo para trás.
+  const inserirFalhas = (u: { id: string; email: string }, ultima: Date, n = 10) =>
+    banco.insert(schema.eventosAuditoria).values(
+      Array.from({ length: n }, (_, i) => ({
+        autorId: u.id,
+        operacao: "login_falha",
+        entidade: "usuarios",
+        entidadeId: u.id,
+        depois: { email: u.email, ip: null, userAgent: null },
+        criadoEm: new Date(ultima.getTime() - i * 1000),
+      })),
+    );
+  const operacoesDe = async (email: string) => (await auditoriaDe(email)).map((e) => e.operacao).sort();
+  // Resposta inteira: status, statusText, todos os cabeçalhos (inclui Set-Cookie) e corpo.
+  const resposta = async (r: Response) => ({ status: r.status, statusText: r.statusText, headers: [...r.headers], corpo: await r.text() });
+  const ERRADA = "senha-errada-de-teste-999";
+
+  it("11. bloqueado (senha certa), senha errada, inexistente e inativo: resposta byte a byte igual e um KDF cada", async () => {
+    const bloqueado = await criarUsuario();
+    const ativo = await criarUsuario();
+    const inativo = await criarUsuario({ ativo: false });
+    await inserirFalhas(bloqueado, new Date(Date.now() - 1000));
+    const ctx = await auth.$context;
+    const verify = vi.spyOn(ctx.password, "verify");
+    const hash = vi.spyOn(ctx.password, "hash");
+    const tentar = async (corpo: object) => {
+      verify.mockClear();
+      hash.mockClear();
+      const r = await resposta(await entrar(corpo));
+      return { r, kdf: verify.mock.calls.length + hash.mock.calls.length };
+    };
+    const casos = {
+      bloqueado: await tentar({ email: bloqueado.email, password: SENHA }),
+      senhaErrada: await tentar({ email: ativo.email, password: ERRADA }),
+      inexistente: await tentar({ email: `teste-${randomUUID()}@ficticio.invalid`, password: ERRADA }),
+      inativo: await tentar({ email: inativo.email, password: SENHA }),
+    };
+    expect(casos.senhaErrada.r).toMatchObject({ status: 401, corpo: JSON.stringify(ERRO_GENERICO) });
+    for (const [nome, c] of Object.entries(casos)) {
+      expect({ nome, r: c.r }).toEqual({ nome, r: casos.senhaErrada.r });
+      expect({ nome, kdf: c.kdf }).toEqual({ nome, kdf: 1 });
+    }
+    expect(casos.bloqueado.r.headers.filter(([k]) => k === "set-cookie")).toEqual([]);
+    expect(await sessoesDe(bloqueado.id)).toHaveLength(0);
+    // A recusa por bloqueio tem operação própria; as 10 falhas inseridas continuam sendo as únicas login_falha.
+    expect(await operacoesDe(bloqueado.email)).toEqual([...Array(10).fill("login_falha"), "login_bloqueado"].sort());
+  });
+
+  it("12. bloqueado com senha errada: genérico, um KDF, audita login_bloqueado", async () => {
+    const u = await criarUsuario();
+    await inserirFalhas(u, new Date(Date.now() - 1000));
+    const ctx = await auth.$context;
+    const verify = vi.spyOn(ctx.password, "verify");
+    const hash = vi.spyOn(ctx.password, "hash");
+    const r = await entrar({ email: u.email, password: ERRADA });
+    expect({ status: r.status, corpo: await r.json() }).toEqual({ status: 401, corpo: ERRO_GENERICO });
+    expect(verify.mock.calls.length + hash.mock.calls.length).toBe(1);
+    expect((await operacoesDe(u.email)).filter((o) => o !== "login_falha")).toEqual(["login_bloqueado"]);
+    expect((await operacoesDe(u.email)).filter((o) => o === "login_falha")).toHaveLength(10);
+  });
+
+  it("13. e-mail digitado é normalizado: maiúsculas batem nas falhas do e-mail minúsculo", async () => {
+    const u = await criarUsuario();
+    await inserirFalhas(u, new Date(Date.now() - 1000));
+    const r = await entrar({ email: u.email.toUpperCase(), password: SENHA });
+    expect(r.status).toBe(401);
+    expect(await sessoesDe(u.id)).toHaveLength(0);
+  });
+
+  it("14. 9 falhas não bloqueiam: a senha certa entra", async () => {
+    const u = await criarUsuario();
+    await inserirFalhas(u, new Date(Date.now() - 1000), 9);
+    expect((await entrar({ email: u.email, password: SENHA })).status).toBe(200);
+  });
+
+  it("15. janela deslizante: 15 min menos 1 ms depois da última falha ainda bloqueia; 15 min exatos entra sozinho", async () => {
+    const u = await criarUsuario();
+    const ultima = new Date(Date.now() - 1000);
+    await inserirFalhas(u, ultima);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(ultima.getTime() + JANELA_FALHAS_MS - 1);
+    expect((await entrar({ email: u.email, password: SENHA })).status).toBe(401);
+    expect(await sessoesDe(u.id)).toHaveLength(0);
+    vi.setSystemTime(ultima.getTime() + JANELA_FALHAS_MS);
+    expect((await entrar({ email: u.email, password: SENHA })).status).toBe(200);
+    expect(await sessoesDe(u.id)).toHaveLength(1);
+  });
+
+  it("16. tentativas bloqueadas não estendem o bloqueio", async () => {
+    const u = await criarUsuario();
+    // Última falha 14 min atrás: bloqueado por mais 1 min.
+    const ultima = new Date(Date.now() - 14 * 60 * 1000);
+    await inserirFalhas(u, ultima);
+    for (let i = 0; i < 3; i++) expect((await entrar({ email: u.email, password: ERRADA })).status).toBe(401);
+    expect((await operacoesDe(u.email)).filter((o) => o === "login_bloqueado")).toHaveLength(3);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(ultima.getTime() + JANELA_FALHAS_MS);
+    expect((await entrar({ email: u.email, password: SENHA })).status).toBe(200);
+  });
+
+  it("17. desbloqueio posterior às falhas libera; falhas antes dele não contam", async () => {
+    const u = await criarUsuario();
+    await inserirFalhas(u, new Date(Date.now() - 5000));
+    expect((await entrar({ email: u.email, password: SENHA })).status).toBe(401);
+    expect(await desbloquearUsuario(banco, u.email)).toBe(true);
+    expect((await entrar({ email: u.email, password: SENHA })).status).toBe(200);
+    // Falhas depois do desbloqueio voltam a contar.
+    await inserirFalhas(u, new Date(Date.now() + 10_000));
+    expect((await entrar({ email: u.email, password: SENHA })).status).toBe(401);
+  });
+
+  it("18. a consulta de falhas roda para todo e-mail, exista ou não (uma por tentativa)", async () => {
+    const u = await criarUsuario();
+    const query = vi.spyOn(banco.$client, "query");
+    const consultasDeFalha = () =>
+      query.mock.calls.filter(([q]) => {
+        const texto = typeof q === "string" ? q : (q as { text?: string }).text ?? "";
+        return /^select/i.test(texto) && texto.includes('"eventos_auditoria"');
+      }).length;
+    for (const email of [u.email, `teste-${randomUUID()}@ficticio.invalid`, "nao-e-email"]) {
+      query.mockClear();
+      await entrar({ email, password: ERRADA });
+      expect({ email, consultas: consultasDeFalha() }).toEqual({ email, consultas: 1 });
+    }
+  });
+
+  it("19. sem oráculo: corpo inválido e origem estranha dão a mesma resposta para e-mail bloqueado e livre", async () => {
+    const bloqueado = await criarUsuario();
+    const livre = await criarUsuario();
+    await inserirFalhas(bloqueado, new Date(Date.now() - 1000));
+    for (const [nome, corpo, headers] of [
+      ["senha não string", { password: 123 }, undefined],
+      ["e-mail com espaços", { password: SENHA, espacos: true }, undefined],
+      ["rememberMe inválido", { password: SENHA, rememberMe: "sim" }, undefined],
+      ["origem estranha", { password: SENHA }, { origin: "https://atacante.invalid" }],
+    ] as const) {
+      const de = async (u: { email: string }) => {
+        const { espacos, ...resto } = corpo as { espacos?: boolean; password: unknown };
+        const email = espacos ? ` ${u.email} ` : u.email;
+        const r = await resposta(await entrar({ ...resto, email }, { [HEADER_IP]: ipUnico(), ...(headers ?? {}) }));
+        return { ...r, corpo: r.corpo.replaceAll(u.email, "<email>") };
+      };
+      const [b, l] = [await de(bloqueado), await de(livre)];
+      expect({ nome, b }).toEqual({ nome, b: l });
+      expect({ nome, status: b.status }).not.toEqual({ nome, status: 401 });
+    }
+  });
+
+  it("20. e-mail inexistente: 50 tentativas não gravam auditoria e só o limite por IP barra (a 6ª em 60 s)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 30 * 60 * 1000);
+    const email = `teste-${randomUUID()}@ficticio.invalid`;
+    const ip = ipUnico();
+    const status: number[] = [];
+    for (let i = 0; i < 50; i++) status.push((await entrar({ email, password: ERRADA }, { [HEADER_IP]: ip })).status);
+    expect(status).toEqual([...Array(5).fill(401), ...Array(45).fill(429)]);
+    expect(await auditoriaDe(email)).toHaveLength(0);
   });
 
   it("allowlist na fábrica: só os 3 caminhos respondem", async () => {

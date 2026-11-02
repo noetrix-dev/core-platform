@@ -1,9 +1,17 @@
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getIp, isAPIError } from "better-auth/api";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, max, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { MENSAGEM_LOGIN_FALHOU, normalizarEmail, registroLogin, SENHA_MAX, SENHA_MIN } from "../dominio/seguranca/login";
+import {
+  bloqueioAtivo,
+  JANELA_FALHAS_MS,
+  MENSAGEM_LOGIN_FALHOU,
+  normalizarEmail,
+  registroLogin,
+  SENHA_MAX,
+  SENHA_MIN,
+} from "../dominio/seguranca/login";
 import * as schema from "./db/schema";
 
 type Banco = NodePgDatabase<typeof schema>;
@@ -36,6 +44,27 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
 
   const idPorEmail = async (email: string): Promise<string | undefined> =>
     email ? (await banco.select({ id: schema.usuarios.id }).from(schema.usuarios).where(eq(schema.usuarios.email, email)))[0]?.id : undefined;
+
+  // Falhas contadas do e-mail: login_falha depois do último login_desbloqueio, nas duas últimas janelas.
+  // Pelo e-mail em `depois`, não pelo usuário: a mesma consulta roda para e-mail existente ou não.
+  // ponytail: sem índice em (operacao, criado_em), varredura aceitável no volume atual; índice numa migration futura.
+  const falhasContadas = async (email: string, agora: Date): Promise<Date[]> => {
+    const a = schema.eventosAuditoria;
+    const doEmail = sql`${a.depois}->>'email' = ${email}`;
+    const desbloqueio = banco.select({ em: max(a.criadoEm) }).from(a).where(and(eq(a.operacao, "login_desbloqueio"), doEmail));
+    const desde = new Date(agora.getTime() - 2 * JANELA_FALHAS_MS);
+    const linhas = await banco
+      .select({ em: a.criadoEm })
+      .from(a)
+      .where(and(eq(a.operacao, "login_falha"), doEmail, gt(a.criadoEm, sql`greatest(${desde}::timestamptz, coalesce((${desbloqueio}), '-infinity'::timestamptz))`)));
+    return linhas.map((l) => l.em);
+  };
+
+  // Tentativas de login de e-mail bloqueado, pela chave `ctx.context`: objeto novo por despacho (dispatch.mjs:196), o mesmo
+  // no hooks.before, no databaseHooks e no hooks.after (o corpo não serve: a validação do endpoint cria outro objeto).
+  // A recusa não acontece no before: o Better Auth segue até a senha (uma derivação scrypt, como em qualquer tentativa),
+  // e origem, CSRF e validação respondem igual para e-mail bloqueado ou livre (sem oráculo). Quem recusa é a criação de sessão.
+  const bloqueados = new WeakSet<object>();
 
   return betterAuth({
     secret,
@@ -77,7 +106,8 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
       session: {
         create: {
           // Usuário inativo nunca recebe sessão. A senha já foi verificada pelo Better Auth (custo igual).
-          before: async (sessao) => {
+          before: async (sessao, ctx) => {
+            if (ctx && bloqueados.has(ctx.context)) return false;
             const [u] = await banco.select({ ativo: schema.usuarios.ativo }).from(schema.usuarios).where(eq(schema.usuarios.id, sessao.userId));
             if (!u?.ativo) return false;
             // rememberMe: false faria a sessão valer 24 h (internal-adapter.mjs:199); o teto absoluto é 12 h.
@@ -98,11 +128,18 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
           delete corpo.callbackURL;
           delete corpo.errorCallbackURL;
         }
+        if (ctx.path === "/sign-in/email") {
+          // Sempre, exista o e-mail ou não: mesma consulta, mesmo tempo. E-mail desconhecido não tem linhas e nunca bloqueia.
+          const agora = new Date();
+          const bloqueado = bloqueioAtivo(await falhasContadas(normalizarEmail((ctx.body as { email?: unknown } | undefined)?.email), agora), agora);
+          if (bloqueado) bloqueados.add(ctx.context);
+        }
       }),
       after: createAuthMiddleware(async (ctx) => {
         if (ctx.path !== "/sign-in/email") return;
         const retorno = ctx.context.returned;
         const sucesso = !isAPIError(retorno) && Boolean(ctx.context.newSession);
+        const bloqueado = bloqueados.delete(ctx.context);
         // 401 = credencial: senha errada, e-mail inexistente ou sessão recusada (inativo). Origem e validação passam intactas.
         const falhaDeCredencial = isAPIError(retorno) && retorno.statusCode === 401;
         if (sucesso || falhaDeCredencial) {
@@ -115,6 +152,8 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
               registroLogin({
                 email,
                 sucesso,
+                // Recusa por bloqueio: login_bloqueado, que não conta para o limite (não estende o bloqueio).
+                bloqueado,
                 // O mesmo resolvedor do rate limit e da sessão; registroLogin ainda valida.
                 ip: cabecalhos ? getIp(cabecalhos, ctx.context.options) : null,
                 userAgent: cabecalhos?.get("user-agent") ?? null,

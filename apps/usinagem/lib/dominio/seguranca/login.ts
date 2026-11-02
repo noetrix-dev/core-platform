@@ -36,10 +36,11 @@ const userAgentParaAuditoria = (ua: string | null): string | null =>
   ua === null ? null : Array.from(ua.replace(/\p{Cc}/gu, "")).slice(0, MAX_USER_AGENT).join("");
 
 /** Só para usuário existente: login de e-mail desconhecido não grava auditoria. */
-export function registroLogin(d: { email: unknown; sucesso: boolean; ip: string | null; userAgent: string | null; usuarioId: string }) {
+/** `bloqueado`: recusa pelo limite por e-mail; operação própria que não conta para o limite. */
+export function registroLogin(d: { email: unknown; sucesso: boolean; bloqueado?: boolean; ip: string | null; userAgent: string | null; usuarioId: string }) {
   return {
     autorId: d.usuarioId,
-    operacao: d.sucesso ? "login_sucesso" : "login_falha",
+    operacao: d.bloqueado ? "login_bloqueado" : d.sucesso ? "login_sucesso" : "login_falha",
     entidade: "usuarios",
     entidadeId: d.usuarioId,
     antes: null,
@@ -56,3 +57,16 @@ export const exigeReautenticacao = (sessaoCriadaEm: Date | null, agora: Date): b
   !sessaoCriadaEm || !reautenticacaoRecente(sessaoCriadaEm, agora);
 
 export const excedeuFalhasPorEmail = (falhasRecentes: number): boolean => falhasRecentes >= LIMITE_FALHAS_POR_EMAIL;
+
+/**
+ * Janela deslizante: bloqueado enquanto a última falha contada tiver menos de 15 min e houver
+ * ao menos 10 falhas nos 15 min que terminam nela. Falha no futuro (relógio do banco adiantado) conta, nunca é descartada.
+ */
+export function bloqueioAtivo(instantesDeFalha: readonly Date[], agora: Date): boolean {
+  const fim = agora.getTime();
+  const t = instantesDeFalha.map((d) => d.getTime());
+  if (t.length === 0) return false;
+  const ultima = Math.max(...t);
+  if (fim - ultima >= JANELA_FALHAS_MS) return false;
+  return excedeuFalhasPorEmail(t.filter((x) => x > ultima - JANELA_FALHAS_MS).length);
+}

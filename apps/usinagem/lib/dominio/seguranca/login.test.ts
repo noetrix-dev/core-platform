@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bloqueioAtivo,
   CHAVE_IP_DESCONHECIDO,
   chaveDeLimite,
   emailParaAuditoria,
@@ -24,6 +25,11 @@ describe("registroLogin", () => {
   it("user agent é cortado em 256 caracteres", () => {
     const r = registroLogin({ email: "a@x.invalid", sucesso: false, ip: null, userAgent: "x".repeat(1000), usuarioId: "u1" });
     expect((r.depois as { userAgent: string }).userAgent).toHaveLength(256);
+  });
+  it("bloqueado vira login_bloqueado, mesmo formato", () => {
+    const r = registroLogin({ email: "a@x.invalid", sucesso: false, bloqueado: true, ip: null, userAgent: null, usuarioId: "u1" });
+    expect(r).toMatchObject({ operacao: "login_bloqueado", entidade: "usuarios", entidadeId: "u1", autorId: "u1" });
+    expect(r.depois).toEqual({ email: "a@x.invalid", ip: null, userAgent: null });
   });
   it("e-mail bruto inválido nunca é gravado", () => {
     const r = registroLogin({ email: "lixo <script>", sucesso: false, ip: null, userAgent: null, usuarioId: "u1" });
@@ -92,6 +98,37 @@ describe("reautenticação recente (10 min)", () => {
 describe("limite por e-mail", () => {
   it.each([[0, false], [9, false], [10, true], [11, true]])("%i falhas: %s", (n, r) => {
     expect(excedeuFalhasPorEmail(n)).toBe(r);
+  });
+});
+
+describe("bloqueioAtivo: janela deslizante de 15 min", () => {
+  const MIN = 60 * 1000;
+  const agora = new Date("2026-10-29T12:00:00Z");
+  const antes = (ms: number) => new Date(agora.getTime() - ms);
+  // n falhas, a mais recente `ultima` ms antes de agora, uma a cada `passo` ms.
+  const falhas = (n: number, ultima: number, passo = 1000) => Array.from({ length: n }, (_, i) => antes(ultima + i * passo));
+
+  it("sem falhas não bloqueia", () => expect(bloqueioAtivo([], agora)).toBe(false));
+  it("9 falhas recentes nunca bloqueiam", () => expect(bloqueioAtivo(falhas(9, 0), agora)).toBe(false));
+  it("10 falhas recentes bloqueiam", () => expect(bloqueioAtivo(falhas(10, 0), agora)).toBe(true));
+  it("15 min menos 1 ms depois da última: ainda bloqueado", () => expect(bloqueioAtivo(falhas(10, 15 * MIN - 1), agora)).toBe(true));
+  it("exatamente 15 min depois da última: desbloqueado", () => expect(bloqueioAtivo(falhas(10, 15 * MIN), agora)).toBe(false));
+  // 9 falhas recentes mais 1 que fica `distancia` ms antes da mais recente.
+  const espalhadas = (distancia: number) => [...falhas(9, 0, 1), antes(distancia)];
+  it("10 falhas espalhadas por mais de 15 min não bloqueiam", () => expect(bloqueioAtivo(espalhadas(15 * MIN + 1), agora)).toBe(false));
+  it("10 falhas com a primeira exatamente 15 min antes da última não bloqueiam (janela aberta no início)", () => {
+    expect(bloqueioAtivo(espalhadas(15 * MIN), agora)).toBe(false);
+  });
+  it("10 falhas em 15 min menos 1 ms bloqueiam", () => expect(bloqueioAtivo(espalhadas(15 * MIN - 1), agora)).toBe(true));
+  it("falhas antigas fora da janela da última não somam", () => {
+    expect(bloqueioAtivo([...falhas(9, 0), ...falhas(5, 20 * MIN)], agora)).toBe(false);
+  });
+  it("ordem das falhas não importa", () => expect(bloqueioAtivo(falhas(10, 0).reverse(), agora)).toBe(true));
+  it("falha no futuro (relógio do banco adiantado) conta, não some", () => {
+    const futuras = Array.from({ length: 10 }, (_, i) => new Date(agora.getTime() + (i + 1) * 1000));
+    expect(bloqueioAtivo(futuras, agora)).toBe(true);
+    // Quando o relógio alcança, vale o instante gravado: 15 min depois da última, livre.
+    expect(bloqueioAtivo(futuras, new Date(agora.getTime() + 10 * 1000 + 15 * MIN))).toBe(false);
   });
 });
 
