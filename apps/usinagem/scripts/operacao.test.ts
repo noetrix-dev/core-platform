@@ -73,6 +73,23 @@ describe("lerSenha", () => {
     }
   });
 
+  it("fora de TTY, caractere UTF-8 dividido entre dois pedaços chega inteiro", async () => {
+    const senha = "senha-ação-çé€-😀-123";
+    const bytes = Buffer.from(`${senha}\n`, "utf8");
+    // Corta no meio de cada caractere de vários bytes (ç = 2, € = 3, 😀 = 4).
+    const cortes = [bytes.indexOf(Buffer.from("ç")) + 1, bytes.indexOf(Buffer.from("€")) + 2, bytes.indexOf(Buffer.from("😀")) + 3];
+    const entrada = new PassThrough();
+    const lida = lerSenha(entrada, gravador().saida);
+    let ini = 0;
+    for (const fim of [...cortes, bytes.length]) {
+      entrada.write(bytes.subarray(ini, fim));
+      await new Promise((r) => setImmediate(r));
+      ini = fim;
+    }
+    entrada.end();
+    expect(await lida).toBe(senha);
+  });
+
   const tty = () => Object.assign(new PassThrough(), { isTTY: true });
 
   it("em TTY pede duas vezes, devolve a senha e nunca a escreve na saída", async () => {
@@ -188,6 +205,25 @@ describe("scripts de operação: role, banco fora e fonte", () => {
       () => desbloquear(["a@ficticio.invalid"], deps),
     ];
   };
+
+  it.each(["a@b", "a@localhost", "fulano@ficticio", "a@b.c"])(
+    "e-mail sem TLD que o z.email() do login recusa (%j): cada script recusa com a mensagem fixa, sem hash nem escrita",
+    async (email) => {
+      const execute = vi.fn(async () => ({ rows: [{ u: "usinagem_app" }] }));
+      // Só a checagem de role existe: qualquer consulta além dela lançaria e sairia com outra mensagem.
+      const banco = { execute } as unknown as Parameters<typeof criar>[1]["banco"];
+      const saida: string[] = [];
+      const deps = { banco, log: (m: string) => saida.push(`log:${m}`), erro: (m: string) => saida.push(`erro:${m}`) };
+      const hash = vi.fn(async () => "x");
+      const senha = async () => SENHA;
+      expect(await criar(["[FICTÍCIO] Nome", email, "tecnico"], { ...deps, hash, senha, operador: null })).toBe(1);
+      expect(await redefinir([email], { ...deps, hash, senha, operador: null })).toBe(1);
+      expect(await desbloquear([email], deps)).toBe(1);
+      expect(saida).toEqual(["erro:E-mail inválido.", "erro:E-mail inválido ou não encontrado.", "erro:E-mail inválido ou não encontrado."]);
+      expect(hash).not.toHaveBeenCalled();
+      expect(execute).toHaveBeenCalledTimes(3);
+    },
+  );
 
   it("nenhum script referencia a URL da role de migração", () => {
     for (const s of SCRIPTS) expect(readFileSync(join(__dirname, s), "utf8")).not.toContain("DATABASE_URL_MIGRACAO");

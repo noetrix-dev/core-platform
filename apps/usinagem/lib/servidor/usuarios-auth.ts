@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { ErroDominio } from "../dominio/comum";
 import { PERFIS, type Perfil } from "../dominio/permissoes/perfis";
-import { emailParaAuditoria, senhaValida } from "../dominio/seguranca/login";
+import { emailDeLogin, senhaValida } from "../dominio/seguranca/login";
 import * as schema from "./db/schema";
 
 type Banco = NodePgDatabase<typeof schema>;
@@ -14,7 +14,7 @@ export const operadorValido = (nome: unknown): string | null => (typeof nome ===
 
 /** Marca de desbloqueio: falhas de login anteriores a ela deixam de contar. E-mail inválido ou desconhecido não grava nada. */
 export async function desbloquearUsuario(banco: Banco, email: string): Promise<boolean> {
-  const normalizado = emailParaAuditoria(email);
+  const normalizado = emailDeLogin(email);
   if (!normalizado) return false;
   const [u] = await banco.select({ id: schema.usuarios.id }).from(schema.usuarios).where(eq(schema.usuarios.email, normalizado));
   if (!u) return false;
@@ -40,7 +40,7 @@ export async function criarUsuarioComSenha(
   d: { nome: string; email: string; senha: string; perfil: Perfil; ficticio: boolean; criadoPor: string | null; operador: string | null },
 ): Promise<string> {
   if (!senhaValida(d.senha)) throw new ErroDominio("Senha fora da política.");
-  const email = emailParaAuditoria(d.email);
+  const email = emailDeLogin(d.email);
   if (!email) throw new ErroDominio("E-mail inválido.");
   const nome = d.nome.trim();
   if (!nome) throw new ErroDominio("Nome inválido.");
@@ -76,7 +76,7 @@ export async function criarUsuarioComSenha(
  */
 export async function redefinirSenha(banco: Banco, hash: Hash, d: { email: string; novaSenha: string; operador: string | null }): Promise<boolean> {
   if (!senhaValida(d.novaSenha)) throw new ErroDominio("Senha fora da política.");
-  const email = emailParaAuditoria(d.email);
+  const email = emailDeLogin(d.email);
   if (!email) return false;
   const senhaHash = await hash(d.novaSenha);
   return banco.transaction(async (tx) => {

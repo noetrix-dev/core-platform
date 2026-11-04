@@ -18,6 +18,16 @@ export function emailParaAuditoria(email: unknown): string | null {
   return n.length <= MAX_EMAIL && z.email().safeParse(n).success ? n : null;
 }
 
+/**
+ * E-mail para criar, redefinir ou desbloquear conta: o mesmo `z.email()` que o login do Better Auth aplica (sign-in.mjs:286,
+ * mesma instalação do zod) sobre o e-mail normalizado como o login o grava e procura. Mantém o teto de 254 da auditoria:
+ * o limite de falhas casa pelo e-mail da auditoria, então conta com e-mail maior nunca seria bloqueada.
+ */
+export function emailDeLogin(email: unknown): string | null {
+  const n = normalizarEmail(email);
+  return n.length <= MAX_EMAIL && z.email().safeParse(n).success ? n : null;
+}
+
 export const CHAVE_IP_DESCONHECIDO = "desconhecido";
 
 /** Header controlado pelo atacante: só IP bem formado (trim, IPv6 em minúsculas) passa. */

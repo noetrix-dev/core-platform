@@ -78,6 +78,8 @@ export async function comRoleDaAplicacao(banco: Banco, erro: (m: string) => void
  */
 export async function lerSenha(entrada: NodeJS.ReadableStream & { isTTY?: boolean }, saida: NodeJS.WritableStream): Promise<string | null> {
   if (!entrada.isTTY) {
+    // utf8 no stream: o decodificador junta caractere de vários bytes dividido entre pedaços (String(c) por pedaço viraria U+FFFD).
+    entrada.setEncoding("utf8");
     let texto = "";
     for await (const c of entrada) texto += String(c);
     // Sem trim: espaços são da senha. Só um terminador final sai (\r\n, \n ou \r).
