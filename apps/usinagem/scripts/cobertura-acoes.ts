@@ -12,6 +12,7 @@ export const ROTAS_ISENTAS: readonly string[] = [
 export const ACOES_PUBLICAS: readonly string[] = [];
 
 const MODULO_WRAPPER = "lib/servidor/acao";
+const LEITURA_DE_SESSAO = new Set(["getSession", "useSession"]);
 const CONFIG_ROTA = new Set(["dynamic", "revalidate", "runtime", "preferredRegion", "maxDuration"]);
 
 const ehModuloWrapper = (spec: string) => spec === `@/${MODULO_WRAPPER}` || ((spec.startsWith("./") || spec.startsWith("../")) && spec.endsWith(MODULO_WRAPPER));
@@ -127,7 +128,7 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
 
   const rota = ehRota(caminho);
   if (topo || rota) {
-    const wrapper = rota ? ["rota"] : ["acao", "acaoPublica"];
+    const wrapper = rota ? ["rota"] : ["acao", "acaoSensivel", "acaoPublica"];
     const legitimos = importsLegitimos(sf);
     for (const s of sf.statements) {
       if (!exportado(s)) continue;
@@ -145,6 +146,18 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
       }
       erros.push(`${caminho}: export fora de ${wrapper.join("/")}(): ${linha(s)}`);
     }
+  }
+
+  // Sessão do Better Auth só se lê em lib/servidor/sessao.ts (usuarioAtual), que relê ativo e a troca de senha.
+  // Qualquer forma conta: propriedade, colchete, desestruturação, import com ou sem alias, referência solta.
+  if (caminho !== "lib/servidor/sessao.ts") {
+    const achaSessao = (n: ts.Node) => {
+      if ((ts.isIdentifier(n) || ts.isStringLiteralLike(n)) && LEITURA_DE_SESSAO.has(n.text)) {
+        erros.push(`${caminho}: getSession/useSession fora de lib/servidor/sessao.ts: ${linha(n.parent ?? n)}`);
+      }
+      ts.forEachChild(n, achaSessao);
+    };
+    achaSessao(sf);
   }
 
   if (!publicas.includes(caminho)) {

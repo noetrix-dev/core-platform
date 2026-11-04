@@ -9,7 +9,8 @@ vi.mock("./sessao", () => {
       super(status === 401 ? "Sessão ausente." : "Sem permissão para esta ação.");
     }
   }
-  return { ErroPermissao, requirePermissao: vi.fn() };
+  // Alteração de teste: acao.ts agora também importa requirePermissaoSensivel (acaoSensivel); testada de verdade em sessao.test.ts.
+  return { ErroPermissao, requirePermissao: vi.fn(), requirePermissaoSensivel: vi.fn() };
 });
 vi.mock("next/navigation", () => ({
   // Imita o contrato real: erros internos do Next (redirect/notFound) são relançados.
@@ -26,7 +27,8 @@ import { MATRIZ_PADRAO, type Permissao } from "../dominio/permissoes/catalogo";
 import { serializarItemRevisao } from "../dominio/sigilo/serializar";
 
 // Alteração de teste (só tipo): requirePermissao agora devolve SessaoAutorizada; os asserts continuam comparando o mesmo objeto.
-const usuario: SessaoAutorizada = { id: "u1", nome: "Adm", perfil: "admin", concedidas: [] };
+// Alteração de teste (Task 9, só o campo novo): sessaoCriadaEm: null.
+const usuario: SessaoAutorizada = { id: "u1", nome: "Adm", perfil: "admin", concedidas: [], sessaoCriadaEm: null };
 const esquema = z.object({ n: z.number() });
 const GENERICA = "Não foi possível concluir a operação.";
 const permissao = vi.mocked(requirePermissao);
@@ -236,7 +238,7 @@ describe("rota", () => {
 });
 
 describe("concedidas do banco chegam à fn", () => {
-  const compras = (concedidas: Permissao[]): SessaoAutorizada => ({ id: "u3", nome: "Compras", perfil: "compras_producao", concedidas });
+  const compras = (concedidas: Permissao[]): SessaoAutorizada => ({ id: "u3", nome: "Compras", perfil: "compras_producao", concedidas, sessaoCriadaEm: null });
   const req = new Request("http://x.test/api");
   const item = {
     id: "i1", revisaoId: "r1", ordem: 1, descricao: "Polia", quantidade: 20, unidade: "pç",

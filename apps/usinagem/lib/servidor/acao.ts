@@ -3,7 +3,7 @@ import { unstable_rethrow } from "next/navigation";
 import type { ZodType } from "zod";
 import { ehMensagemDeDominio, ErroDominio } from "../dominio/comum";
 import type { Permissao } from "../dominio/permissoes/catalogo";
-import { ErroPermissao, requirePermissao, type SessaoAutorizada } from "./sessao";
+import { ErroPermissao, requirePermissao, requirePermissaoSensivel, type SessaoAutorizada } from "./sessao";
 
 export type RespostaAcao<T> = { ok: true; dados: T } | { ok: false; erro: string };
 
@@ -41,21 +41,28 @@ async function executar<E, S>(esquema: ZodType<E>, entrada: unknown, fn: (e: E) 
   }
 }
 
-/** Server Action com permissão obrigatória. Sem permissão declarada não existe ação (deny by default). */
-export function acao<E, S>(permissao: Permissao, esquema: ZodType<E>, fn: (entrada: E, usuario: SessaoAutorizada) => Promise<S>) {
-  return async (entrada: unknown): Promise<RespostaAcao<S>> => {
+const protegida =
+  (exigir: (p: Permissao) => Promise<SessaoAutorizada>) =>
+  <E, S>(permissao: Permissao, esquema: ZodType<E>, fn: (entrada: E, usuario: SessaoAutorizada) => Promise<S>) =>
+  async (entrada: unknown): Promise<RespostaAcao<S>> => {
     let usuario: SessaoAutorizada;
     try {
-      usuario = await requirePermissao(permissao);
+      usuario = await exigir(permissao);
     } catch (erro) {
       unstable_rethrow(erro);
+      // Inclui ErroReautenticacao: devolve "Confirme sua senha para continuar." e a fn não roda.
       if (erro instanceof ErroPermissao) return { ok: false, erro: erro.message };
       registrarErro(erro);
       return { ok: false, erro: ERRO_GENERICO };
     }
     return executar(esquema, entrada, (e) => fn(e, usuario));
   };
-}
+
+/** Server Action com permissão obrigatória. Sem permissão declarada não existe ação (deny by default). */
+export const acao = protegida(requirePermissao);
+
+/** Como acao, mais login recente (10 min): o seletor de dev nunca passa. */
+export const acaoSensivel = protegida(requirePermissaoSensivel);
 
 /** Só para ações sem sessão por natureza (login). Cada uso é revisado; o teste de cobertura lista onde aparece. */
 export function acaoPublica<E, S>(esquema: ZodType<E>, fn: (entrada: E) => Promise<S>) {

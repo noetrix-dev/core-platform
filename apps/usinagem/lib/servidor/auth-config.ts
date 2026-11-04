@@ -1,7 +1,7 @@
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getIp, isAPIError } from "better-auth/api";
-import { and, eq, gt, max, sql } from "drizzle-orm";
+import { and, eq, gt, lt, max, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   bloqueioAtivo,
@@ -12,9 +12,25 @@ import {
   SENHA_MAX,
   SENHA_MIN,
 } from "../dominio/seguranca/login";
+import type { UsuarioSessao } from "../dominio/permissoes/acesso";
+import type { Perfil } from "../dominio/permissoes/perfis";
 import * as schema from "./db/schema";
 
 type Banco = NodePgDatabase<typeof schema>;
+
+/**
+ * Usuário ativo cuja sessão nasceu depois da última troca de senha (contas.atualizado_em da conta credential); senão null.
+ * Instante igual conta como anterior (falha fechado). Sem conta credential: null. Lido a cada chamada, sem cache.
+ */
+export async function usuarioDaSessao(banco: Banco, usuarioId: string, sessaoCriadaEm: Date): Promise<UsuarioSessao | null> {
+  const { usuarios, contas } = schema;
+  const [u] = await banco
+    .select({ id: usuarios.id, nome: usuarios.nome, perfil: usuarios.perfilId })
+    .from(usuarios)
+    .innerJoin(contas, and(eq(contas.userId, usuarios.id), eq(contas.providerId, "credential")))
+    .where(and(eq(usuarios.id, usuarioId), eq(usuarios.ativo, true), lt(contas.updatedAt, sessaoCriadaEm)));
+  return u ? { ...u, perfil: u.perfil as Perfil } : null;
+}
 
 export const CAMINHOS_AUTH_PERMITIDOS = ["/sign-in/email", "/sign-out", "/get-session"] as const;
 const DOZE_HORAS_S = 12 * 60 * 60;
@@ -65,6 +81,9 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
   // A recusa não acontece no before: o Better Auth segue até a senha (uma derivação scrypt, como em qualquer tentativa),
   // e origem, CSRF e validação respondem igual para e-mail bloqueado ou livre (sem oráculo). Quem recusa é a criação de sessão.
   const bloqueados = new WeakSet<object>();
+  // Início de cada login, pela mesma chave: vira o createdAt da sessão. Carimbado antes de o Better Auth ler o hash
+  // (sign-in.mjs:287), então um login que leu o hash antigo nasce antes do atualizado_em de uma redefinição concorrente.
+  const inicioDoLogin = new WeakMap<object, Date>();
 
   return betterAuth({
     secret,
@@ -111,8 +130,12 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
             const [u] = await banco.select({ ativo: schema.usuarios.ativo }).from(schema.usuarios).where(eq(schema.usuarios.id, sessao.userId));
             if (!u?.ativo) return false;
             // rememberMe: false faria a sessão valer 24 h (internal-adapter.mjs:199); o teto absoluto é 12 h.
+            // Teto contado da criação real (agora), não do carimbo.
             const teto = Date.now() + DOZE_HORAS_S * 1000;
-            return { data: { ...sessao, expiresAt: new Date(Math.min(new Date(sessao.expiresAt).getTime(), teto)) } };
+            const inicio = ctx ? inicioDoLogin.get(ctx.context) : undefined;
+            return {
+              data: { ...sessao, ...(inicio ? { createdAt: inicio } : {}), expiresAt: new Date(Math.min(new Date(sessao.expiresAt).getTime(), teto)) },
+            };
           },
         },
       },
@@ -131,11 +154,18 @@ export function criarAuth({ banco, plugins = [] }: { banco: Banco; plugins?: Bet
         if (ctx.path === "/sign-in/email") {
           // Sempre, exista o e-mail ou não: mesma consulta, mesmo tempo. E-mail desconhecido não tem linhas e nunca bloqueia.
           const agora = new Date();
+          inicioDoLogin.set(ctx.context, agora);
           const bloqueado = bloqueioAtivo(await falhasContadas(normalizarEmail((ctx.body as { email?: unknown } | undefined)?.email), agora), agora);
           if (bloqueado) bloqueados.add(ctx.context);
         }
       }),
       after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === "/get-session") {
+          // Nenhuma autorização usa este endpoint (só usuarioAtual/requirePermissao), mas ele não mostra sessão obsoleta nem de inativo.
+          const r = ctx.context.returned as { session?: { userId: string; createdAt: Date | string } } | null | undefined;
+          if (r && !isAPIError(r) && r.session && !(await usuarioDaSessao(banco, r.session.userId, new Date(r.session.createdAt)))) return ctx.json(null);
+          return;
+        }
         if (ctx.path !== "/sign-in/email") return;
         const retorno = ctx.context.returned;
         const sucesso = !isAPIError(retorno) && Boolean(ctx.context.newSession);

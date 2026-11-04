@@ -108,6 +108,52 @@ describe("cobertura do wrapper de permissão", () => {
     });
   });
 
+  describe("acaoSensivel", () => {
+    it("export const x = acaoSensivel(...) importado de @/lib/servidor/acao ou relativo passa", () => {
+      for (const spec of ["@/lib/servidor/acao", "../../lib/servidor/acao"]) {
+        const codigo = `"use server";\nimport { acaoSensivel } from "${spec}";\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`;
+        expect(violacoes("app/x/actions.ts", codigo)).toEqual([]);
+      }
+    });
+    it("alias, declaração local e outro módulo são recusados", () => {
+      for (const codigo of [
+        `"use server";\nimport { acaoSensivel as s } from "@/lib/servidor/acao";\nexport const x = s("processo.editar", e, async () => 1);`,
+        `"use server";\nimport { acao as acaoSensivel } from "@/lib/servidor/acao";\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`,
+        `"use server";\nconst acaoSensivel = (...a: unknown[]) => a;\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`,
+        `"use server";\nimport { acaoSensivel } from "./falso";\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`,
+      ]) {
+        expect(violacoes("app/x/actions.ts", codigo).length, codigo).toBeGreaterThanOrEqual(1);
+      }
+    });
+    it("route.ts não aceita acaoSensivel (só rota)", () => {
+      const rt = `import { acaoSensivel } from "@/lib/servidor/acao";\nexport const GET = acaoSensivel("processo.ver", e, async () => 1);`;
+      expect(violacoes("app/api/x/route.ts", rt)).toHaveLength(1);
+    });
+  });
+
+  describe("getSession/useSession só em lib/servidor/sessao.ts", () => {
+    const FORMAS: [string, string][] = [
+      ["chamada com ponto", `export async function f() { return auth().api.getSession({ headers: h }); }`],
+      ["acesso por colchete", `export const f = () => auth().api["getSession"]({ headers: h });`],
+      ["colchete com template", "export const f = () => api[`getSession`]({ headers: h });"],
+      ["desestruturação", `const { getSession } = auth().api;\nexport const f = () => getSession({ headers: h });`],
+      ["desestruturação com renome", `const { getSession: g } = auth().api;\nexport const f = () => g({ headers: h });`],
+      ["import nomeado", `import { useSession } from "better-auth/react";\nexport const f = () => useSession();`],
+      ["import com alias", `import { useSession as u } from "@/lib/auth-cliente";\nexport const f = () => u();`],
+      ["referência solta", `export const f = getSession;`],
+      ["useSession por propriedade", `export const f = () => cliente.useSession();`],
+    ];
+    it.each(FORMAS)("fora de sessao.ts é violação: %s", (_n, codigo) => {
+      expect(violacoes("lib/servidor/outro.ts", codigo).filter((e) => e.includes("getSession/useSession")).length).toBeGreaterThanOrEqual(1);
+    });
+    it.each(FORMAS)("em lib/servidor/sessao.ts é permitido: %s", (_n, codigo) => {
+      expect(violacoes("lib/servidor/sessao.ts", codigo)).toEqual([]);
+    });
+    it("nomes parecidos não contam (getSessionCookie do proxy, texto livre)", () => {
+      expect(violacoes("proxy.ts", `import { getSessionCookie } from "better-auth/cookies";\nexport const f = (r: Request) => getSessionCookie(r);\nconst m = "use getSession only in sessao";`)).toEqual([]);
+    });
+  });
+
   describe("ACOES_PUBLICAS", () => {
     const codigo = `"use server";\n${IMP}export const entrar = acaoPublica(esquema, async () => 1);`;
     it("começa vazia", () => {
