@@ -530,6 +530,7 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | `updatePassword` do Better Auth (`internal-adapter.mjs:538`) não grava `updatedAt` em `contas`. As rotas que o usam (troca e redefinição de senha do próprio Better Auth) estão fora da allowlist. Se forem abertas, sessões antigas sobreviveriam à troca de senha, porque a leitura compara com `contas.atualizado_em`. | Ao abrir troca de senha pelo próprio usuário (§9.2) |
 | Com o hook do `/get-session` devolvendo sessão nula, `usuarioAtual` cai no seletor de dev, só em development (em produção o ramo é eliminado no build). O hook também não apaga o cookie: o proxy, que só olha a presença do cookie, deixa passar e as páginas respondem 401; evitar laço se `/entrar` redirecionar quando acha o cookie. São duas leituras de `usuarioDaSessao` por requisição (hook e `usuarioAtual`). | 1D, Task 11 (tela `/entrar`) |
 | A regra do scanner para `getSession` não pega o caminho do endpoint como texto (`fetch("/api/auth/get-session")`). Incluir o literal `"get-session"` na regra. | Próximo commit que mexer no scanner |
+| Login legítimo com a senha NOVA carimbado entre o COMMIT da redefinição e a segunda gravação de `contas.atualizado_em` tem a sessão recusada na leitura: o carimbo fica anterior ao `atualizado_em` final. Falha fechada, janela de milissegundos; a pessoa entra de novo. | Aceito (1D, Task 9) |
 | Há duas versões do zod instaladas (`4.4.3`, dependência transitiva, e `4.6.5`, a do app). Não está confirmado qual o Better Auth resolve; o login recebe o mesmo e-mail normalizado, então não há divergência efetiva. | Próximo upgrade de dependências |
 
 ### 9.3 Checklist de entrada em produção
@@ -549,7 +550,7 @@ Nada vai para produção com cliente real enquanto um item abaixo estiver aberto
 - [ ] Relógio de app e banco sincronizados (NTP), ou contagem do bloqueio com `now()` do banco (§9.2).
 - [ ] Banco de testes separado (`usinagem_test`) com o Vitest apontado para ele; o banco de desenvolvimento fora do alcance dos testes (§9.2).
 - [ ] Limpeza de sessões obsoletas e expiradas em `sessoes`: as recusadas na leitura (criadas antes do `atualizado_em` da conta credential, ou de usuário inativo) e as vencidas ficam gravadas, porque o caminho de leitura não faz DELETE. Criar uma limpeza periódica fora do caminho da requisição, com escopo por `expires_at` vencido ou sessão obsoleta, e teste em transação revertida.
-- [ ] Corrida entre login concorrente e redefinição de senha fechada (carimbo do início do login como `createdAt`, rejeição de sessão anterior ao `atualizado_em` da conta credential), com teste de intercalamento forçado (1D, Task 9; §9.2).
+- [ ] Corrida entre login concorrente e redefinição de senha fechada (carimbo do início do login como `createdAt`, rejeição de sessão anterior ao `atualizado_em` da conta credential, segunda gravação de `atualizado_em` depois do COMMIT da redefinição), com teste de intercalamento forçado (1D, Task 9; §9.2). Premissa da correção: relógios do host do app e do host que roda os scripts sincronizados por NTP (item de relógio acima).
 
 ## 10. Testes de aceite
 

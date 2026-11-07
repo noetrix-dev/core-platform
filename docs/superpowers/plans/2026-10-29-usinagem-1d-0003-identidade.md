@@ -1184,6 +1184,11 @@ Casos:
 - mensagem única;
 - cobertura do wrapper verde com a ação pública listada.
 
+**Requisito do responsável humano (2026-11-07): cookie de sessão obsoleta.** O hook de `/get-session` (Task 9) devolve sessão nula para sessão obsoleta ou usuário inativo, mas não apaga o cookie. Por isso o proxy, que só olha a presença do cookie, deixa a pessoa passar. As consequências para `/entrar`:
+- a página não pode redirecionar para o app só por achar o cookie de sessão. O redirecionamento para o app só acontece quando `usuarioAtual()` devolve um usuário válido; com o cookie presente e a sessão recusada, `/entrar` mostra o formulário. Isso evita o laço entre `/entrar`, o app e o 401;
+- teste: com um cookie de sessão obsoleta (sessão criada antes do `atualizado_em` da conta), `/entrar` renderiza o formulário e não redireciona. Mutação: redirecionar quando o cookie existe tem que derrubar o teste;
+- de preferência, o `sair` e o login novo apagam o cookie obsoleto.
+
 ### Task 12: Seletor de dev fora do build de produção (PARA no workflow)
 
 **Files:**
