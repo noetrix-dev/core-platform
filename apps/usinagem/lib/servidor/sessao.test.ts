@@ -311,12 +311,14 @@ describe.skipIf(!temBanco)("sessão real (Postgres local, tudo em transação re
     it("relógio do banco adiantado em relação ao app: login logo depois da criação é aceito (atualizado_em da criação no relógio do app)", async () => {
       await emTransacao(async (tx) => {
         // A transação já começou: o now() do banco (início da transação) fica 5 min À FRENTE do relógio do app daqui em diante.
-        // shouldAdvanceTime: relógio parado deixaria criação e login no mesmo instante, que conta como anterior (recusa).
-        vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+        // Relógio do app parado e avançado à mão: determinístico (com shouldAdvanceTime o passo de 20 ms podia pôr criação e
+        // login no mesmo instante, que conta como anterior e recusa).
+        vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(Date.now() - 5 * MIN);
         try {
           const criadoNoApp = Date.now();
           const { id, entrar, lerPeloToken, lerPeloEndpoint, senhaTrocadaEm } = await preparar(tx);
+          vi.setSystemTime(Date.now() + 1000); // login 1 s depois da criação, ainda uns 5 min atrás do now() do banco
           const { token, cookie } = await entrar();
           lerPeloToken(token);
           expect(await usuarioAtual()).toMatchObject({ id });
