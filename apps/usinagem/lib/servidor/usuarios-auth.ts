@@ -56,7 +56,8 @@ export async function criarUsuarioComSenha(
       .insert(schema.usuarios)
       .values({ nome, email, perfilId: d.perfil, ativo: true, ficticio: d.ficticio, criadoPor: d.criadoPor })
       .returning({ id: schema.usuarios.id });
-    await tx.insert(schema.contas).values({ providerId: "credential", accountId: u.id, userId: u.id, password: senhaHash });
+    // atualizado_em no relógio do app, como na redefinição: é comparado com o carimbo do login (relógio do app), não com o now() do banco.
+    await tx.insert(schema.contas).values({ providerId: "credential", accountId: u.id, userId: u.id, password: senhaHash, updatedAt: new Date() });
     await tx.insert(schema.eventosAuditoria).values({
       autorId: d.criadoPor,
       operacao: "usuario_criado",
