@@ -22,11 +22,12 @@ describe("rota de auth: import sem ambiente (como o next build)", () => {
     vi.stubEnv("BETTER_AUTH_URL", "");
   }
 
+  // Timeout próprio: scrypt real e import frio, lentos sob a carga dos arquivos em paralelo (intermitente com 5 s).
   it("importar não lança (auth() é lazy) e só exporta GET e POST", async () => {
     semAmbiente();
     const rota = await importarRota();
     expect(Object.keys(rota).sort()).toEqual(["GET", "POST"]);
-  });
+  }, 30_000);
 
   it("caminho permitido delega ao auth() real na chamada: sem segredo, é aí que falha", async () => {
     semAmbiente();

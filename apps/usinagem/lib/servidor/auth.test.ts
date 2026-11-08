@@ -267,6 +267,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     expect(options.session?.disableSessionRefresh).toBe(true);
   });
 
+  // Timeout próprio: scrypt real e import frio, lentos sob a carga dos arquivos em paralelo (intermitente com 5 s).
   it("8b. rememberMe (false, true ou ausente) não muda a expiração de 12 h no servidor", async () => {
     for (const rememberMe of [false, true, undefined]) {
       const u = await criarUsuario();
@@ -286,7 +287,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
         dontRemember: rememberMe === false,
       });
     }
-  });
+  }, 30_000);
 
   it("8c. callbackURL do login é descartado: auth.api, externo e relativo, não devolve destino", async () => {
     for (const callbackURL of ["https://atacante.invalid/x", "/painel"]) {
@@ -371,6 +372,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
   const resposta = async (r: Response) => ({ status: r.status, statusText: r.statusText, headers: [...r.headers], corpo: await r.text() });
   const ERRADA = "senha-errada-de-teste-999";
 
+  // Timeout próprio: scrypt real e import frio, lentos sob a carga dos arquivos em paralelo (intermitente com 5 s).
   it("11. bloqueado (senha certa), senha errada, inexistente e inativo: resposta byte a byte igual e um KDF cada", async () => {
     const bloqueado = await criarUsuario();
     const ativo = await criarUsuario();
@@ -400,8 +402,9 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     expect(await sessoesDe(bloqueado.id)).toHaveLength(0);
     // A recusa por bloqueio tem operação própria; as 10 falhas inseridas continuam sendo as únicas login_falha.
     expect(await operacoesDe(bloqueado.email)).toEqual([...Array(10).fill("login_falha"), "login_bloqueado"].sort());
-  });
+  }, 30_000);
 
+  // Timeout próprio: scrypt real e import frio, lentos sob a carga dos arquivos em paralelo (intermitente com 5 s).
   it("12. bloqueado com senha errada: genérico, um KDF, audita login_bloqueado", async () => {
     const u = await criarUsuario();
     await inserirFalhas(u, new Date(Date.now() - 1000));
@@ -413,7 +416,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     expect(verify.mock.calls.length + hash.mock.calls.length).toBe(1);
     expect((await operacoesDe(u.email)).filter((o) => o !== "login_falha")).toEqual(["login_bloqueado"]);
     expect((await operacoesDe(u.email)).filter((o) => o === "login_falha")).toHaveLength(10);
-  });
+  }, 30_000);
 
   it("13. e-mail digitado é normalizado: maiúsculas batem nas falhas do e-mail minúsculo", async () => {
     const u = await criarUsuario();
