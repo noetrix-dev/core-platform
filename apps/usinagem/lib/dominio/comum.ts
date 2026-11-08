@@ -38,6 +38,7 @@ const MENSAGENS_DE_DOMINIO = new Set<string>([
   "Nome inválido.",
   "Perfil inexistente.",
   "Usuário sem senha cadastrada.",
+  "Senha redefinida, mas a atualização final falhou: sessões abertas durante a troca podem continuar válidas. Rode de novo.",
   "E-mail já cadastrado.",
   "Erro de domínio.",
 ]);

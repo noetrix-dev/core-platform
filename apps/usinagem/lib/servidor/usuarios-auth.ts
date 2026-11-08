@@ -74,19 +74,27 @@ export async function criarUsuarioComSenha(
 /**
  * Troca o hash da conta `credential` (recusa se faltar) e apaga todas as sessões do usuário, na mesma transação.
  * E-mail inválido ou desconhecido devolve false sem gravar nada. Auditoria `senha_redefinida` sem senha, sem autor.
+ * Depois do COMMIT, grava de novo `atualizado_em` (relógio do app); se essa gravação falhar, lança ErroDominio com aviso fixo.
  */
-export async function redefinirSenha(banco: Banco, hash: Hash, d: { email: string; novaSenha: string; operador: string | null }): Promise<boolean> {
+export async function redefinirSenha(
+  banco: Banco,
+  hash: Hash,
+  d: { email: string; novaSenha: string; operador: string | null },
+  // Só para teste: segura a transação entre a escrita e o COMMIT (corrida com login concorrente).
+  ganchos: { aposUpdate?: () => Promise<void> } = {},
+): Promise<boolean> {
   if (!senhaValida(d.novaSenha)) throw new ErroDominio("Senha fora da política.");
   const email = emailDeLogin(d.email);
   if (!email) return false;
   const senhaHash = await hash(d.novaSenha);
-  return banco.transaction(async (tx) => {
+  const credencial = (id: string) => and(eq(schema.contas.userId, id), eq(schema.contas.providerId, "credential"));
+  const id = await banco.transaction(async (tx) => {
     const [u] = await tx.select({ id: schema.usuarios.id }).from(schema.usuarios).where(eq(schema.usuarios.email, email));
-    if (!u) return false;
+    if (!u) return null;
     const atualizadas = await tx
       .update(schema.contas)
       .set({ password: senhaHash, updatedAt: new Date() })
-      .where(and(eq(schema.contas.userId, u.id), eq(schema.contas.providerId, "credential")))
+      .where(credencial(u.id))
       .returning({ id: schema.contas.id });
     // Sem conta credential: recusa. Lançar desfaz a transação (o UPDATE não tocou nada; as sessões ainda não foram apagadas).
     if (atualizadas.length === 0) throw new ErroDominio("Usuário sem senha cadastrada.");
@@ -100,6 +108,16 @@ export async function redefinirSenha(banco: Banco, hash: Hash, d: { email: strin
       depois: { email, operador: operadorValido(d.operador) },
       justificativa: "redefinição pelo script de operação usuario:redefinir-senha",
     });
-    return true;
+    await ganchos.aposUpdate?.();
+    return u.id;
   });
+  if (!id) return false;
+  // Segunda gravação, depois do COMMIT: um login que carimbou depois do new Date() acima e leu o hash antigo antes do
+  // COMMIT gravaria sessão com createdAt posterior ao primeiro atualizado_em. Este instante fica depois dela.
+  try {
+    await banco.update(schema.contas).set({ updatedAt: new Date() }).where(credencial(id));
+  } catch {
+    throw new ErroDominio("Senha redefinida, mas a atualização final falhou: sessões abertas durante a troca podem continuar válidas. Rode de novo.");
+  }
+  return true;
 }

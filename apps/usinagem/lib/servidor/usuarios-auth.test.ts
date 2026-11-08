@@ -6,7 +6,7 @@ import * as schema from "./db/schema";
 import { bancoDisponivel } from "./db/teste-banco";
 import { urlLocal } from "./db/url-local";
 import { criarUsuarioComSenha, desbloquearUsuario, operadorValido, redefinirSenha } from "./usuarios-auth";
-import { criarAuth } from "./auth-config";
+import { criarAuth, usuarioDaSessao } from "./auth-config";
 import { ehMensagemDeDominio, ErroDominio } from "../dominio/comum";
 import type { Perfil } from "../dominio/permissoes/perfis";
 import { main } from "../../scripts/desbloquear-usuario";
@@ -322,6 +322,68 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     expect(await contasDe(u.id)).toHaveLength(0);
     expect(await banco.select().from(schema.sessoes).where(eq(schema.sessoes.userId, u.id))).toHaveLength(1);
     expect(await eventos(u.id, "senha_redefinida")).toHaveLength(0);
+  });
+
+  // Exceção do responsável humano à transação revertida, só aqui: duas conexões reais, dados commitados.
+  // Só usuários novos @ficticio.invalid criados pelo teste; nenhum DELETE no teste (o da redefinição tem escopo pelo alvo).
+  it("corrida real: login completo com a senha antiga numa segunda conexão entre o UPDATE e o COMMIT tem a sessão recusada", async () => {
+    const segunda = drizzle(urlLocal(process.env.DATABASE_URL), { schema });
+    try {
+      const authLogin = (() => {
+        novoAuth(); // estabiliza as variáveis de ambiente
+        return criarAuth({ banco: segunda });
+      })();
+      const d = dados();
+      const id = await criarUsuarioComSenha(banco, hashReal, d);
+      let login: { token: string; criadaEm: Date; cookie: string } | undefined;
+      const aposUpdate = async () => {
+        // O UPDATE (atualizado_em = T_r) já rodou e não foi commitado. Espera o relógio passar de T_r, sem sleep:
+        // o carimbo do login precisa ser posterior, que é o caso que a primeira gravação não pega.
+        const depoisDoUpdate = Date.now();
+        while (Date.now() <= depoisDoUpdate);
+        // Login completo na segunda conexão: SELECT simples vê o hash commitado (o antigo) e não bloqueia no UPDATE pendente.
+        const r = await authLogin.api.signInEmail({ body: { email: d.email, password: SENHA }, headers: new Headers({ "x-real-ip": "203.0.113.20" }), returnHeaders: true });
+        const [sessao] = await segunda.select().from(schema.sessoes).where(eq(schema.sessoes.token, r.response.token));
+        login = { token: r.response.token, criadaEm: sessao.createdAt, cookie: cookieDe(r.headers) };
+      };
+      expect(await redefinirSenha(banco, hashReal, { email: d.email, novaSenha: NOVA, operador: null }, { aposUpdate })).toBe(true);
+      expect(login).toBeDefined();
+      // A sessão foi gravada antes do COMMIT, depois do DELETE da redefinição: sobreviveu e está commitada.
+      expect(await banco.select({ t: schema.sessoes.token }).from(schema.sessoes).where(eq(schema.sessoes.userId, id))).toEqual([{ t: login!.token }]);
+      // Leitura: recusada pela regra (sessão criada até o atualizado_em da conta), também no /get-session.
+      expect(await usuarioDaSessao(banco, id, login!.criadaEm)).toBeNull();
+      expect(await novoAuth().api.getSession({ headers: new Headers({ cookie: login!.cookie }) })).toBeNull();
+      // Por quê: o carimbo do login é posterior ao T_r da primeira gravação; só a segunda gravação o deixa para trás.
+      const [conta] = await contasDe(id);
+      expect(conta.updatedAt.getTime()).toBeGreaterThan(login!.criadaEm.getTime());
+    } finally {
+      await segunda.$client.end();
+    }
+  });
+
+  it("segunda gravação que falha: o script avisa com mensagem fixa e sai com código diferente de zero", async () => {
+    const AVISO = "Senha redefinida, mas a atualização final falhou: sessões abertas durante a troca podem continuar válidas. Rode de novo.";
+    // Stub: o banco real, mas o UPDATE fora da transação (a segunda gravação) lança. A transação usa o tx real.
+    const falhaNoFim = new Proxy(banco, {
+      get(o, k) {
+        if (k === "update") return () => {
+          throw new Error("falha simulada na segunda gravação");
+        };
+        const v = Reflect.get(o, k);
+        return typeof v === "function" ? v.bind(o) : v;
+      },
+    });
+    const d = dados();
+    const id = await criarUsuarioComSenha(banco, hashReal, d);
+    const [antes] = await contasDe(id);
+    const saida: string[] = [];
+    const deps = { banco: falhaNoFim, hash: hashReal, senha: async () => NOVA, operador: null, log: (m: string) => saida.push(`log:${m}`), erro: (m: string) => saida.push(`erro:${m}`) };
+    expect(await redefinirPorScript([d.email], deps)).toBe(1);
+    expect(saida).toEqual([`erro:${AVISO}`]);
+    expect(ehMensagemDeDominio(AVISO)).toBe(true);
+    // A troca em si foi commitada (o aviso diz isso): hash novo.
+    expect((await contasDe(id))[0].password).not.toBe(antes.password);
+    expect(saida.join("\n")).not.toContain("falha simulada");
   });
 
   it("script usuario:redefinir-senha: mensagens fixas, saída sem a senha", async () => {
