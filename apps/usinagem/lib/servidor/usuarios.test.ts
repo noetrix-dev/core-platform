@@ -231,14 +231,16 @@ describe.skipIf(!temBanco)("alterarUsuario (Postgres local)", () => {
 
   // Exceção do responsável humano à transação desfeita: duas conexões reais, dados commitados.
   // Só usuários novos @ficticio.invalid e ficticio=true criados aqui; toda escrita tem escopo pelos ids deles.
-  it("3. concorrência: duas conexões desativam A e B; a segunda espera a trava e vê a desativação da primeira (20 rodadas)", async () => {
+  it("3. concorrência: duas conexões desativam A e B; a segunda espera a trava e vê a desativação da primeira (3 rodadas)", async () => {
     const c1 = drizzle(urlLocal(process.env.DATABASE_URL), { schema });
     try {
       const c2 = drizzle(urlLocal(process.env.DATABASE_URL), { schema });
       try {
         const autor = await criar(banco, "tecnico", true);
+        // A espera é detectada por pg_blocking_pids, sem temporização: mais rodadas não acrescentam prova e cada uma deixa 2 usuários commitados.
+        const RODADAS = 3;
         let recusas = 0;
-        for (let rodada = 0; rodada < 20; rodada++) {
+        for (let rodada = 0; rodada < RODADAS; rodada++) {
           const a = await criar(banco, "admin", true);
           const b = await criar(banco, "admin", true);
           try {
@@ -303,8 +305,9 @@ describe.skipIf(!temBanco)("alterarUsuario (Postgres local)", () => {
               .where(and(inArray(schema.usuarios.id, [a.id, b.id]), like(schema.usuarios.email, "%@ficticio.invalid"), eq(schema.usuarios.ficticio, true)));
           }
         }
-        // Banco local com o Admin fictício do seed ativo: ele protege A e B (fictícios), então recusas = 0 aqui; sem outro Admin, 20.
-        expect(recusas === 0 || recusas === 20).toBe(true);
+        // Banco local com o Admin fictício do seed ativo: ele protege A e B (fictícios), então recusas = 0 aqui; sem outro Admin, todas.
+        console.info(`concorrência: ${recusas} rodada(s) com recusa de ${RODADAS}.`);
+        expect(recusas === 0 || recusas === RODADAS).toBe(true);
       } finally {
         await c2.$client.end();
       }
