@@ -16,6 +16,21 @@ import { mensagemDeErro, MSG_DUPLICADO, MSG_PERFIL } from "../../scripts/operaca
 
 const temBanco = bancoDisponivel();
 
+/** Guarda dos testes que commitam uma redefinição: o alvo tem que ser fictício. Lança antes de qualquer escrita. */
+function exigeAlvoFicticio(email: string): void {
+  if (!email.trim().toLowerCase().endsWith("@ficticio.invalid")) throw new Error("Alvo de redefinição fora de @ficticio.invalid.");
+}
+
+describe("exigeAlvoFicticio", () => {
+  it("e-mail fictício passa, também com espaços e maiúsculas", () => {
+    expect(() => exigeAlvoFicticio("teste-1@ficticio.invalid")).not.toThrow();
+    expect(() => exigeAlvoFicticio("  Teste-1@FICTICIO.Invalid ")).not.toThrow();
+  });
+  it.each(["x@empresa.com.br", "x@ficticio.invalid.com", "x@ficticio.invalido", ""])("%j lança", (email) => {
+    expect(() => exigeAlvoFicticio(email)).toThrow("Alvo de redefinição fora de @ficticio.invalid.");
+  });
+});
+
 describe.skipIf(!temBanco)("desbloquearUsuario e script de operação (Postgres local)", () => {
   const banco = temBanco ? drizzle(urlLocal(process.env.DATABASE_URL), { schema }) : undefined!;
   afterAll(async () => {
@@ -272,6 +287,7 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     const antiga = await entrar(d.email, SENHA);
     const cookie = cookieDe(antiga.headers);
     expect(await novoAuth().api.getSession({ headers: new Headers({ cookie }) })).not.toBeNull();
+    exigeAlvoFicticio(` ${d.email.toUpperCase()} `);
     expect(await redefinirSenha(banco, hashReal, { email: ` ${d.email.toUpperCase()} `, novaSenha: NOVA, operador: "operador_teste" })).toBe(true);
     expect(await banco.select().from(schema.sessoes).where(eq(schema.sessoes.userId, id))).toHaveLength(0);
     expect(await novoAuth().api.getSession({ headers: new Headers({ cookie }) })).toBeNull();
@@ -346,6 +362,7 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
         const [sessao] = await segunda.select().from(schema.sessoes).where(eq(schema.sessoes.token, r.response.token));
         login = { token: r.response.token, criadaEm: sessao.createdAt, cookie: cookieDe(r.headers) };
       };
+      exigeAlvoFicticio(d.email);
       expect(await redefinirSenha(banco, hashReal, { email: d.email, novaSenha: NOVA, operador: null }, { aposUpdate })).toBe(true);
       expect(login).toBeDefined();
       // A sessão foi gravada antes do COMMIT, depois do DELETE da redefinição: sobreviveu e está commitada.
@@ -378,6 +395,7 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     const [antes] = await contasDe(id);
     const saida: string[] = [];
     const deps = { banco: falhaNoFim, hash: hashReal, senha: async () => NOVA, operador: null, log: (m: string) => saida.push(`log:${m}`), erro: (m: string) => saida.push(`erro:${m}`) };
+    exigeAlvoFicticio(d.email);
     expect(await redefinirPorScript([d.email], deps)).toBe(1);
     expect(saida).toEqual([`erro:${AVISO}`]);
     expect(ehMensagemDeDominio(AVISO)).toBe(true);
@@ -391,6 +409,7 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     await criarUsuarioComSenha(banco, hashReal, d);
     const saida: string[] = [];
     const deps = { banco, hash: hashReal, senha: async () => NOVA, operador: null, log: (m: string) => saida.push(`log:${m}`), erro: (m: string) => saida.push(`erro:${m}`) };
+    exigeAlvoFicticio(d.email);
     expect(await redefinirPorScript([d.email], deps)).toBe(0);
     expect(await redefinirPorScript([novoEmail()], deps)).toBe(1);
     expect(await redefinirPorScript([], deps)).toBe(1);
