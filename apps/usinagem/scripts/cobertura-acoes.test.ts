@@ -156,8 +156,9 @@ describe("cobertura do wrapper de permissão", () => {
 
   describe("ACOES_PUBLICAS", () => {
     const codigo = `"use server";\n${IMP}export const entrar = acaoPublica(esquema, async () => 1);`;
-    it("começa vazia", () => {
-      expect(ACOES_PUBLICAS).toEqual([]);
+    // Alteração de teste: era "começa vazia"; a Task 11 (1D) lista a ação sair, com motivo.
+    it("é exatamente a ação sair de /entrar", () => {
+      expect(ACOES_PUBLICAS).toEqual(["app/entrar/acoes.ts"]);
     });
     it("acaoPublica em arquivo fora da lista é violação", () => {
       expect(violacoes("app/x/actions.ts", codigo, [])).toHaveLength(1);

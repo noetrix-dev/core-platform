@@ -9,7 +9,11 @@ export const ROTAS_ISENTAS: readonly string[] = [
   "app/api/auth/[...all]/route.ts",
 ];
 /** Arquivos autorizados a usar acaoPublica (ação sem sessão por natureza, ex.: login). Cada entrada é revisada. */
-export const ACOES_PUBLICAS: readonly string[] = [];
+export const ACOES_PUBLICAS: readonly string[] = [
+  // sair: precisa funcionar sem sessão válida (obsoleta, de conta inativa ou já apagada) para expirar o cookie. Não lê
+  // nem altera dado de negócio: só auth().api.signOut com os headers da request e redirect("/entrar").
+  "app/entrar/acoes.ts",
+];
 
 const MODULO_WRAPPER = "lib/servidor/acao";
 const LEITURA_DE_SESSAO = new Set(["getSession", "useSession"]);

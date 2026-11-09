@@ -80,3 +80,34 @@ export function bloqueioAtivo(instantesDeFalha: readonly Date[], agora: Date): b
   if (fim - ultima >= JANELA_FALHAS_MS) return false;
   return excedeuFalhasPorEmail(t.filter((x) => x > ultima - JANELA_FALHAS_MS).length);
 }
+
+const DESTINO_MAX = 2048;
+const BASE_DESTINO = "http://destino.invalid";
+// Barra ou contrabarra dupla no início é host (//x, /\x); espaço e controle o parser de URL apaga ("/\t/x" vira "//x").
+const DESTINO_RUIM = /^(?!\/(?![/\\]))|[\s\p{Cc}]/u;
+
+/**
+ * Destino pós-login: só caminho relativo do próprio app. Recusa (vira "/") host, esquema, codificação que esconda `//`,
+ * espaço ou controle, entrada longa, e caminhos que voltam à tela de entrada (laço) ou à API.
+ */
+export function destinoSeguro(volta: unknown): string {
+  if (typeof volta !== "string" || volta.length > DESTINO_MAX) return "/";
+  // Decodifica até estabilizar: %252F%252F vira %2F%2F e depois //. Quatro camadas bastam; mais que isso é ataque.
+  let atual = volta;
+  for (let i = 0; ; i++) {
+    if (DESTINO_RUIM.test(atual)) return "/";
+    let proximo: string;
+    try {
+      proximo = decodeURIComponent(atual);
+    } catch {
+      return "/";
+    }
+    if (proximo === atual) break;
+    if (i === 4) return "/";
+    atual = proximo;
+  }
+  // Pontos (/x/../entrar) resolvidos pelo mesmo parser do navegador, sobre a forma decodificada.
+  const caminho = new URL(atual, BASE_DESTINO).pathname;
+  // Passou na regra acima: caminho absoluto sem host, sempre da mesma origem. Devolve a entrada como veio.
+  return /^\/(entrar|api)(\/|$)/.test(caminho) ? "/" : volta;
+}
