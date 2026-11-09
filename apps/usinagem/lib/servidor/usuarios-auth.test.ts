@@ -308,6 +308,42 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     expect(JSON.stringify(ev)).not.toContain(NOVA);
   });
 
+  it("redefinir em transação revertida: só o alvo muda (hash, atualizado_em, sessões); a testemunha fica intacta", async () => {
+    const REVERTER = new Error("reverter");
+    // Transação externa sempre revertida (padrão de sessao.test.ts): redefinirSenha recebe o tx e a transação dela vira SAVEPOINT.
+    const r = await banco
+      .transaction(async (tx) => {
+        const HASH_ANTIGO = "sal-antigo:chave-antiga";
+        const marca = new Date(Date.now() - 60 * 60 * 1000);
+        const criarComConta = async () => {
+          const email = novoEmail();
+          const [u] = await tx.insert(schema.usuarios).values({ nome: "[FICTÍCIO] Escopo", email, perfilId: "tecnico", ficticio: true }).returning({ id: schema.usuarios.id });
+          await tx.insert(schema.contas).values({ providerId: "credential", accountId: u.id, userId: u.id, password: HASH_ANTIGO, updatedAt: marca });
+          await tx.insert(schema.sessoes).values({ token: randomUUID(), userId: u.id, expiresAt: new Date(Date.now() + 60_000) });
+          return { id: u.id, email };
+        };
+        const alvo = await criarComConta();
+        const testemunha = await criarComConta();
+        const contaDe = async (id: string) => (await tx.select().from(schema.contas).where(eq(schema.contas.userId, id)))[0];
+        const sessoesDe = (id: string) => tx.select().from(schema.sessoes).where(eq(schema.sessoes.userId, id));
+        const antesTestemunha = { conta: await contaDe(testemunha.id), sessoes: await sessoesDe(testemunha.id) };
+        exigeAlvoFicticio(alvo.email);
+        expect(await redefinirSenha(tx, async () => "sal-novo:chave-nova", { email: alvo.email, novaSenha: NOVA, operador: null })).toBe(true);
+        const contaAlvo = await contaDe(alvo.id);
+        expect(contaAlvo.password).toBe("sal-novo:chave-nova");
+        expect(contaAlvo.updatedAt.getTime()).toBeGreaterThan(marca.getTime());
+        expect(await sessoesDe(alvo.id)).toHaveLength(0);
+        const contaTestemunha = await contaDe(testemunha.id);
+        expect(contaTestemunha.password).toBe(HASH_ANTIGO);
+        expect(contaTestemunha.updatedAt.getTime()).toBe(antesTestemunha.conta.updatedAt.getTime());
+        expect(await sessoesDe(testemunha.id)).toEqual(antesTestemunha.sessoes);
+        expect(antesTestemunha.sessoes).toHaveLength(1);
+        throw REVERTER;
+      })
+      .catch((e: unknown) => e);
+    if (r !== REVERTER) throw r;
+  });
+
   it("redefinir: senha fora da política recusa sem mudar hash nem sessões", async () => {
     const d = dados();
     const id = await criarUsuarioComSenha(banco, hashReal, d);
