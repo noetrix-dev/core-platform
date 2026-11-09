@@ -40,24 +40,26 @@ describe.skipIf(!temBanco)("alterarUsuario (Postgres local)", () => {
   type Exec = Tx | typeof banco;
 
   const REVERTER = new Error("reverter");
-  let reversiveis = 0;
+  /** Os tx abertos por emTransacao e ainda vivos: só eles podem receber a neutralização. */
+  const vivos = new Set<Tx>();
   /**
    * Tudo dentro de uma transação desfeita no fim: nada do teste fica no banco. O ROLLBACK é garantido também quando o
    * teste falha: o drizzle faz `rollback` no catch de toda exceção (node-postgres/session.js:188-190, savepoint em :218-220),
    * e aqui o caminho feliz também lança (REVERTER). `aninhada` usa o tx de fora: SAVEPOINT + ROLLBACK TO SAVEPOINT.
    */
   async function emTransacao(fn: (tx: Tx) => Promise<void>, aninhada?: Tx) {
-    reversiveis++;
+    let aberto: Tx | undefined;
     try {
       const r = await (aninhada ?? banco)
         .transaction(async (tx) => {
+          vivos.add((aberto = tx));
           await fn(tx);
           throw REVERTER;
         })
         .catch((e: unknown) => e);
       if (r !== REVERTER) throw r;
     } finally {
-      reversiveis--;
+      if (aberto) vivos.delete(aberto);
     }
   }
   /**
@@ -65,7 +67,7 @@ describe.skipIf(!temBanco)("alterarUsuario (Postgres local)", () => {
    * Torna os casos de "último Admin" deterministas em qualquer banco local, inclusive com um Admin real criado à mão.
    */
   const neutralizarAdminsReais = async (tx: Tx, exceto: string[]) => {
-    if (reversiveis === 0) throw new Error("Neutralização fora de transação revertida.");
+    if (!vivos.has(tx)) throw new Error("Neutralização fora de transação revertida.");
     await tx
       .update(schema.usuarios)
       .set({ ativo: false })
@@ -113,6 +115,30 @@ describe.skipIf(!temBanco)("alterarUsuario (Postgres local)", () => {
       expect(await linha(fora, r.id)).toMatchObject({ ativo: true, versao: 1 });
     });
     expect(await reaisAtivos()).toEqual(doBanco);
+  });
+
+  it("guarda da neutralização: executor que não é o tx vivo da emTransacao lança antes de qualquer SQL, mesmo com transação aberta", async () => {
+    // Stub no lugar do `banco`: se a guarda falhar, a chamada fica registrada aqui e nenhum UPDATE sem escopo vai ao banco compartilhado.
+    const chamadas: string[] = [];
+    const foraDaTransacao = {
+      update: () => (chamadas.push("update"), { set: () => ({ where: async () => {} }) }),
+    } as unknown as Tx;
+    await emTransacao(async () => {
+      await expect(neutralizarAdminsReais(foraDaTransacao, [])).rejects.toThrow("Neutralização fora de transação revertida.");
+    });
+    expect(chamadas).toEqual([]);
+  });
+
+  it("versaoLida acima do int4 (2147483648) é recusada com a mensagem genérica, sem erro do Postgres", async () => {
+    await emTransacao(async (tx) => {
+      const autor = await criar(tx, "tecnico", true);
+      const t = await criar(tx, "tecnico", true);
+      const e = await erroDe(alterarUsuario(tx, autorDe(autor.id), t.id, 2147483648, { ativo: false }));
+      expect(e).toBeInstanceOf(ErroDominio);
+      expect(e?.message).toBe(RECUSADA);
+      expect((e as Error & { cause?: unknown }).cause).toBeUndefined();
+      expect(await linha(tx, t.id)).toMatchObject({ ativo: true, versao: 1 });
+    });
   });
 
   it("1. desativar o único Admin ativo (real) é recusado com a mensagem genérica; nada muda", async () => {

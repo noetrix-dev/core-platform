@@ -12,6 +12,8 @@ type Executor = PgDatabase<NodePgQueryResultHKT, typeof schema>;
 export type LinhaTravada = { id: string; perfil: Perfil; ativo: boolean; ficticio: boolean };
 
 const RECUSADA = "Alteração de usuário recusada.";
+// versao é integer (int4): acima disso o Postgres lançaria 22003 em vez da recusa de domínio.
+const INT4_MAX = 2147483647;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -32,7 +34,7 @@ export async function alterarUsuario(
   // Só para teste: roda logo depois do SELECT ... FOR UPDATE, com as linhas travadas (corrida entre duas conexões).
   ganchos: { aposTrava?: (linhas: LinhaTravada[], tx: Executor) => Promise<void> } = {},
 ): Promise<void> {
-  if (!UUID.test(alvoId) || !Number.isSafeInteger(versaoLida) || (mudanca.perfil !== undefined && !PERFIS.includes(mudanca.perfil)))
+  if (!UUID.test(alvoId) || !(Number.isSafeInteger(versaoLida) && versaoLida <= INT4_MAX) || (mudanca.perfil !== undefined && !PERFIS.includes(mudanca.perfil)))
     throw new ErroDominio("Alteração de usuário recusada.");
   const u = schema.usuarios;
   await banco.transaction(async (tx) => {
