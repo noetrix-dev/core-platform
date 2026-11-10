@@ -13,6 +13,9 @@ export const ACOES_PUBLICAS: readonly string[] = [
   // sair: precisa funcionar sem sessão válida (obsoleta, de conta inativa ou já apagada) para expirar o cookie. Não lê
   // nem altera dado de negócio: só auth().api.signOut com os headers da request e redirect("/entrar").
   "app/entrar/acoes.ts",
+  // escolherPerfil do seletor de dev: escolhe a identidade de dev, então não há sessão antes dela. Barreiras: o arquivo
+  // só entra no build com o gate (pageExtensions), a ação recusa com o gate desligado e só aceita fictício ativo.
+  "app/dev/perfil/acoes.dev.ts",
 ];
 
 const MODULO_WRAPPER = "lib/servidor/acao";
