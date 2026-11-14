@@ -42,6 +42,7 @@ const MENSAGENS_DE_DOMINIO = new Set<string>([
   "E-mail já cadastrado.",
   "Alteração de usuário recusada.",
   "Registro alterado por outra pessoa.",
+  "Usuário alterado, mas a atualização final falhou: sessões abertas durante a alteração podem continuar válidas.",
   "Erro de domínio.",
 ]);
 

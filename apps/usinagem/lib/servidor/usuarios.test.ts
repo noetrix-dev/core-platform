@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray, like, notInArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./db/schema";
 import { bancoDisponivel } from "./db/teste-banco";
 import { urlLocal } from "./db/url-local";
 import { alterarUsuario, type LinhaTravada } from "./usuarios";
+import { criarAuth, usuarioDaSessao } from "./auth-config";
+import { criarUsuarioComSenha } from "./usuarios-auth";
 import type { SessaoAutorizada } from "./sessao";
 import { ehMensagemDeDominio, ErroDominio } from "../dominio/comum";
 import type { Perfil } from "../dominio/permissoes/perfis";
@@ -242,6 +244,31 @@ describe.skipIf(!temBanco)("alterarUsuario (Postgres local)", () => {
     });
   });
 
+  it("atualização final que falha depois do COMMIT: aviso fixo, a alteração fica e a gravação de dentro da transação já valeu", async () => {
+    const AVISO = "Usuário alterado, mas a atualização final falhou: sessões abertas durante a alteração podem continuar válidas.";
+    await emTransacao(async (tx) => {
+      const autor = await criar(tx, "tecnico", true);
+      const t = await criar(tx, "tecnico", true);
+      const marca = new Date(Date.now() - 60 * 60 * 1000);
+      await tx.insert(schema.contas).values({ providerId: "credential", accountId: t.id, userId: t.id, password: "hash-ficticio", updatedAt: marca });
+      // Stub: o tx real, mas o UPDATE fora da transação interna (a segunda gravação) lança. A transação interna usa o savepoint real.
+      const falhaNoFim = new Proxy(tx, {
+        get(o, k) {
+          if (k === "update") return () => {
+            throw new Error("falha simulada na segunda gravação");
+          };
+          const v = Reflect.get(o, k);
+          return typeof v === "function" ? v.bind(o) : v;
+        },
+      });
+      const t0 = new Date();
+      await esperaRecusa(alterarUsuario(falhaNoFim, autorDe(autor.id), t.id, 1, { ativo: false }), AVISO);
+      expect(await linha(tx, t.id)).toMatchObject({ ativo: false, versao: 2 });
+      const [conta] = await tx.select().from(schema.contas).where(eq(schema.contas.userId, t.id));
+      expect(conta.updatedAt.getTime()).toBeGreaterThanOrEqual(t0.getTime());
+    });
+  });
+
   it("alvo inexistente, id fora de UUID, versão não inteira ou perfil inexistente: recusa genérica, sem evento", async () => {
     await emTransacao(async (tx) => {
       const autor = await criar(tx, "tecnico", true);
@@ -253,6 +280,84 @@ describe.skipIf(!temBanco)("alterarUsuario (Postgres local)", () => {
       expect(await linha(tx, t.id)).toMatchObject({ ativo: true, versao: 1, perfilId: "tecnico" });
       expect(await eventos(tx, t.id)).toHaveLength(0);
     });
+  });
+
+  describe("corrida real com login (duas conexões, dados commitados)", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+    const SENHA = "senha-correta-de-teste-123";
+    const cookieDe = (h: Headers) => h.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+
+    // Exceção do responsável humano à transação desfeita: duas conexões reais, dados commitados.
+    // Só usuários novos @ficticio.invalid e ficticio=true criados aqui; toda escrita commitada tem escopo pelo id do alvo.
+    it.each([
+      ["desativação", { ativo: false }, { ativo: true }],
+      ["troca de perfil", { perfil: "comercial" as Perfil }, undefined],
+    ] as const)(
+      "%s: login que passou pela checagem de ativo antes do COMMIT grava a sessão depois; ela continua recusada (também reativado)",
+      async (nome, mudanca, desfazer) => {
+        vi.stubEnv("BETTER_AUTH_SECRET", "segredo-de-teste-somente-vitest-0123456789");
+        vi.stubEnv("BETTER_AUTH_URL", "https://usinagem.teste.invalid");
+        vi.stubEnv("AUTH_IP_HEADER", "x-real-ip");
+        const segunda = drizzle(urlLocal(process.env.DATABASE_URL), { schema });
+        try {
+          const authLogin = criarAuth({ banco: segunda });
+          const hash = async (s: string) => (await criarAuth({ banco }).$context).password.hash(s);
+          const autor = await criar(banco, "tecnico", true);
+          const email = `teste-${randomUUID()}@ficticio.invalid`;
+          const id = await criarUsuarioComSenha(banco, hash, { nome: "[FICTÍCIO] Corrida", email, senha: SENHA, perfil: "tecnico", ficticio: true, criadoPor: null, operador: null });
+          const entrar = () =>
+            authLogin.api.signInEmail({ body: { email, password: SENHA }, headers: new Headers({ "x-real-ip": "203.0.113.30" }), returnHeaders: true });
+          let login: ReturnType<typeof entrar> | undefined;
+          let esperouTrava = false;
+          const antesDoCommit = async (tx: Parameters<typeof alterarUsuario>[0]) => {
+            const [{ pid }] = (await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`)).rows;
+            // A gravação de dentro da transação (atualizado_em = T1) já rodou. Espera o relógio passar de T1, sem sleep:
+            // o carimbo do login precisa ser posterior, que é o caso que só a gravação depois do COMMIT pega.
+            const marca = Date.now();
+            while (Date.now() <= marca);
+            // Login na segunda conexão: lê ativo = true (a desativação não foi commitada) e bloqueia no INSERT da sessão
+            // (FK para usuarios contra o FOR UPDATE do alvo) até o COMMIT; ou termina antes, se nada bloquear.
+            login = entrar();
+            let terminou = false;
+            login.then(
+              () => (terminou = true),
+              () => (terminou = true),
+            );
+            for (let i = 0; !terminou; i++) {
+              if (i > 5000) throw new Error("O login não bloqueou nem terminou.");
+              const r = await banco.execute<{ b: boolean }>(sql`select exists (select 1 from pg_stat_activity where ${pid}::int = any(pg_blocking_pids(pid))) as b`);
+              if (r.rows[0].b) {
+                esperouTrava = true;
+                break;
+              }
+            }
+          };
+          exigeAlvoFicticio({ email, ficticio: true });
+          await alterarUsuario(banco, autorDe(autor.id), id, 1, mudanca, { antesDoCommit });
+          expect(login).toBeDefined();
+          const r = await login!;
+          // A sessão foi gravada depois do DELETE da alteração: a corrida aconteceu.
+          const [s] = await banco.select().from(schema.sessoes).where(eq(schema.sessoes.token, r.response.token));
+          expect(s.userId).toBe(id);
+          console.info(`corrida (${nome}): login ${esperouTrava ? "bloqueou até o COMMIT" : "terminou antes do COMMIT"}.`);
+          if (desfazer) {
+            exigeAlvoFicticio({ email, ficticio: true });
+            await alterarUsuario(banco, autorDe(autor.id), id, 2, desfazer);
+            expect(await linha(banco, id)).toMatchObject({ ativo: true, versao: 3 });
+          }
+          expect(await usuarioDaSessao(banco, id, s.createdAt)).toBeNull();
+          expect(await criarAuth({ banco }).api.getSession({ headers: new Headers({ cookie: cookieDe(r.headers) }) })).toBeNull();
+          // Por quê: o carimbo do login é posterior ao T1 de dentro da transação; só a gravação depois do COMMIT o deixa para trás.
+          const [conta] = await banco.select().from(schema.contas).where(eq(schema.contas.userId, id));
+          expect(conta.updatedAt.getTime()).toBeGreaterThan(s.createdAt.getTime());
+        } finally {
+          await segunda.$client.end();
+        }
+      },
+      30_000,
+    );
   });
 
   // Exceção do responsável humano à transação desfeita: duas conexões reais, dados commitados.
