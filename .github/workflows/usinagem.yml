@@ -94,6 +94,13 @@ jobs:
         working-directory: apps/usinagem
         run: pnpm db:migrate
 
+      # Seed fictício idempotente (onConflictDoNothing): perfis, permissões e usuários fictícios de que os testes
+      # dependem por FK. Chamado sem `pnpm db:seed`, porque esse script usa --env-file=.env.local, que não existe no CI;
+      # o seed lê só DATABASE_URL (role da aplicação), que vem do env do job.
+      - name: Seed fictício (role da aplicação)
+        working-directory: apps/usinagem
+        run: node --import tsx scripts/seed.ts
+
       - name: Testes (role da aplicação)
         working-directory: apps/usinagem
         run: pnpm test
