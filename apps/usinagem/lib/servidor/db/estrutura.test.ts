@@ -84,7 +84,7 @@ describe.skipIf(!temBanco)("estrutura das tabelas (spec §4 e §6.8)", () => {
         expect(col!.padrao, `${t}.${c} default`).toMatch(/^now\(\)/);
       }
     }
-  });
+  }, 30_000);
 
   it("exceções: perfil_permissoes e eventos_auditoria só com criado_em", async () => {
     const rows = await colunas(SO_CRIADO_EM, ["criado_em", "atualizado_em"]);

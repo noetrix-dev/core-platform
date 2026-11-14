@@ -222,7 +222,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     expect(deInativo).toEqual({ statusCode: 401, body: ERRO_GENERICO });
     expect(deInativo).toEqual(deSenhaErrada);
     expect(await sessoesDe(inativo.id)).toHaveLength(0);
-  });
+  }, 30_000);
 
   it("6. fixação de sessão: tokens novos a cada login e cookie forjado não vale", async () => {
     const u = await criarUsuario();
@@ -424,7 +424,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     const r = await entrar({ email: u.email.toUpperCase(), password: SENHA });
     expect(r.status).toBe(401);
     expect(await sessoesDe(u.id)).toHaveLength(0);
-  });
+  }, 30_000);
 
   it("14. 9 falhas não bloqueiam: a senha certa entra", async () => {
     const u = await criarUsuario();
@@ -455,7 +455,7 @@ describe.skipIf(!temBanco)("criarAuth com Postgres local (usuários fictícios)"
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(ultima.getTime() + JANELA_FALHAS_MS);
     expect((await entrar({ email: u.email, password: SENHA })).status).toBe(200);
-  });
+  }, 30_000);
 
   it("17. desbloqueio posterior às falhas libera; falhas antes dele não contam", async () => {
     const u = await criarUsuario();

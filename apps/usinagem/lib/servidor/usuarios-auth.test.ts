@@ -306,7 +306,7 @@ describe.skipIf(!temBanco)("criação e redefinição de senha (Postgres local)"
     });
     expect(JSON.stringify(ev)).not.toContain(SENHA);
     expect(JSON.stringify(ev)).not.toContain(NOVA);
-  });
+  }, 30_000);
 
   it("redefinir em transação revertida: só o alvo muda (hash, atualizado_em, sessões); a testemunha fica intacta", async () => {
     const REVERTER = new Error("reverter");

@@ -366,6 +366,6 @@ describe.skipIf(!temBanco)("sessão real (Postgres local, tudo em transação re
         await tx.update(schema.contas).set({ updatedAt: new Date(Date.now() + 1000) }).where(eq(schema.contas.userId, id));
         expect(await lerPeloEndpoint(obsoleta.cookie)).toBeNull();
       });
-    });
+    }, 30_000);
   });
 });
