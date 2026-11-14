@@ -547,7 +547,7 @@ Pré-requisitos registrados para a Fase 2: Chrome instalado na máquina para o P
 | `destinoSeguro` recusa valores legítimos de query com `%20` ou `%2F%2F` (conservador). Revisar quando houver rota de busca usada como `volta`. | Quando surgir a primeira rota de busca |
 | `/entrar` lança se `usuarioAtual()` falhar (por exemplo, banco fora do ar): a pessoa vê a página de erro em vez do formulário. Fecha em falha e não forma laço. | 1C (página de erro amigável) |
 | Reautenticação com senha errada deixa a pessoa deslogada, porque o `signOut` já rodou antes do login (desenho D1 do plano 0003). Fecha em falha. | Aceito (1D, Task 11) |
-| Verificação manual do fluxo de login com `pnpm dev` e `curl` (comandos no relatório da Task 11): saídas ainda não coladas. | Responsável humano, antes do PR do 1D |
+| **Concluído em 2026-11-13.** Verificação manual da 1D (Tasks 7 e 11) feita pelo responsável humano com `pnpm dev` e `curl`, incluindo `usuario:criar` em terminal real. Item 6b (logout): com sessão válida (controle: `get-session` respondendo com sessão), a ação `sair` devolveu 200 e o `get-session` com o token antigo passou a devolver sessão nula, o que confirma que o logout revoga a sessão no servidor. A primeira tentativa do 6b saiu com o id da ação vazio e foi descartada como inválida. | Concluído (1D) |
 | Há duas versões do zod instaladas (`4.4.3`, dependência transitiva, e `4.6.5`, a do app). Não está confirmado qual o Better Auth resolve; o login recebe o mesmo e-mail normalizado, então não há divergência efetiva. | Próximo upgrade de dependências |
 
 ### 9.3 Checklist de entrada em produção
