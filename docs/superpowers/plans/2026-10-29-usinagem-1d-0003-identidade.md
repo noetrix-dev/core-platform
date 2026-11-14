@@ -154,7 +154,7 @@ Estes ajustes valem sobre o desenho acima e já estão refletidos nas tasks.
 - Mensagens em PT-BR, sem travessão, sem valor de campo nem detalhe de erro de biblioteca.
 - Dados fictícios marcados. Nenhum banco real.
 - Cada task: RED literal antes do código, mutação de prova, comandos exatos com exit code, contagem de testes antes e depois, e um commit novo com os trailers da sessão. Sem push.
-- Comandos sempre com `cd` explícito na mesma linha: `cd /home/ewerton/projects/core-platform-usinagem/apps/usinagem && <cmd>`. Lint sem filtro: `rtk proxy pnpm lint; echo "lint_exit=$?"`.
+- Comandos sempre com `cd` explícito na mesma linha: `cd apps/usinagem && <cmd>`. Lint sem filtro: `rtk proxy pnpm lint; echo "lint_exit=$?"`.
 - A tela `/entrar` é funcional e sem estilo próprio. O visual vem do `/impeccable shape` da 1C.
 
 ---
@@ -186,7 +186,7 @@ Mais um teste igual para `acao(...)` com sessão permitida.
 
 - [ ] **Step 2: RED literal**
 
-Run: `cd /home/ewerton/projects/core-platform-usinagem/apps/usinagem && pnpm exec vitest run lib/servidor/acao.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×"`
+Run: `cd apps/usinagem && pnpm exec vitest run lib/servidor/acao.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×"`
 Expected: os 2 testes novos falham, porque a exceção escapa de `executar`.
 
 - [ ] **Step 3: Implementar**
@@ -269,7 +269,7 @@ Ajuste os argumentos reais às assinaturas de `regras.ts` e `serializar.ts` lida
 
 - [ ] **Step 2: RED literal**
 
-Run: `cd /home/ewerton/projects/core-platform-usinagem/apps/usinagem && pnpm typecheck; echo "typecheck_exit=$?"`
+Run: `cd apps/usinagem && pnpm typecheck; echo "typecheck_exit=$?"`
 Expected: `error TS2578: Unused '@ts-expect-error' directive.`, uma linha por diretiva, e `typecheck_exit=2`.
 
 - [ ] **Step 3: Implementar**
@@ -318,7 +318,7 @@ O teste exige igualdade com `PODE_PERMITIDO`, a lista de arquivos que hoje chama
 
 Run:
 ```bash
-cd /home/ewerton/projects/core-platform-usinagem && pnpm --filter usinagem add --save-exact better-auth@1.6.33
+pnpm --filter usinagem add --save-exact better-auth@1.6.33
 npm view better-auth time dist-tags --json
 ```
 
@@ -339,7 +339,7 @@ Aplicar também as duas correções pendentes da §9.2:
 
 - [ ] **Step 3: RED literal**
 
-Run: `cd /home/ewerton/projects/core-platform-usinagem/apps/usinagem && pnpm exec vitest run lib/servidor/db/estrutura.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×"`
+Run: `cd apps/usinagem && pnpm exec vitest run lib/servidor/db/estrutura.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×"`
 Expected: os testes novos falham porque as tabelas não existem no banco local.
 
 - [ ] **Step 4: Schema**
@@ -536,7 +536,7 @@ O import do teste passa a incluir `emailParaAuditoria` e `senhaValida`, e os cas
 
 - [ ] **Step 2: RED literal**
 
-Run: `cd /home/ewerton/projects/core-platform-usinagem/apps/usinagem && pnpm exec vitest run lib/dominio/seguranca/login.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×|Error"`
+Run: `cd apps/usinagem && pnpm exec vitest run lib/dominio/seguranca/login.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×|Error"`
 Expected: `Cannot find module './login'`.
 
 - [ ] **Step 3: Implementar**
@@ -631,7 +631,7 @@ Testes:
 
 - [ ] **Step 3: RED literal**
 
-Run: `cd /home/ewerton/projects/core-platform-usinagem/apps/usinagem && pnpm exec vitest run lib/servidor/auth.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×|Error"`
+Run: `cd apps/usinagem && pnpm exec vitest run lib/servidor/auth.test.ts 2>&1 | grep -E "Test Files|Tests |FAIL|×|Error"`
 Expected: `Cannot find module './auth-config'`.
 
 - [ ] **Step 4: Implementar `auth-config.ts`**
