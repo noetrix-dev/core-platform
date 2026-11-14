@@ -26,7 +26,7 @@ describe("exigeAlvoFicticio (alteração)", () => {
     expect(() => exigeAlvoFicticio({ email: "teste-1@ficticio.invalid", ficticio: true })).not.toThrow();
     for (const u of [
       { email: "teste-1@ficticio.invalid", ficticio: false },
-      { email: "x@empresa.com.br", ficticio: true },
+      { email: "x@example.com", ficticio: true },
       { email: "x@ficticio.invalid.com", ficticio: true },
     ])
       expect(() => exigeAlvoFicticio(u)).toThrow("Alvo de alteração fora de @ficticio.invalid.");

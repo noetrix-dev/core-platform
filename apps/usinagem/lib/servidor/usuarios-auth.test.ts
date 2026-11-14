@@ -26,7 +26,7 @@ describe("exigeAlvoFicticio", () => {
     expect(() => exigeAlvoFicticio("teste-1@ficticio.invalid")).not.toThrow();
     expect(() => exigeAlvoFicticio("  Teste-1@FICTICIO.Invalid ")).not.toThrow();
   });
-  it.each(["x@empresa.com.br", "x@ficticio.invalid.com", "x@ficticio.invalido", ""])("%j lança", (email) => {
+  it.each(["x@example.com", "x@ficticio.invalid.com", "x@ficticio.invalido", ""])("%j lança", (email) => {
     expect(() => exigeAlvoFicticio(email)).toThrow("Alvo de redefinição fora de @ficticio.invalid.");
   });
 });
@@ -99,7 +99,7 @@ describe("operadorValido", () => {
   it("só nome de usuário Unix simples; o resto vira null", () => {
     expect(operadorValido("root")).toBe("root");
     expect(operadorValido("_op-1")).toBe("_op-1");
-    for (const n of ["Ewerton", "a;rm -rf", "", "1abc", "a".repeat(33), null, undefined, 7]) expect(operadorValido(n)).toBeNull();
+    for (const n of ["Fulano", "a;rm -rf", "", "1abc", "a".repeat(33), null, undefined, 7]) expect(operadorValido(n)).toBeNull();
     expect(operadorValido("a".repeat(32))).toBe("a".repeat(32));
   });
 });

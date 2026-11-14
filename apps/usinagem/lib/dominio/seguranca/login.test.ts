@@ -39,7 +39,7 @@ describe("registroLogin", () => {
     ["127.0.0.1", "127.0.0.1"],
     ["::1", "::1"],
     ["2001:db8::1", "2001:db8::1"],
-    ["1.2.3.4, 5.6.7.8", null],
+    ["192.0.2.10, 192.0.2.20", null],
     ["x".repeat(10_000), null],
     ["127.0.0.1\nX: 1", null],
     ["", null],
@@ -178,7 +178,7 @@ describe("chave do limite por IP", () => {
     [undefined, "desconhecido"],
     ["", "desconhecido"],
     [123, "desconhecido"],
-    ["1.2.3.4, 5.6.7.8", "desconhecido"],
+    ["192.0.2.10, 192.0.2.20", "desconhecido"],
     ["127.0.0.1\nX: 1", "desconhecido"],
     ["x".repeat(10_000), "desconhecido"],
   ])("%j vira %j", (ip, esperado) => {
