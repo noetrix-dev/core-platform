@@ -44,6 +44,11 @@ jobs:
       # localhost: passa na guarda urlLocal. Migração usa a role dona; testes, seed e build usam a role da aplicação.
       DATABASE_URL_MIGRACAO: postgres://usinagem_migracao:ci_migracao_descartavel@localhost:5432/usinagem
       DATABASE_URL: postgres://usinagem_app:ci_app_descartavel@localhost:5432/usinagem
+      # Segredo descartável do CI, valor de teste. AUTH_IP_HEADER fica de fora de propósito: a verificação do build
+      # de produção nunca chama auth() (sondas com cookie de presença em rotas inexistentes); se chamasse, o servidor
+      # lançaria "AUTH_IP_HEADER ausente em produção." e a sonda daria 500, não 404.
+      BETTER_AUTH_SECRET: ci_better_auth_descartavel_0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3999
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,6 +97,12 @@ jobs:
       - name: Testes (role da aplicação)
         working-directory: apps/usinagem
         run: pnpm test
+
+      # Build com ENABLE_DEV_SWITCHER=1 e NODE_ENV=production; prova que o seletor de dev não está no .next e que
+      # /dev/perfil responde 404 no servidor de produção (porta 3999). Herda o env do job, igual ao passo Build.
+      - name: Seletor de dev fora do build de produção
+        working-directory: apps/usinagem
+        run: bash scripts/verificar-build-producao.sh
 
       - name: Build
         working-directory: apps/usinagem
