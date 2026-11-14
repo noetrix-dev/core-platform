@@ -26,7 +26,7 @@ vi.mock("./auth", () => ({ auth: () => ({ api: { getSession: h.getSession } }) }
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 
 import { criarAuth } from "./auth-config";
-import { acaoSensivel } from "./acao";
+import { acao, acaoSensivel, rota } from "./acao";
 import { ErroPermissao, ErroReautenticacao, requirePermissao, requirePermissaoSensivel, usuarioAtual } from "./sessao";
 import { criarUsuarioComSenha, redefinirSenha } from "./usuarios-auth";
 
@@ -103,6 +103,12 @@ describe("seletor de dev (sem sessão real)", () => {
     expect(erro).toBeInstanceOf(ErroPermissao);
     expect(erro).toMatchObject({ status: 403, message: "Confirme sua senha para continuar." });
   });
+  it("6d. requirePermissao de permissão sensível com o seletor de dev: ErroReautenticacao, mesmo para Admin", async () => {
+    h.usuario = { id: "u1", nome: "Adm", perfil: "admin" };
+    for (const p of ["usuarios.gerenciar", "permissoes.gerenciar"] as const)
+      await expect(requirePermissao(p)).rejects.toBeInstanceOf(ErroReautenticacao);
+    expect(await requirePermissao("processo.ver")).toMatchObject({ id: "u1" });
+  });
 });
 
 const temBanco = bancoDisponivel();
@@ -127,10 +133,10 @@ describe.skipIf(!temBanco)("sessão real (Postgres local, tudo em transação re
     if (r !== REVERTER) throw r;
   }
 
-  async function usuario(tx: Tx, { ativo = true, senhaTrocadaEm = new Date(Date.now() - 60 * MIN), credencial = true } = {}) {
+  async function usuario(tx: Tx, { ativo = true, senhaTrocadaEm = new Date(Date.now() - 60 * MIN), credencial = true, perfil = "tecnico" } = {}) {
     const [u] = await tx
       .insert(schema.usuarios)
-      .values({ nome: "[FICTÍCIO] Sessão", email: `teste-${randomUUID()}@ficticio.invalid`, perfilId: "tecnico", ativo, ficticio: true })
+      .values({ nome: "[FICTÍCIO] Sessão", email: `teste-${randomUUID()}@ficticio.invalid`, perfilId: perfil, ativo, ficticio: true })
       .returning({ id: schema.usuarios.id, nome: schema.usuarios.nome, perfil: schema.usuarios.perfilId });
     if (credencial) await tx.insert(schema.contas).values({ providerId: "credential", accountId: u.id, userId: u.id, password: "hash-ficticio", updatedAt: senhaTrocadaEm });
     return u;
@@ -212,15 +218,46 @@ describe.skipIf(!temBanco)("sessão real (Postgres local, tudo em transação re
 
   it("7. acaoSensivel com sessão velha: { ok: false, erro } e a fn não roda; com sessão recente roda", async () => {
     await emTransacao(async (tx) => {
-      const u = await usuario(tx);
-      const [p] = await concedidasDe(tx, "tecnico");
+      const u = await usuario(tx, { perfil: "admin" });
       const fn = vi.fn(async () => 1);
-      const sensivel = acaoSensivel(p as never, z.object({}), fn);
+      const sensivel = acaoSensivel("usuarios.gerenciar", z.object({}), fn);
       h.getSession.mockResolvedValue(sessaoDe(u, new Date(Date.now() - 11 * MIN)));
       expect(await sensivel({})).toEqual({ ok: false, erro: "Confirme sua senha para continuar." });
       expect(fn).not.toHaveBeenCalled();
       h.getSession.mockResolvedValue(sessaoDe(u, new Date(Date.now() - 5 * MIN)));
       expect(await sensivel({})).toEqual({ ok: true, dados: 1 });
+    });
+  });
+
+  // Permissões sensíveis exigem login recente também por acao e rota (não só por acaoSensivel): esquecer o acaoSensivel não abre a porta.
+  describe.each(["usuarios.gerenciar", "permissoes.gerenciar"] as const)("%s por acao e rota (Admin real)", (p) => {
+    it("sessão de 11 min: recusada com a mensagem de reautenticação; de 9 min: aceita", async () => {
+      await emTransacao(async (tx) => {
+        const u = await usuario(tx, { perfil: "admin" });
+        const fn = vi.fn(async () => 1);
+        const handler = vi.fn(async () => Response.json({ ok: true }));
+        const a = acao(p, z.object({}), fn);
+        const r = rota(p, handler);
+        h.getSession.mockResolvedValue(sessaoDe(u, new Date(Date.now() - 11 * MIN)));
+        expect(await a({})).toEqual({ ok: false, erro: "Confirme sua senha para continuar." });
+        const recusada = await r(new Request("https://usinagem.teste.invalid/x"));
+        expect(recusada.status).toBe(403);
+        expect(await recusada.json()).toEqual({ erro: "Confirme sua senha para continuar." });
+        expect(fn).not.toHaveBeenCalled();
+        expect(handler).not.toHaveBeenCalled();
+        h.getSession.mockResolvedValue(sessaoDe(u, new Date(Date.now() - 9 * MIN)));
+        expect(await a({})).toEqual({ ok: true, dados: 1 });
+        expect((await r(new Request("https://usinagem.teste.invalid/x"))).status).toBe(200);
+      });
+    });
+  });
+
+  it("permissão não sensível com sessão de 11 h: aceita por acao e rota (Admin real)", async () => {
+    await emTransacao(async (tx) => {
+      const u = await usuario(tx, { perfil: "admin", senhaTrocadaEm: new Date(Date.now() - 12 * 60 * MIN) });
+      h.getSession.mockResolvedValue(sessaoDe(u, new Date(Date.now() - 11 * 60 * MIN)));
+      expect(await acao("processo.ver", z.object({}), async () => 1)({})).toEqual({ ok: true, dados: 1 });
+      expect((await rota("processo.ver", async () => new Response(null, { status: 204 }))(new Request("https://usinagem.teste.invalid/x"))).status).toBe(204);
     });
   });
 

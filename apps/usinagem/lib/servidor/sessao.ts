@@ -52,6 +52,9 @@ export async function usuarioAtual(): Promise<SessaoAtual | null> {
   return null;
 }
 
+// Exigem login recente (10 min) em qualquer porta (acao, rota, acaoSensivel). Tipado no catálogo: renomear quebra o typecheck.
+const SENSIVEIS = new Set<Permissao>(["usuarios.gerenciar", "permissoes.gerenciar"]);
+
 // Tabela perfil_permissoes vazia (seed não rodado) nega toda ação de não-admin: falha fechado.
 export async function requirePermissao(permissao: Permissao): Promise<SessaoAutorizada> {
   const usuario = await usuarioAtual();
@@ -61,6 +64,8 @@ export async function requirePermissao(permissao: Permissao): Promise<SessaoAuto
   const decisao = decidirAcesso(usuario, permissao, concedidas);
   if (decisao === "nao_autenticado") throw new ErroPermissao(401);
   if (decisao === "negado") throw new ErroPermissao(403);
+  // O seletor de dev (sessaoCriadaEm null) nunca passa aqui.
+  if (SENSIVEIS.has(permissao) && exigeReautenticacao(usuario!.sessaoCriadaEm, new Date())) throw new ErroReautenticacao();
   return { ...usuario!, concedidas };
 }
 
