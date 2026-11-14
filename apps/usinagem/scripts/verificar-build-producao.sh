@@ -2,6 +2,7 @@
 # Prova que o seletor de dev não existe em produção, mesmo com ENABLE_DEV_SWITCHER=1:
 # nenhum marcador do seletor no build e /dev/perfil (e variações) respondendo 404 no servidor de produção.
 # Nunca imprime valores de variáveis de ambiente.
+# ATENÇÃO: apaga o .next local (rm -rf .next) e o recria com um build de produção.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -23,14 +24,29 @@ fi
 rm -rf .next
 ENABLE_DEV_SWITCHER=1 NODE_ENV=production pnpm build
 
+# Sem .next/server o grep abaixo não teria onde procurar e passaria em falso (ex.: distDir trocado).
+[ -d .next/server ] || falha "o build não gerou .next/server; nada a verificar."
+
+# Nome do cookie lido da fonte, para o marcador não divergir do código.
+COOKIE_DEV=$(sed -nE 's/^export const COOKIE_USUARIO_DEV = "([^"]+)";.*/\1/p' lib/servidor/sessao-dev.ts)
+[ -n "$COOKIE_DEV" ] || falha "não consegui extrair COOKIE_USUARIO_DEV de lib/servidor/sessao-dev.ts."
+
 # Marcadores do seletor: nome do cookie, título da página (só o trecho exclusivo dela: o comentário de
 # lib/dominio/seguranca/dev.ts também diz "Seletor de perfil" e vai nos source maps) e caminho da rota.
-# .next/cache fica de fora (cache do compilador, não é servido).
-for marcador in "usinagem_dev_usuario" "Seletor de perfil (somente desenvolvimento" "dev/perfil"; do
-  if grep -rIlF --exclude-dir=cache "$marcador" .next >/dev/null; then
-    falha "o marcador \"$marcador\" está no build de produção."
-  fi
+# .next/cache fica de fora (cache do compilador, não é servido). grep: 1 = ausente; 0 = presente; 2+ = erro.
+for marcador in "$COOKIE_DEV" "Seletor de perfil (somente desenvolvimento" "dev/perfil"; do
+  status=0
+  grep -rIlF --exclude-dir=cache "$marcador" .next >/dev/null || status=$?
+  case "$status" in
+    1) ;;
+    0) falha "o marcador \"$marcador\" está no build de produção." ;;
+    *) falha "grep falhou (código $status) procurando \"$marcador\"." ;;
+  esac
 done
+
+if [ -n "$(find .next/server/app -type d -name dev 2>/dev/null)" ]; then
+  falha "há diretório dev em .next/server/app."
+fi
 
 ENABLE_DEV_SWITCHER=1 NODE_ENV=production setsid node_modules/.bin/next start -H 127.0.0.1 -p "$PORTA" >/dev/null 2>&1 &
 PID=$!
