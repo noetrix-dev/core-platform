@@ -9,7 +9,8 @@ vi.mock("./sessao", () => {
       super(status === 401 ? "Sessão ausente." : "Sem permissão para esta ação.");
     }
   }
-  return { ErroPermissao, requirePermissao: vi.fn() };
+  // Alteração de teste: acao.ts agora também importa requirePermissaoSensivel (acaoSensivel); testada de verdade em sessao.test.ts.
+  return { ErroPermissao, requirePermissao: vi.fn(), requirePermissaoSensivel: vi.fn() };
 });
 vi.mock("next/navigation", () => ({
   // Imita o contrato real: erros internos do Next (redirect/notFound) são relançados.
@@ -22,11 +23,12 @@ import { unstable_rethrow } from "next/navigation";
 import { ErroDominio } from "../dominio/comum";
 import { acao, acaoPublica, rota } from "./acao";
 import { ErroPermissao, requirePermissao, type SessaoAutorizada } from "./sessao";
-import type { Permissao } from "../dominio/permissoes/catalogo";
+import { MATRIZ_PADRAO, type Permissao } from "../dominio/permissoes/catalogo";
 import { serializarItemRevisao } from "../dominio/sigilo/serializar";
 
 // Alteração de teste (só tipo): requirePermissao agora devolve SessaoAutorizada; os asserts continuam comparando o mesmo objeto.
-const usuario: SessaoAutorizada = { id: "u1", nome: "Adm", perfil: "admin", concedidas: [] };
+// Alteração de teste (Task 9, só o campo novo): sessaoCriadaEm: null.
+const usuario: SessaoAutorizada = { id: "u1", nome: "Adm", perfil: "admin", concedidas: [], sessaoCriadaEm: null };
 const esquema = z.object({ n: z.number() });
 const GENERICA = "Não foi possível concluir a operação.";
 const permissao = vi.mocked(requirePermissao);
@@ -139,6 +141,17 @@ describe("acao", () => {
     expect(log).toHaveBeenCalledTimes(1);
     expect(logado()).not.toContain("valor-secreto");
   });
+  it("exceção dentro de refine do esquema, com sessão permitida, vira genérica e o log não leva o valor", async () => {
+    const comRefine = z.string().refine(() => {
+      throw new Error('invalid input syntax for type uuid: "valor-secreto"');
+    });
+    const fn = vi.fn();
+    const r = await acao("processo.ver", comRefine, fn)("x");
+    expect(r).toEqual({ ok: false, erro: GENERICA });
+    expect(fn).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(logado()).not.toContain("valor-secreto");
+  });
   it("redirect vindo de requirePermissao é relançado", async () => {
     const redir = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/x;307;" });
     permissao.mockRejectedValue(redir);
@@ -162,6 +175,15 @@ describe("acaoPublica", () => {
   });
   it("sucesso devolve os dados", async () => {
     expect(await acaoPublica(esquema, async (e) => e.n)({ n: 7 })).toEqual({ ok: true, dados: 7 });
+  });
+  it("exceção dentro de transform do esquema vira resposta genérica, logada sem valor", async () => {
+    const comTransform = z.string().transform(() => {
+      throw new Error('invalid input syntax for type uuid: "valor-secreto"');
+    });
+    const r = await acaoPublica(comTransform, async () => 1)("x");
+    expect(r).toEqual({ ok: false, erro: GENERICA });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(logado()).not.toContain("valor-secreto");
   });
 });
 
@@ -216,7 +238,7 @@ describe("rota", () => {
 });
 
 describe("concedidas do banco chegam à fn", () => {
-  const compras = (concedidas: Permissao[]): SessaoAutorizada => ({ id: "u3", nome: "Compras", perfil: "compras_producao", concedidas });
+  const compras = (concedidas: Permissao[]): SessaoAutorizada => ({ id: "u3", nome: "Compras", perfil: "compras_producao", concedidas, sessaoCriadaEm: null });
   const req = new Request("http://x.test/api");
   const item = {
     id: "i1", revisaoId: "r1", ordem: 1, descricao: "Polia", quantidade: 20, unidade: "pç",
@@ -251,7 +273,7 @@ describe("concedidas do banco chegam à fn", () => {
     expect(JSON.stringify(revogado)).not.toContain("custoEstimadoCentavos");
     expect(JSON.stringify(revogado)).not.toContain("6000");
     // Sem a lista (comportamento antigo), a matriz padrão emitiria o custo.
-    expect(serializarItemRevisao(item, "compras_producao")).toMatchObject({ custoEstimadoCentavos: 6_000 });
+    expect(serializarItemRevisao(item, "compras_producao", MATRIZ_PADRAO.compras_producao)).toMatchObject({ custoEstimadoCentavos: 6_000 });
     // Sem nenhuma concessão: nem o item sai.
     permissao.mockResolvedValue(compras([]));
     expect(await lerItem({ n: 1 })).toEqual({ ok: true, dados: null });

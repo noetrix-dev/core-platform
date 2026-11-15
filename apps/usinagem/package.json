@@ -9,13 +9,18 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:isolado": "node --import tsx scripts/test-isolado.ts",
     "db:up": "docker compose --env-file .env.local up -d --wait",
     "db:down": "docker compose --env-file .env.local down",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "node --env-file=.env.local --import tsx scripts/seed.ts"
+    "db:seed": "node --env-file=.env.local --import tsx scripts/seed.ts",
+    "usuario:desbloquear": "node --env-file=.env.local --import tsx scripts/desbloquear-usuario.ts",
+    "usuario:criar": "node --env-file=.env.local --import tsx scripts/criar-usuario.ts",
+    "usuario:redefinir-senha": "node --env-file=.env.local --import tsx scripts/redefinir-senha.ts"
   },
   "dependencies": {
+    "better-auth": "1.6.33",
     "drizzle-orm": "0.45.4",
     "next": "16.3.4",
     "pg": "8.23.1",

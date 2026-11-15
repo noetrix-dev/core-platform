@@ -33,6 +33,16 @@ const MENSAGENS_DE_DOMINIO = new Set<string>([
   "Reserva de estoque inválida.",
   "Entrada de status inválida.",
   "Soma fora do limite seguro.",
+  "Senha fora da política.",
+  "E-mail inválido.",
+  "Nome inválido.",
+  "Perfil inexistente.",
+  "Usuário sem senha cadastrada.",
+  "Senha redefinida, mas a atualização final falhou: sessões abertas durante a troca podem continuar válidas. Rode de novo.",
+  "E-mail já cadastrado.",
+  "Alteração de usuário recusada.",
+  "Registro alterado por outra pessoa.",
+  "Usuário alterado, mas a atualização final falhou: sessões abertas durante a alteração podem continuar válidas.",
   "Erro de domínio.",
 ]);
 

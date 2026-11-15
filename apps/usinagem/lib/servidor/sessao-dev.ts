@@ -12,6 +12,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Só usuários fictícios e ativos. Usuário real nunca entra pelo seletor de dev. */
 export async function usuarioDev(): Promise<UsuarioSessao | null> {
+  // Defesa em profundidade: fora de development nem lê o cookie (o gate de usuarioAtual é a primeira barreira).
+  if (process.env.NODE_ENV !== "development") return null;
   const id = (await cookies()).get(COOKIE_USUARIO_DEV)?.value;
   if (!id || !UUID.test(id)) return null;
   const [u] = await db()

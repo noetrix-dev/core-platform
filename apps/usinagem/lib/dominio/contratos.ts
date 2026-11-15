@@ -7,7 +7,11 @@ type Registro = { id: Id; criadoEm: string; criadoPor: Id };
 type Versionado = { versao: number };
 
 // Núcleo
-export type Usuario = Versionado & { id: Id; nome: string; email: string; perfil: Perfil; ativo: boolean; ficticio: boolean };
+// criadoPor nulo só para o primeiro Admin (spec §4); por isso Usuario não usa Registro.
+export type Usuario = Versionado & {
+  id: Id; nome: string; email: string; perfil: Perfil; ativo: boolean; ficticio: boolean;
+  criadoEm: string; criadoPor: Id | null;
+};
 export type EventoAuditoria = {
   // entidadeId é text no banco: chaves de configuracoes/perfis/permissoes são text; UUIDs entram como texto.
   id: Id; autorId: Id | null; operacao: string; entidade: string; entidadeId: string | null;

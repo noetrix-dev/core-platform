@@ -80,6 +80,8 @@ export const usuarios = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     nome: text("nome").notNull(),
     email: text("email").notNull().unique(),
+    // Exigida pelo Better Auth; fica false: não há verificação de e-mail (sem cadastro público).
+    emailVerificado: boolean("email_verificado").notNull().default(false),
     perfilId: text("perfil_id").notNull().references(() => perfis.id),
     ativo: boolean("ativo").notNull().default(true),
     ficticio: boolean("ficticio").notNull().default(false),
@@ -248,4 +250,56 @@ export const itensRevisao = pgTable(
     check("itens_preco_check", sql`${t.precoUnitarioCentavos} is null or ${t.precoUnitarioCentavos} >= 0`),
     index("itens_revisao_criado_por_idx").on(t.criadoPor),
   ],
+);
+
+// ── Identidade (Better Auth 1.6.33, nomes mapeados em auth-config.ts) ──
+// Exceção da §4: tabelas escritas pela biblioteca, sem criado_por nem versao (spec §4, D5 do plano 0003).
+// FK sem CASCADE: usuário nunca é apagado, só desativado.
+export const sessoes = pgTable(
+  "sessoes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    expiresAt: timestamp("expira_em", { withTimezone: true }).notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+    ipAddress: text("ip"),
+    userAgent: text("user_agent"),
+    userId: uuid("usuario_id").notNull().references(() => usuarios.id),
+  },
+  (t) => [index("sessoes_usuario_idx").on(t.userId)],
+);
+
+export const contas = pgTable(
+  "contas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: text("conta_id").notNull(),
+    providerId: text("provedor_id").notNull(),
+    userId: uuid("usuario_id").notNull().references(() => usuarios.id),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expira_em", { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expira_em", { withTimezone: true }),
+    scope: text("escopo"),
+    // Hash da senha, nunca a senha. Nunca sai em serialização nem em log.
+    password: text("senha_hash"),
+    createdAt: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("contas_usuario_idx").on(t.userId), unique("contas_provedor_conta_unique").on(t.providerId, t.accountId)],
+);
+
+export const verificacoes = pgTable(
+  "verificacoes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    identifier: text("identificador").notNull(),
+    value: text("valor").notNull(),
+    expiresAt: timestamp("expira_em", { withTimezone: true }).notNull(),
+    createdAt: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("verificacoes_identificador_idx").on(t.identifier)],
 );

@@ -2,12 +2,24 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import ts from "typescript";
 
-/** Rotas que não passam pelo wrapper, com motivo. O 1D acrescenta a do Better Auth. */
-export const ROTAS_ISENTAS: readonly string[] = [];
+/** Rotas que não passam pelo wrapper, com motivo. Caminho exato; cada entrada é revisada. */
+export const ROTAS_ISENTAS: readonly string[] = [
+  // Endpoint do próprio Better Auth: é ele que cria a sessão, então não há sessão para rota() checar. A barreira é a
+  // allowlist de caminhos (filtrarCaminhoAuth, só sign-in/email, sign-out e get-session) mais o hooks.before do auth-config.
+  "app/api/auth/[...all]/route.ts",
+];
 /** Arquivos autorizados a usar acaoPublica (ação sem sessão por natureza, ex.: login). Cada entrada é revisada. */
-export const ACOES_PUBLICAS: readonly string[] = [];
+export const ACOES_PUBLICAS: readonly string[] = [
+  // sair: precisa funcionar sem sessão válida (obsoleta, de conta inativa ou já apagada) para expirar o cookie. Não lê
+  // nem altera dado de negócio: só auth().api.signOut com os headers da request e redirect("/entrar").
+  "app/entrar/acoes.ts",
+  // escolherPerfil do seletor de dev: escolhe a identidade de dev, então não há sessão antes dela. Barreiras: o arquivo
+  // só entra no build com o gate (pageExtensions), a ação recusa com o gate desligado e só aceita fictício ativo.
+  "app/dev/perfil/acoes.dev.ts",
+];
 
 const MODULO_WRAPPER = "lib/servidor/acao";
+const LEITURA_DE_SESSAO = new Set(["getSession", "useSession"]);
 const CONFIG_ROTA = new Set(["dynamic", "revalidate", "runtime", "preferredRegion", "maxDuration"]);
 
 const ehModuloWrapper = (spec: string) => spec === `@/${MODULO_WRAPPER}` || ((spec.startsWith("./") || spec.startsWith("../")) && spec.endsWith(MODULO_WRAPPER));
@@ -123,7 +135,7 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
 
   const rota = ehRota(caminho);
   if (topo || rota) {
-    const wrapper = rota ? ["rota"] : ["acao", "acaoPublica"];
+    const wrapper = rota ? ["rota"] : ["acao", "acaoSensivel", "acaoPublica"];
     const legitimos = importsLegitimos(sf);
     for (const s of sf.statements) {
       if (!exportado(s)) continue;
@@ -141,6 +153,18 @@ export function violacoes(caminho: string, codigo: string, publicas: readonly st
       }
       erros.push(`${caminho}: export fora de ${wrapper.join("/")}(): ${linha(s)}`);
     }
+  }
+
+  // Sessão do Better Auth só se lê em lib/servidor/sessao.ts (usuarioAtual), que relê ativo e a troca de senha.
+  // Qualquer forma conta: propriedade, colchete, desestruturação, import com ou sem alias, referência solta.
+  if (caminho !== "lib/servidor/sessao.ts") {
+    const achaSessao = (n: ts.Node) => {
+      if ((ts.isIdentifier(n) || ts.isStringLiteralLike(n)) && LEITURA_DE_SESSAO.has(n.text)) {
+        erros.push(`${caminho}: getSession/useSession fora de lib/servidor/sessao.ts: ${linha(n.parent ?? n)}`);
+      }
+      ts.forEachChild(n, achaSessao);
+    };
+    achaSessao(sf);
   }
 
   if (!publicas.includes(caminho)) {
@@ -199,4 +223,37 @@ export function arquivosVerificados(raiz = process.cwd()): { caminho: string; co
   };
   andar(raiz, true);
   return achados;
+}
+
+const MODULO_CATALOGO = "lib/dominio/permissoes/catalogo";
+const ehModuloCatalogo = (spec: string) => spec === `@/${MODULO_CATALOGO}` || ((spec.startsWith("./") || spec.startsWith("../")) && /(^|\/)catalogo$/.test(spec));
+
+/** Arquivos (fora de testes) que chamam `pode` importado do catálogo, inclusive por alias (`pode as p`) ou namespace (`ns.pode(`). */
+export function arquivosQueChamamPode(raiz = process.cwd()): string[] {
+  return arquivosVerificados(raiz)
+    .filter(({ caminho, codigo }) => {
+      const sf = ts.createSourceFile(caminho, codigo, ts.ScriptTarget.Latest, true);
+      const nomes = new Set<string>();
+      const espacos = new Set<string>();
+      for (const s of sf.statements) {
+        if (!ts.isImportDeclaration(s) || !ts.isStringLiteral(s.moduleSpecifier) || !ehModuloCatalogo(s.moduleSpecifier.text)) continue;
+        const b = s.importClause?.namedBindings;
+        if (s.importClause?.isTypeOnly || !b) continue;
+        if (ts.isNamespaceImport(b)) espacos.add(b.name.text);
+        else for (const e of b.elements) if (!e.isTypeOnly && (e.propertyName ?? e.name).text === "pode") nomes.add(e.name.text);
+      }
+      let chama = false;
+      const achar = (n: ts.Node) => {
+        if (ts.isCallExpression(n)) {
+          const f = n.expression;
+          if (ts.isIdentifier(f) && nomes.has(f.text)) chama = true;
+          if (ts.isPropertyAccessExpression(f) && f.name.text === "pode" && ts.isIdentifier(f.expression) && espacos.has(f.expression.text)) chama = true;
+        }
+        ts.forEachChild(n, achar);
+      };
+      achar(sf);
+      return chama;
+    })
+    .map((a) => a.caminho)
+    .sort();
 }

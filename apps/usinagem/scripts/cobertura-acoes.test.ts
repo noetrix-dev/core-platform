@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ehMensagemDeDominio, mensagensDeDominio } from "../lib/dominio/comum";
-import { ACOES_PUBLICAS, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
+import { ACOES_PUBLICAS, ROTAS_ISENTAS, arquivosQueChamamPode, arquivosVerificados, mensagensDeErroDominio, violacoes } from "./cobertura-acoes";
 
 const IMP = `import { acao, acaoPublica } from "@/lib/servidor/acao";\n`;
 const IMP_ROTA = `import { rota } from "@/lib/servidor/acao";\n`;
@@ -45,6 +45,21 @@ describe("cobertura do wrapper de permissão", () => {
   it("route.ts recusa export default e re-export", () => {
     expect(violacoes("app/api/x/route.ts", `${IMP_ROTA}export default rota("processo.ver", async () => new Response())`)).toHaveLength(1);
     expect(violacoes("app/api/x/route.ts", `export { GET } from "./outro";`)).toHaveLength(1);
+  });
+  describe("ROTAS_ISENTAS", () => {
+    const CRU = `export const GET = (req: Request) => fazer(req);\nexport const POST = (req: Request) => fazer(req);`;
+    it("é exatamente a rota do Better Auth", () => {
+      expect(ROTAS_ISENTAS).toEqual(["app/api/auth/[...all]/route.ts"]);
+    });
+    it("a rota isenta aceita handler cru", () => {
+      expect(violacoes("app/api/auth/[...all]/route.ts", CRU)).toEqual([]);
+    });
+    it.each(["app/api/x/route.ts", "app/api/auth/route.ts", "app/api/auth/[...outro]/route.ts", "app/api/auth/[...all]/route.js", "x/app/api/auth/[...all]/route.ts"])(
+      "outra route.ts com handler cru continua violação: %s",
+      (caminho) => {
+        expect(violacoes(caminho, CRU)).toHaveLength(2);
+      },
+    );
   });
   it("route.ts só com configuração de segmento passa", () => {
     expect(violacoes("app/api/x/route.ts", `export const dynamic = "force-dynamic";`)).toEqual([]);
@@ -93,10 +108,57 @@ describe("cobertura do wrapper de permissão", () => {
     });
   });
 
+  describe("acaoSensivel", () => {
+    it("export const x = acaoSensivel(...) importado de @/lib/servidor/acao ou relativo passa", () => {
+      for (const spec of ["@/lib/servidor/acao", "../../lib/servidor/acao"]) {
+        const codigo = `"use server";\nimport { acaoSensivel } from "${spec}";\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`;
+        expect(violacoes("app/x/actions.ts", codigo)).toEqual([]);
+      }
+    });
+    it("alias, declaração local e outro módulo são recusados", () => {
+      for (const codigo of [
+        `"use server";\nimport { acaoSensivel as s } from "@/lib/servidor/acao";\nexport const x = s("processo.editar", e, async () => 1);`,
+        `"use server";\nimport { acao as acaoSensivel } from "@/lib/servidor/acao";\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`,
+        `"use server";\nconst acaoSensivel = (...a: unknown[]) => a;\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`,
+        `"use server";\nimport { acaoSensivel } from "./falso";\nexport const x = acaoSensivel("processo.editar", e, async () => 1);`,
+      ]) {
+        expect(violacoes("app/x/actions.ts", codigo).length, codigo).toBeGreaterThanOrEqual(1);
+      }
+    });
+    it("route.ts não aceita acaoSensivel (só rota)", () => {
+      const rt = `import { acaoSensivel } from "@/lib/servidor/acao";\nexport const GET = acaoSensivel("processo.ver", e, async () => 1);`;
+      expect(violacoes("app/api/x/route.ts", rt)).toHaveLength(1);
+    });
+  });
+
+  describe("getSession/useSession só em lib/servidor/sessao.ts", () => {
+    const FORMAS: [string, string][] = [
+      ["chamada com ponto", `export async function f() { return auth().api.getSession({ headers: h }); }`],
+      ["acesso por colchete", `export const f = () => auth().api["getSession"]({ headers: h });`],
+      ["colchete com template", "export const f = () => api[`getSession`]({ headers: h });"],
+      ["desestruturação", `const { getSession } = auth().api;\nexport const f = () => getSession({ headers: h });`],
+      ["desestruturação com renome", `const { getSession: g } = auth().api;\nexport const f = () => g({ headers: h });`],
+      ["import nomeado", `import { useSession } from "better-auth/react";\nexport const f = () => useSession();`],
+      ["import com alias", `import { useSession as u } from "@/lib/auth-cliente";\nexport const f = () => u();`],
+      ["referência solta", `export const f = getSession;`],
+      ["useSession por propriedade", `export const f = () => cliente.useSession();`],
+    ];
+    it.each(FORMAS)("fora de sessao.ts é violação: %s", (_n, codigo) => {
+      expect(violacoes("lib/servidor/outro.ts", codigo).filter((e) => e.includes("getSession/useSession")).length).toBeGreaterThanOrEqual(1);
+    });
+    it.each(FORMAS)("em lib/servidor/sessao.ts é permitido: %s", (_n, codigo) => {
+      expect(violacoes("lib/servidor/sessao.ts", codigo)).toEqual([]);
+    });
+    it("nomes parecidos não contam (getSessionCookie do proxy, texto livre)", () => {
+      expect(violacoes("proxy.ts", `import { getSessionCookie } from "better-auth/cookies";\nexport const f = (r: Request) => getSessionCookie(r);\nconst m = "use getSession only in sessao";`)).toEqual([]);
+    });
+  });
+
   describe("ACOES_PUBLICAS", () => {
     const codigo = `"use server";\n${IMP}export const entrar = acaoPublica(esquema, async () => 1);`;
-    it("começa vazia", () => {
-      expect(ACOES_PUBLICAS).toEqual([]);
+    // Alteração de teste: era "começa vazia"; a Task 11 (1D) lista a ação sair e a Task 12 o seletor de dev, com motivo.
+    it("é exatamente a ação sair de /entrar e a do seletor de dev", () => {
+      expect(ACOES_PUBLICAS).toEqual(["app/entrar/acoes.ts", "app/dev/perfil/acoes.dev.ts"]);
     });
     it("acaoPublica em arquivo fora da lista é violação", () => {
       expect(violacoes("app/x/actions.ts", codigo, [])).toHaveLength(1);
@@ -263,5 +325,35 @@ describe("o conjunto de mensagens de domínio não vaza", () => {
     const comum = readFileSync(join(process.cwd(), "lib/dominio/comum.ts"), "utf8");
     expect(comum).toMatch(new RegExp(`^const ${NOME} = new Set`, "m"));
     expect(comum).not.toMatch(new RegExp(`export\\s+(?:const|let|var)\\s+${NOME}|export\\s*\\{[^}]*${NOME}`));
+  });
+});
+
+describe("pode( só é chamado onde está previsto", () => {
+  // Cada arquivo que decide permissão chama pode() com as concedidas do banco; arquivo novo exige revisão aqui.
+  const PODE_PERMITIDO: string[] = [
+    "lib/dominio/permissoes/acesso.ts", // acesso: decidirAcesso repassa as concedidas do banco
+    "lib/dominio/processo/regras.ts", // regras de processo: as 5 regras exigem concedidas
+    "lib/dominio/sigilo/campos.ts", // sigilo: leitura de contexto e de campo por categoria
+    "lib/dominio/sigilo/serializar.ts", // sigilo: serialização, auditoria e exportação
+  ];
+
+  it("o conjunto de arquivos que chamam pode() é exatamente PODE_PERMITIDO", () => {
+    expect(arquivosQueChamamPode()).toEqual([...PODE_PERMITIDO].sort());
+  });
+
+  it("detecta alias e namespace, e ignora função local de mesmo nome", () => {
+    const raiz = mkdtempSync(join(tmpdir(), "pode-"));
+    try {
+      const w = (n: string, c: string) => writeFileSync(join(raiz, n), c);
+      w("alias.ts", `import { pode as p } from "./catalogo";\np(1);\n`);
+      w("ns.ts", `import * as c from "@/lib/dominio/permissoes/catalogo";\nc.pode(1);\n`);
+      w("direto.ts", `import { pode } from "../permissoes/catalogo";\npode(1);\n`);
+      w("local.ts", `function pode(x: number) { return x; }\npode(1);\n`);
+      w("so-import.ts", `import { pode } from "./catalogo";\nexport const f = pode;\n`);
+      w("x.test.ts", `import { pode } from "./catalogo";\npode(1);\n`);
+      expect(arquivosQueChamamPode(raiz)).toEqual(["alias.ts", "direto.ts", "ns.ts"]);
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
   });
 });
